@@ -88,6 +88,50 @@ impl OwnedDevice {
     pub(crate) fn header_fd(&self) -> Option<RawFd> {
         self.header.as_ref().map(AsRawFd::as_raw_fd)
     }
+
+    pub(crate) fn header_sha256(&self) -> Result<String> {
+        use sha2::{Digest, Sha256};
+        let fd = self
+            .header_fd()
+            .ok_or_else(|| anyhow::anyhow!("header not pinned"))?;
+        let mut file = File::open(format!("/proc/self/fd/{fd}"))?;
+        let mut hash = Sha256::new();
+        let mut buffer = [0; 65536];
+        let mut bytes = 0_u64;
+        loop {
+            let count = file.read(&mut buffer)?;
+            if count == 0 {
+                break;
+            }
+            bytes += count as u64;
+            ensure!(bytes <= LUKS_HEADER_BYTES, "header size changed");
+            hash.update(&buffer[..count]);
+        }
+        ensure!(bytes == LUKS_HEADER_BYTES, "incomplete pinned header");
+        Ok(hex::encode(hash.finalize()))
+    }
+
+    pub(crate) fn ciphertext_payload_zero(&self, bytes: u64) -> Result<bool> {
+        use std::os::unix::fs::FileExt;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        let mut offset = LUKS_HEADER_BYTES;
+        let mut buffer = [0; 65536];
+        while offset < bytes {
+            ensure!(
+                std::time::Instant::now() < deadline
+                    && crate::mount_handoff::SIGNAL.load(std::sync::atomic::Ordering::SeqCst) == 0,
+                "empty-payload proof interrupted"
+            );
+            let want = buffer.len().min((bytes - offset) as usize);
+            let count = self.file.read_at(&mut buffer[..want], offset)?;
+            ensure!(count > 0, "short ciphertext payload");
+            if buffer[..count].iter().any(|byte| *byte != 0) {
+                return Ok(false);
+            }
+            offset += count as u64;
+        }
+        Ok(true)
+    }
 }
 
 impl AsRawFd for OwnedDevice {

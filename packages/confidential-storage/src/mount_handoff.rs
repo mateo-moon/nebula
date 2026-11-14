@@ -302,20 +302,69 @@ fn startup_credentials(uid: u32, gid: u32, groups: &[u32]) -> Result<()> {
     Ok(())
 }
 
-/// Terminate every other process in this container's PID namespace. The client
-/// supervisor only waits for its direct child, but a client such as `sshd`
-/// leaves per-connection children behind that still hold handed-over mounts.
-fn stop_namespace_clients() {
+fn private_pid_init() -> Result<()> {
+    // Never use namespace-wide signals from an ordinary host process, a joined
+    // PID namespace, or a procfs mounted for a different namespace. Native OCI
+    // policy independently requires this container's own PID namespace.
+    ensure!(
+        unsafe { libc::getpid() } == 1,
+        "launcher must own its private PID namespace"
+    );
+    ensure!(
+        fs::read_link("/proc/self")? == std::path::Path::new("1"),
+        "launcher procfs namespace differs"
+    );
+    Ok(())
+}
+
+/// PID1 is the only supervisor. Its capability-free children keep the same
+/// kernel UID, even across nested namespaces; no CAP_KILL is retained. Reap all
+/// adopted descendants and require the namespace empty before another exec.
+fn stop_namespace_clients() -> Result<()> {
+    private_pid_init()?;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let gentle = Instant::now() + Duration::from_millis(500);
     unsafe { libc::kill(-1, libc::SIGTERM) };
-    thread::sleep(Duration::from_millis(500));
-    unsafe { libc::kill(-1, libc::SIGKILL) };
-    thread::sleep(Duration::from_millis(500));
+    loop {
+        loop {
+            let result = unsafe { libc::waitpid(-1, std::ptr::null_mut(), libc::WNOHANG) };
+            if result > 0 {
+                continue;
+            }
+            ensure!(
+                result == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::ECHILD),
+                "descendant reap failed"
+            );
+            break;
+        }
+        let alive = fs::read_dir("/proc")?
+            .filter_map(|entry| entry.ok())
+            .any(|entry| {
+                entry
+                    .file_name()
+                    .to_str()
+                    .and_then(|name| name.parse::<u32>().ok())
+                    .is_some_and(|pid| pid > 1)
+            });
+        if !alive {
+            return Ok(());
+        }
+        ensure!(
+            Instant::now() < deadline,
+            "application descendants did not stop"
+        );
+        if Instant::now() >= gentle {
+            unsafe { libc::kill(-1, libc::SIGKILL) };
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
 }
 
 pub(crate) fn launch_generic(
     config: &crate::generic_config::Launcher,
     args: &[String],
 ) -> Result<()> {
+    private_pid_init().context(LauncherStage::Credentials)?;
     // Only the trusted static launcher can report startup failures. The
     // application child gets no host-visible standard streams; a wrapper from
     // the application image must never run with the launcher's credentials.
@@ -475,65 +524,134 @@ fn supervise(
             attached: true,
         });
     }
-    let mut command = Command::new(&args[0]);
-    command
-        .args(&args[1..])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    unsafe {
-        command.pre_exec(|| {
-            set_caps(0)?;
-            check(libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) as _)?;
-            check(libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) as _)?;
-            Ok(())
-        });
-    }
-    let mut child = command.spawn().context("client start failed")?;
-    println!(
-        "{}",
-        serde_json::json!({"phase":"client-started", "role":name,
-        "uid":uid, "all_child_capabilities_dropped":true, "no_new_privileges":true})
-    );
-    let mut stopping = None;
+    supervise_leases(name, uid, grace, args, leases)
+}
+
+fn supervise_leases(
+    name: &str,
+    uid: u32,
+    grace: Duration,
+    args: &[String],
+    mut leases: Vec<MountLease>,
+) -> Result<()> {
+    private_pid_init()?;
+    let mut restarts = 0_u64;
+    let mut consecutive = 0_u32;
     let mut lease_failed = false;
-    let status = loop {
-        if let Some(status) = child.try_wait()? {
-            break status;
+    'lifetime: loop {
+        if SIGNAL.load(Ordering::SeqCst) != 0 {
+            break;
         }
-        let mut stop_requested = false;
         for lease in &mut leases {
             let mut request = [0];
-            stop_requested |= match lease.stream.read(&mut request) {
-                Ok(1) if request == *b"S" => true,
-                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => false,
+            match lease.stream.read(&mut request) {
+                Ok(1) if request == *b"S" => break 'lifetime,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
                 _ => {
                     lease_failed = true;
-                    true
+                    break 'lifetime;
                 }
-            };
-        }
-        if (stop_requested || SIGNAL.load(Ordering::SeqCst) != 0) && stopping.is_none() {
-            let sent = unsafe { libc::kill(child.id() as i32, libc::SIGTERM) };
-            if sent != 0 && std::io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH) {
-                // Do not leave a child running if signalling it failed.
-                let _ = child.kill();
-                let _ = child.wait();
-                bail!("client graceful shutdown could not be requested");
             }
-            stopping = Some(Instant::now());
         }
-        if stopping.is_some_and(|start| start.elapsed() > grace) {
-            child.kill()?;
-            let _ = child.wait();
-            bail!("client graceful shutdown timed out");
+        let mut command = Command::new(&args[0]);
+        command
+            .args(&args[1..])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        unsafe {
+            command.pre_exec(|| {
+                set_caps(0)?;
+                check(libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) as _)?;
+                check(libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) as _)?;
+                Ok(())
+            });
         }
-        thread::sleep(Duration::from_millis(100));
-    };
-    // The direct child is gone, but its descendants may still hold the mount.
-    // Stop them, then release with bounded retries, and always answer the
-    // supervisor: an unexplained lease end takes the whole guest down.
-    stop_namespace_clients();
+        let mut child = command.spawn().context("client start failed")?;
+        for lease in &mut leases {
+            lease.stream.write_all(b"B")?;
+        }
+        println!(
+            "{}",
+            serde_json::json!({"phase":"client-started","role":name,"uid":uid,
+            "restart_count":restarts,"all_child_capabilities_dropped":true,"no_new_privileges":true})
+        );
+        let started = Instant::now();
+        let mut stopping = None;
+        loop {
+            if child.try_wait()?.is_some() {
+                break;
+            }
+            let mut stop_requested = SIGNAL.load(Ordering::SeqCst) != 0;
+            for lease in &mut leases {
+                let mut request = [0];
+                stop_requested |= match lease.stream.read(&mut request) {
+                    Ok(1) if request == *b"S" => true,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => false,
+                    _ => {
+                        lease_failed = true;
+                        true
+                    }
+                };
+            }
+            if stop_requested && stopping.is_none() {
+                let sent = unsafe { libc::kill(child.id() as i32, libc::SIGTERM) };
+                if sent != 0 && std::io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH)
+                {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    bail!("client graceful shutdown could not be requested");
+                }
+                stopping = Some(Instant::now());
+            }
+            if stopping.is_some_and(|start| start.elapsed() > grace) {
+                child.kill()?;
+                let _ = child.wait();
+                break;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        stop_namespace_clients()?;
+        if stopping.is_some() || SIGNAL.load(Ordering::SeqCst) != 0 || lease_failed {
+            break;
+        }
+        for lease in &mut leases {
+            lease.stream.write_all(b"X")?;
+        }
+        println!(
+            "{}",
+            serde_json::json!({"phase":"client-backoff","role":name,"restart_count":restarts.saturating_add(1)})
+        );
+        consecutive = if started.elapsed() >= Duration::from_secs(60) {
+            0
+        } else {
+            consecutive.saturating_add(1)
+        };
+        let pause = Duration::from_millis(
+            250_u64
+                .saturating_mul(1_u64 << consecutive.min(7))
+                .min(30_000),
+        );
+        let retry_at = Instant::now() + pause;
+        while Instant::now() < retry_at {
+            if SIGNAL.load(Ordering::SeqCst) != 0 {
+                break 'lifetime;
+            }
+            for lease in &mut leases {
+                let mut request = [0];
+                match lease.stream.read(&mut request) {
+                    Ok(1) if request == *b"S" => break 'lifetime,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
+                    _ => {
+                        lease_failed = true;
+                        break 'lifetime;
+                    }
+                }
+            }
+            thread::sleep(Duration::from_millis(50));
+        }
+        restarts = restarts.saturating_add(1);
+    }
     let release_deadline = Instant::now() + Duration::from_secs(15);
     loop {
         for lease in leases.iter_mut().rev() {
@@ -545,15 +663,16 @@ fn supervise(
         thread::sleep(Duration::from_millis(100));
     }
     let released = leases.iter().all(|lease| !lease.attached);
-    // A failed or forcibly terminated client must never claim a clean handover.
-    let clean = status.success() && !lease_failed && released;
+    // Only this same trusted PID1, after reaping every child and unmounting, can
+    // finish its original lease. Ordinary child failures never release/regrant it.
+    let clean = !lease_failed && released;
     for lease in &mut leases {
         lease.stream.write_all(if clean { b"D" } else { b"F" })?;
     }
     println!(
         "{}",
         serde_json::json!({"phase":"client-unmounted", "role":name,
-        "client_success":status.success(), "termination_requested":stopping.is_some(),
+        "restart_count":restarts,"termination_requested":SIGNAL.load(Ordering::SeqCst) != 0,
         "mount_released":released})
     );
     ensure!(clean, "client failed or mount owner disappeared");
@@ -619,3 +738,7 @@ mod tests {
         fs::remove_file(path).unwrap();
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/supervisor.rs"]
+mod supervisor_tests;

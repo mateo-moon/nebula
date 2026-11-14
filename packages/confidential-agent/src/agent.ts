@@ -1,11 +1,14 @@
 import { execFileSync, spawn } from "node:child_process";
+import { createHash, X509Certificate } from "node:crypto";
+import { type ChildProcess } from "node:child_process";
+import { type Duplex } from "node:stream";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { parseAgentConfig, type AgentConfig } from "./config.js";
 import { installGuestGuard } from "./guard.js";
 import { awaitOwner, awaitOwnerReady, publishOwnerReady } from "./await-owner.js";
-import { gatewayConfigured, startGateway } from "./gateway.js";
+import { gatewayConfigured, loadOrCreateIdentity, startGateway } from "./gateway.js";
 import { collateralProxy, prefetchSnpCollateral } from "./snp-collateral.js";
 import { AgentLifecycle } from "./lifecycle.js";
 
@@ -31,6 +34,56 @@ export async function awaitInternalOwnerBootstrap(directory: string, signal: Abo
   throw new Error("Guest-internal owner bootstrap unavailable");
 }
 
+/** One inherited Unix socket; no public path, port, key or arbitrary command. */
+export function nativeStorageControl(child: ChildProcess) {
+  const channel = child.stdio[3] as Duplex | null;
+  if (!channel || typeof channel.write !== "function") throw new Error("Native module channel unavailable");
+  let buffer = "", initialized = false, sequence = 0, closed = false;
+  const pending = new Map<number, { resolve(value: unknown): void; reject(error: Error): void; timer: NodeJS.Timeout }>();
+  let readyResolve!: () => void, readyReject!: (error: Error) => void;
+  const ready = new Promise<void>((resolve, reject) => { readyResolve = resolve; readyReject = reject; });
+  const fail = () => {
+    if (closed) return; closed = true;
+    const error = new Error("Native storage control unavailable"); readyReject(error);
+    for (const item of pending.values()) { clearTimeout(item.timer); item.reject(error); }
+    pending.clear();
+  };
+  const timer = setTimeout(() => { fail(); channel.destroy(); }, 10_000);
+  channel.on("data", (bytes: Buffer) => {
+    buffer += bytes.toString("utf8");
+    if (buffer.length > 65536) { fail(); channel.destroy(); return; }
+    for (;;) {
+      const end = buffer.indexOf("\n"); if (end < 0) break;
+      const line = buffer.slice(0, end); buffer = buffer.slice(end + 1);
+      if (!initialized) {
+        if (line !== "nebula-storage-module-v1") { fail(); channel.destroy(); return; }
+        initialized = true; clearTimeout(timer); readyResolve(); continue;
+      }
+      try {
+        const value = JSON.parse(line), item = pending.get(value.id);
+        if (!item || Object.keys(value).sort().join() !== ("error" in value ? "error,id" : "id,result")) throw new Error();
+        pending.delete(value.id); clearTimeout(item.timer);
+        if ("error" in value) item.reject(new Error("Native recovery request refused")); else item.resolve(value.result);
+      } catch { fail(); channel.destroy(); return; }
+    }
+  });
+  channel.once("error", fail); channel.once("end", fail); child.once("error", fail); child.once("exit", fail);
+  ready.finally(() => clearTimeout(timer)).catch(() => {});
+  const request = async (op: "bind" | "plans" | "apply", fields: Record<string, unknown> = {}) => {
+    await ready;
+    if (closed || pending.size >= 8 || sequence >= 0x7fffffff) throw new Error("Native storage control unavailable");
+    const id = ++sequence, raw = JSON.stringify({ id, op, ...fields }) + "\n";
+    if (Buffer.byteLength(raw) > 8192) throw new Error("Invalid native request");
+    return new Promise<unknown>((resolve, reject) => {
+      const timeout = setTimeout(() => { pending.delete(id); reject(new Error("Native storage control timed out")); }, 5000);
+      pending.set(id, { resolve, reject, timer: timeout });
+      channel.write(raw, error => { if (error) fail(); });
+    });
+  };
+  return { ready, bind: (instance: string) => request("bind", { instance }),
+    plans: () => request("plans"), apply: (value: unknown) => request("apply", { request: value }) };
+}
+
 /** Privileged setup finishes before any owner-facing listener starts. The
  * native disk module keeps only its required capabilities; the HTTP agent
  * drops permanently to the measured helper UID. */
@@ -42,29 +95,15 @@ async function initializeWorkload(config: Extract<AgentConfig, { role: "workload
   installGuestGuard();
   agentStartupStage = "native-install";
   execFileSync(native, ["install"], { stdio: "ignore", timeout: 15_000 });
+  let control: ReturnType<typeof nativeStorageControl> | undefined;
   if (config.storage.volumes.length || config.storage.clients.length) {
     agentStartupStage = "native-start";
     const child = spawn(native, ["agent", JSON.stringify(config.storage)], {
       stdio: ["pipe", "ignore", "ignore", "pipe"], env: { PATH: "/usr/sbin:/usr/bin:/sbin:/bin", LC_ALL: "C" },
     });
     lifecycle.native(child);
-    await new Promise<void>((resolve, reject) => {
-      const channel = child.stdio[3];
-      if (!channel || !("on" in channel)) { reject(new Error("Native module startup channel unavailable")); return; }
-      let receipt = "";
-      const timeout = setTimeout(() => reject(new Error("Native module startup timed out")), 10_000);
-      channel.on("data", bytes => {
-        receipt += String(bytes);
-        if (receipt.length > 64) { clearTimeout(timeout); reject(new Error("Invalid native module startup")); }
-      });
-      channel.once("end", () => {
-        clearTimeout(timeout);
-        if (receipt === "nebula-storage-module-v1\n") resolve(); else reject(new Error("Native module did not initialize"));
-      });
-      channel.once("error", () => { clearTimeout(timeout); reject(new Error("Native module startup failed")); });
-      child.once("error", () => { clearTimeout(timeout); reject(new Error("Native module startup failed")); });
-      child.once("exit", () => { clearTimeout(timeout); reject(new Error("Native module stopped during startup")); });
-    });
+    control = nativeStorageControl(child);
+    await control.ready;
   }
   agentStartupStage = "privilege-drop";
   lifecycle.signal.throwIfAborted();
@@ -80,8 +119,13 @@ async function initializeWorkload(config: Extract<AgentConfig, { role: "workload
     await awaitInternalOwnerBootstrap("/run/instance", lifecycle.signal);
   }
   agentStartupStage = "owner-gateway";
+  if (control) {
+    const certificate = new X509Certificate(loadOrCreateIdentity("/run/instance").cert);
+    const instance = createHash("sha256").update(certificate.publicKey.export({ type: "spki", format: "der" })).digest("hex");
+    await control.bind(instance);
+  }
   const gateway = startGateway("/run/instance", owner.storageNames, owner.resources,
-    owner.ownerClaimSha256, owner.audience, owner.browser, () => ready);
+    owner.ownerClaimSha256, owner.audience, owner.browser, () => ready, control);
   lifecycle.server(gateway);
   lifecycle.task(awaitOwner(owner.resources, lifecycle.signal, undefined,
     async () => gatewayConfigured(gateway)).then(() => {

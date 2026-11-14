@@ -61,7 +61,7 @@ pub struct ResourceClient {
     pub resources: Vec<String>,
 }
 
-fn name(value: &str) -> bool {
+pub(crate) fn name(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 40
         && value.as_bytes()[0].is_ascii_lowercase()
@@ -127,6 +127,7 @@ impl Volume {
         for client in &value.clients {
             ensure!(
                 name(&client.name)
+                    && client.name != "coco-volume-marker"
                     && identity(client.uid, client.gid)
                     && names.insert(&client.name)
                     && users.insert(client.uid),
@@ -187,6 +188,7 @@ impl ResourceBroker {
         for client in &value.clients {
             ensure!(
                 name(&client.name)
+                    && client.name != "coco-volume-marker"
                     && identity(client.uid, client.gid)
                     && names.insert(&client.name)
                     && users.insert(client.uid)

@@ -10,7 +10,7 @@
   "scripts": {
     "build": "node --import tsx src/build.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test test/*.test.mjs"
+    "test": "node --import tsx --test --test-concurrency=1 test/*.test.mjs"
   },
   "dependencies": {
     "@nebula/confidential-client": "file:../confidential-client",

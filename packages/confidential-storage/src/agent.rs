@@ -12,11 +12,7 @@ use std::{
     sync::{atomic::Ordering, mpsc},
     thread,
 };
-use std::{
-    fs::File,
-    io::{Read, Write},
-    os::fd::FromRawFd,
-};
+use std::{fs::File, io::Read, os::fd::FromRawFd};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -111,17 +107,23 @@ pub(crate) fn run(raw: &str) -> Result<()> {
     });
     // A fixed private parent channel confirms validation and privilege
     // reduction before the HTTP agent drops UID and opens its listeners.
-    let mut ready = unsafe { File::from_raw_fd(3) };
-    ready.write_all(b"nebula-storage-module-v1\n")?;
-    drop(ready);
+    let recovery = crate::recovery::Manager::new();
+    let volumes: Vec<_> = volumes
+        .into_iter()
+        .map(|config| {
+            let control = recovery.volume(&config.name, &config.key_resource);
+            (config, control)
+        })
+        .collect();
+    recovery.start()?;
     let (finished, completion) = mpsc::channel();
     let mut modules = Vec::new();
-    for config in volumes {
+    for (config, control) in volumes {
         let done = finished.clone();
         modules.push(thread::spawn(move || {
             let result = std::panic::catch_unwind(|| {
                 let profile = volume::Profile::agent(&config.name, config.size_bytes);
-                generic_storage::serve_volume(config, profile, true)
+                generic_storage::serve_volume(config, profile, true, Some(control))
             });
             let _ = done.send(
                 result

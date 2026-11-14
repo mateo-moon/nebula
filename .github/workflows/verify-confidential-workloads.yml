@@ -205,3 +205,26 @@ jobs:
           --security-opt no-new-privileges
           --tmpfs /tmp:rw,nosuid,nodev,noexec,size=256m
           nebula-storage-tests:ci
+
+      - name: Restart only the measured child inside its original private PID namespace
+        run: |
+          for fixture in \
+            mount_handoff::supervisor_tests::isolated_pid1_supervisor_restart_reaps_descendants_and_retains_original_lease \
+            mount_handoff::supervisor_tests::isolated_pid1_supervisor_lease_loss_stops_without_restart
+          do
+            docker run --rm --network none --read-only --user 0:0 \
+              --cap-drop ALL --cap-add SYS_ADMIN --cap-add SETUID --cap-add SETGID --cap-add SETPCAP \
+              --security-opt no-new-privileges --memory 256m --pids-limit 64 \
+              --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m,mode=1777 \
+              --env COCO_SUPERVISOR_TEST=isolated-pid1 nebula-storage-tests:ci \
+              --ignored --exact "$fixture" --test-threads=1 --nocapture
+          done
+      - name: Resume private recipient publication with only native storage capabilities
+        run: >-
+          docker run --rm --network none --read-only --user 0:0
+          --cap-drop ALL --cap-add CHOWN --cap-add SYS_ADMIN --cap-add MKNOD --cap-add SETPCAP
+          --security-opt no-new-privileges --memory 256m --pids-limit 64
+          --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m,mode=1777
+          --env COCO_RECIPIENT_TEST=isolated-tmpfs nebula-storage-tests:ci
+          --ignored --exact initialization::tests::isolated_private_recipient_staging_survives_chown_interruption
+          --test-threads=1 --nocapture

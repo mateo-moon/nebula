@@ -23,6 +23,27 @@ export function storageDiagnostics(names: readonly string[]) {
   }));
 }
 
+/** Process supervision is not an application health assertion. */
+export function supervisorStatus(names: readonly string[]) {
+  const storage = Object.fromEntries(names.map(name => {
+    if (!/^[a-z][a-z0-9-]{0,39}$/.test(name)) throw new Error("Invalid storage name");
+    try {
+      const text = readFileSync(`/run/nebula-storage/${name}/status.json`, "utf8");
+      if (text.length > 8192) throw new Error();
+      const value = JSON.parse(text), clients: Record<string, { phase: string; restartCount: number; applicationReady: null }> = {};
+      if (!value.supervisors || typeof value.supervisors !== "object" || Array.isArray(value.supervisors) || Object.keys(value.supervisors).length > 8) throw new Error();
+      for (const [client, entry] of Object.entries(value.supervisors)) {
+        const item = entry as { phase: string; restartCount: number; applicationReady: unknown };
+        if (!/^[a-z][a-z0-9-]{0,39}$/.test(client) || !["starting", "running", "backoff", "stopped"].includes(item.phase) ||
+            !Number.isSafeInteger(item.restartCount) || item.restartCount < 0 || item.applicationReady !== null) throw new Error();
+        clients[client] = { phase: item.phase, restartCount: item.restartCount, applicationReady: null };
+      }
+      return [name, { available: true, clients }];
+    } catch { return [name, { available: false, clients: {} }]; }
+  }));
+  return { version: 1, storage };
+}
+
 export const validResource = (value: unknown): value is string => typeof value === "string" &&
   /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}\/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}\/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$/.test(value);
 

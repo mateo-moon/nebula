@@ -147,3 +147,23 @@ fn real_hostile_headers() {
         fs::remove_file(&path).unwrap();
     }
 }
+
+#[test]
+#[ignore = "explicit unprivileged Linux container, cryptsetup and owned tmpfs required"]
+fn real_empty_payload_recovery_requires_owned_header_key_and_every_payload_byte_zero() {
+    guard();
+    let root=PathBuf::from(format!("/tmp/coco-recovery-{}",std::process::id()));
+    DirBuilder::new().mode(0o700).create(&root).unwrap();let _fixture=Fixture(root.clone());
+    let path=root.join("fixture.img");format(&path);
+    let mut disk=owned(&path);crate::volume::prepare_unlock(&mut disk,soon()).unwrap();
+    assert!(crate::volume::recovery_proof(&disk,64*1024*1024,&WRONG,soon()).is_err());
+    let header=crate::volume::recovery_proof(&disk,64*1024*1024,&OWN,soon()).unwrap().unwrap();
+    assert_eq!(header,disk.header_sha256().unwrap());
+    let mut raw=open(&path);raw.seek(SeekFrom::Start(64*1024*1024-1)).unwrap();raw.write_all(&[1]).unwrap();raw.sync_all().unwrap();
+    assert!(crate::volume::recovery_proof(&disk,64*1024*1024,&OWN,soon()).unwrap().is_none());
+    raw.seek(SeekFrom::Start(64*1024*1024-1)).unwrap();raw.write_all(&[0]).unwrap();raw.sync_all().unwrap();
+    assert_eq!(crate::volume::recovery_proof(&disk,64*1024*1024,&OWN,soon()).unwrap(),Some(header.clone()));
+    assert!(crate::volume::recovery_proof(&disk,65*1024*1024,&OWN,soon()).is_err());
+    // The owner confirmation is tied to the entire sealed header, not only UUID.
+    assert_ne!(header,"0".repeat(64));
+}

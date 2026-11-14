@@ -444,7 +444,59 @@ pub(crate) fn open_lifecycle(
     profile: &'static Profile,
     format: Format,
 ) -> Result<(Option<ActiveVolume>, serde_json::Value)> {
-    open_with(key, profile, Some(format))
+    open_with(key, profile, Some(format), None)
+}
+
+pub(crate) fn recovery_candidate(
+    key: &Zeroizing<[u8; 32]>,
+    profile: &'static Profile,
+) -> Result<Option<String>> {
+    ensure!(
+        !std::path::Path::new(profile.mapped).exists(),
+        "mapping still active"
+    );
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(profile.disk)?;
+    let mut disk = OwnedDevice::open(file)?;
+    ensure!(
+        device_bytes(&disk)? == profile.bytes,
+        "unexpected recovery disk size"
+    );
+    let deadline = Instant::now() + Duration::from_secs(60);
+    prepare_unlock(&mut disk, deadline)?;
+    recovery_proof(&disk, profile.bytes, key, deadline)
+}
+
+/// All callers retain the exclusive device lease and the same sealed header.
+/// A zero ciphertext payload proves no prior encrypted filesystem write exists.
+pub(crate) fn recovery_proof(
+    disk: &OwnedDevice,
+    bytes: u64,
+    key: &[u8; 32],
+    deadline: Instant,
+) -> Result<Option<String>> {
+    ensure!(
+        bytes > crate::device::LUKS_HEADER_BYTES,
+        "recovery payload absent"
+    );
+    crate::keyslots::layout(disk, key, deadline)?;
+    if !disk.ciphertext_payload_zero(bytes)? {
+        return Ok(None);
+    }
+    Ok(Some(disk.header_sha256()?))
+}
+
+pub(crate) fn recover_empty_filesystem(
+    key: Zeroizing<[u8; 32]>,
+    profile: &'static Profile,
+    header: &str,
+) -> Result<()> {
+    let (active, _) = open_with(key, profile, Some(Format::Deny), Some(header))?;
+    let mut active = active.ok_or_else(|| anyhow::anyhow!("recovery key refused"))?;
+    active.close()
 }
 
 /// Every production open, including non-lifecycle modes, checks the exact
@@ -459,6 +511,7 @@ fn open_with(
     key: Zeroizing<[u8; 32]>,
     profile: &'static Profile,
     lifecycle: Option<Format>,
+    recovery_header: Option<&str>,
 ) -> Result<(Option<ActiveVolume>, serde_json::Value)> {
     let disk = OpenOptions::new()
         .read(true)
@@ -490,6 +543,10 @@ fn open_with(
         "LUKS header inspection failed: {recognized}"
     );
     let luks = recognized == 0;
+    ensure!(
+        recovery_header.is_none() || luks,
+        "recovery requires existing owned LUKS2 header"
+    );
     // A failed unlock, invalid header, unknown filesystem or partial format
     // can never reach luksFormat. The complete explicit disk must be zero.
     let chosen = plan(luks, lifecycle.unwrap_or(Format::Allow), || {
@@ -526,6 +583,12 @@ fn open_with(
     }
     let deadline = Instant::now() + Duration::from_secs(60);
     prepare_unlock(&mut disk, deadline)?;
+    if let Some(header) = recovery_header {
+        ensure!(
+            recovery_proof(&disk, profile.bytes, &key, deadline)?.as_deref() == Some(header),
+            "recovery header or exhaustive empty-payload proof changed"
+        );
+    }
     let opened = crypt_run(
         &disk,
         &[
@@ -568,7 +631,8 @@ fn open_with(
             active.layout = Some(crate::keyslots::layout(&active.disk, &key, deadline)?);
         }
         drop(key);
-        if chosen == Action::Create {
+        let initialize = chosen == Action::Create || recovery_header.is_some();
+        if initialize {
             command(
                 "/usr/sbin/mkfs.ext4",
                 &mkfs_args(profile, lifecycle.is_some()),
@@ -595,7 +659,13 @@ fn open_with(
             )?;
         }
         active.mounted = true;
-        if chosen == Action::Create {
+        if lifecycle.is_some() {
+            crate::initialization::marker(
+                std::path::Path::new(profile.mount),
+                &active.layout.as_ref().unwrap().uuid,
+                initialize,
+            )?;
+        } else if initialize {
             let mut random = Zeroizing::new([0; 32]);
             File::open("/dev/urandom")?.read_exact(&mut *random)?;
             let mut content = profile.marker_prefix.as_bytes().to_vec();
@@ -635,12 +705,7 @@ fn open_with(
         let digest = hex::encode(Sha256::digest(&content));
         // An open file pins this mount: close it before unmounting.
         drop(marker);
-        let status = opened_status(
-            chosen == Action::Create,
-            &digest,
-            size,
-            active.layout.as_ref(),
-        );
+        let status = opened_status(initialize, &digest, size, active.layout.as_ref());
         Ok((Some(active), status))
     }
 }

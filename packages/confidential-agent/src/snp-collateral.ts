@@ -196,7 +196,9 @@ export function collateralProxy(port = 8007) {
   const certificates = new Map<string, number[]>();
   const server = createServer(async (incoming, outgoing) => {
     incoming.resume();
-    const url = new URL(incoming.url ?? "", "http://localhost");
+    let url: URL;
+    try { url = new URL(incoming.url ?? "", "http://localhost"); }
+    catch { outgoing.writeHead(400).end(); return; }
     if (incoming.method !== "GET" || !(url.pathname === "/info" || url.pathname === "/aa/evidence")) {
       outgoing.writeHead(404).end(); return;
     }

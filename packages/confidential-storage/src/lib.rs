@@ -7,6 +7,8 @@ mod generic_config;
 #[cfg(target_os = "linux")]
 mod generic_storage;
 #[cfg(target_os = "linux")]
+mod initialization;
+#[cfg(target_os = "linux")]
 mod keyslots;
 #[cfg(target_os = "linux")]
 mod lifecycle;
@@ -14,6 +16,8 @@ mod lifecycle;
 mod mount_handoff;
 #[cfg(target_os = "linux")]
 mod native;
+#[cfg(target_os = "linux")]
+mod recovery;
 #[cfg(target_os = "linux")]
 mod runtime;
 #[cfg(target_os = "linux")]

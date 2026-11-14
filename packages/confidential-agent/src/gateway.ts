@@ -1,10 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, X509Certificate } from "node:crypto";
-import { chmodSync, constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, statfsSync, writeFileSync } from "node:fs";
+import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, randomUUID, X509Certificate } from "node:crypto";
+import { chmodSync, constants, closeSync, fsyncSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync,
+  renameSync, statfsSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer } from "node:https";
 import { request, createServer as createHttpServer, type RequestListener } from "node:http";
 import { join } from "node:path";
-import { bootstrapStatus, storageDiagnostics, validResource } from "./bootstrap.js";
+import { bootstrapStatus, storageDiagnostics, supervisorStatus, validResource } from "./bootstrap.js";
 import { kbsDiagnostics, kbsOwnerAuthorized } from "./diagnostics.js";
 import { claimOwner, internalOwnerToken, loadInternalOwnerKey, readClaimedOwner, verifyOwnerJwt,
   type ClaimConfig } from "./claim.js";
@@ -12,6 +13,8 @@ import { claimOwner, internalOwnerToken, loadInternalOwnerKey, readClaimedOwner,
 const MAX_BODY = 2 * 1024 * 1024;
 const configuration = new WeakMap<object, () => boolean>();
 export const gatewayConfigured = (server: object) => configuration.get(server)?.() === true;
+const identityRenewals = new WeakMap<ReturnType<typeof createServer>, { directory: string; cert: Buffer }>();
+const RENEW_BEFORE_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** Explicit owner administration only. RCAR auth/attest and resource GET are
  * never exposed through this endpoint, regardless of an installed KBS policy. */
@@ -32,6 +35,7 @@ export interface GatewayOptions {
   readonly claim?: ClaimConfig;
   readonly browser?: boolean;
   readonly ready?: () => boolean;
+  readonly recovery?: { plans(): Promise<unknown>; apply(value: unknown): Promise<unknown> };
 }
 
 export function gateway(options: GatewayOptions) {
@@ -49,12 +53,14 @@ export function gateway(options: GatewayOptions) {
   const ownerAuthorization = (header: string | undefined): string | undefined => {
     if (!/^Bearer [A-Za-z0-9_.-]+$/.test(header ?? "")) return undefined;
     if (!claim) return header;
-    const owner = readClaimedOwner(claim.directory);
+    let owner: string | undefined;
+    try { owner = readClaimedOwner(claim.directory); }
+    catch { return undefined; }
     if (!owner || !verifyOwnerJwt(header, owner, claim.audience)) return undefined;
     return `Bearer ${internalOwnerToken(claim.internalOwnerKey, claim.audience)}`;
   };
   let attestationConfigured = false, resourcesConfigured = false;
-  const handler: RequestListener = (incoming, outgoing) => {
+  const handle: RequestListener = (incoming, outgoing) => {
     const path = incoming.url ?? "", method = incoming.method ?? "";
     outgoing.setHeader("Cache-Control", "no-store");
     if (method === "GET" && path === "/nebula/v1/ready") {
@@ -85,6 +91,36 @@ export function gateway(options: GatewayOptions) {
       }).catch(() => { if (!outgoing.headersSent) outgoing.writeHead(403); outgoing.end(); });
       return;
     }
+    if ((method === "GET" && (path === "/nebula/v1/storage-recovery" || path === "/nebula/v1/supervisors")) ||
+        (method === "POST" && path === "/nebula/v1/storage-recovery")) {
+      const authorization = ownerAuthorization(incoming.headers.authorization);
+      if (!authorization) { incoming.resume(); outgoing.writeHead(403).end(); return; }
+      const authorized = claim ? Promise.resolve(true) : kbsOwnerAuthorized(authorization, options.upstreamPort ?? 8080);
+      authorized.then(async allowed => {
+        if (!allowed) { incoming.resume(); outgoing.writeHead(403).end(); return; }
+        if (path === "/nebula/v1/supervisors") {
+          incoming.resume(); outgoing.writeHead(200, { "Content-Type": "application/json" });
+          outgoing.end(JSON.stringify(supervisorStatus(storageNames))); return;
+        }
+        if (!options.recovery) { incoming.resume(); outgoing.writeHead(503).end(); return; }
+        if (method === "GET") {
+          incoming.resume(); const value = await options.recovery.plans();
+          outgoing.writeHead(200, { "Content-Type": "application/json" }); outgoing.end(JSON.stringify(value)); return;
+        }
+        let size = 0; const chunks: Buffer[] = [];
+        try {
+          for await (const chunk of incoming) {
+            size += chunk.length; if (size > 4096) throw new Error("Oversized recovery request"); chunks.push(chunk);
+          }
+          const body = Buffer.concat(chunks);
+          let value: unknown; try { value = JSON.parse(body.toString("utf8")); } finally { body.fill(0); }
+          const accepted = await options.recovery.apply(value);
+          outgoing.writeHead(202, { "Content-Type": "application/json" }); outgoing.end(JSON.stringify(accepted));
+        } catch { if (!outgoing.headersSent) outgoing.writeHead(size > 4096 ? 413 : 409); outgoing.end(); }
+        finally { chunks.forEach(chunk => chunk.fill(0)); }
+      }).catch(() => { incoming.resume(); if (!outgoing.headersSent) outgoing.writeHead(503); outgoing.end(); });
+      return;
+    }
     if (method === "GET" && path === "/nebula/v1/configured") {
       incoming.resume();
       outgoing.setHeader("Content-Type", "application/json");
@@ -97,7 +133,7 @@ export function gateway(options: GatewayOptions) {
         let phase = "starting";
         try {
           const status = JSON.parse(readFileSync(`/run/nebula-storage/${name}/status.json`, "utf8"));
-          if (["awaiting-owner", "ready", "unlock-denied", "failed", "closed"].includes(status.phase)) phase = status.phase;
+          if (["awaiting-owner", "ready", "unlock-denied", "failed", "closed", "initializing", "migrating", "recovery-required", "recovering", "manual-recovery-required"].includes(status.phase)) phase = status.phase;
         } catch { /* No status exists until the measured helper starts. */ }
         return [name, { phase }];
       }));
@@ -134,8 +170,12 @@ export function gateway(options: GatewayOptions) {
           const fingerprint = claimOwner(claim, value.token, value.ownerPublicKeyPem, incoming.headers.authorization);
           outgoing.writeHead(200, { "Content-Type": "application/json" });
           outgoing.end(JSON.stringify({ version: 1, ownerPublicKeySha256: fingerprint }));
-        } catch { outgoing.writeHead(readClaimedOwner(claim.directory) ? 409 : 403).end(); }
-        body.fill(0);
+        } catch {
+          let status = 403;
+          try { if (readClaimedOwner(claim.directory)) status = 409; }
+          catch { status = 503; }
+          outgoing.writeHead(status).end();
+        } finally { body.fill(0); }
       });
       incoming.once("error", () => chunks.forEach(chunk => chunk.fill(0)));
       return;
@@ -188,11 +228,22 @@ export function gateway(options: GatewayOptions) {
     });
     incoming.once("error", () => { for (const chunk of chunks) chunk.fill(0); });
   };
+  const handler: RequestListener = (incoming, outgoing) => {
+    try { handle(incoming, outgoing); }
+    catch {
+      incoming.resume();
+      if (!outgoing.headersSent) outgoing.writeHead(503);
+      outgoing.end();
+    }
+  };
   const server = createServer({ key: options.key, cert: options.cert, minVersion: "TLSv1.3" }, handler);
   configuration.set(server, () => attestationConfigured && resourcesConfigured);
   if (options.browser) {
     const http = createHttpServer(handler);
     http.maxConnections = 32; http.requestTimeout = 30_000; http.headersTimeout = 10_000;
+    // The public TLS server is registered with AgentLifecycle. Forward a
+    // private listener failure to that same lifetime before any retry/rebind.
+    http.once("error", () => server.emit("error", new Error("Private owner listener failed")));
     http.listen(8447, "127.0.0.1");
     server.once("close", () => { http.closeAllConnections(); http.close(); });
   }
@@ -234,31 +285,68 @@ export function loadOrCreateIdentity(directory: string): { key: Buffer; cert: Bu
       Number(statfsSync(state).type) !== 0x01021994) throw new Error("Invalid guest identity directory");
   const key = join(state, "key.pem"), cert = join(state, "cert.pem");
   if (fresh) {
-    execFileSync("openssl", ["req", "-new", "-x509", "-newkey", "ec",
-      "-pkeyopt", "ec_paramgen_curve:P-256", "-noenc", "-sha256", "-days", "365",
-      "-subj", "/CN=nebula-instance", "-addext", "subjectAltName=DNS:nebula-instance",
-      "-addext", "basicConstraints=critical,CA:TRUE,pathlen:0",
-      "-addext", "keyUsage=critical,digitalSignature,keyCertSign",
-      "-keyout", key, "-out", cert], { stdio: "ignore", timeout: 15_000 });
+    execFileSync("openssl", ["genpkey", "-algorithm", "EC", "-pkeyopt", "ec_paramgen_curve:P-256",
+      "-out", key], { stdio: "ignore", timeout: 15_000 });
     chmodSync(key, 0o600);
-    chmodSync(cert, 0o600);
   }
-  const credential = { key: checkedFile(key), cert: checkedFile(cert) };
-  const certificate = new X509Certificate(credential.cert);
-  const privateKey = createPrivateKey(credential.key);
+  const privateBytes = checkedFile(key);
+  const privateKey = createPrivateKey(privateBytes);
   const publicKey = createPublicKey(privateKey).export({ type: "spki", format: "der" });
-  if (privateKey.asymmetricKeyType !== "ec" || privateKey.asymmetricKeyDetails?.namedCurve !== "prime256v1" ||
-      !certificate.publicKey.export({ type: "spki", format: "der" }).equals(publicKey) ||
-      !certificate.verify(certificate.publicKey) || !certificate.ca ||
-      certificate.subjectAltName !== "DNS:nebula-instance" ||
-      Date.parse(certificate.validFrom) > Date.now() || Date.parse(certificate.validTo) <= Date.now()) {
-    throw new Error("Invalid or expired guest identity");
+  if (privateKey.asymmetricKeyType !== "ec" || privateKey.asymmetricKeyDetails?.namedCurve !== "prime256v1") {
+    throw new Error("Invalid guest identity key");
   }
-  return credential;
+  const validate = (bytes: Buffer): X509Certificate => {
+    const certificate = new X509Certificate(bytes);
+    if (!certificate.publicKey.export({ type: "spki", format: "der" }).equals(publicKey) ||
+        !certificate.verify(certificate.publicKey) || !certificate.ca ||
+        certificate.subjectAltName !== "DNS:nebula-instance" ||
+        Date.parse(certificate.validFrom) > Date.now()) throw new Error("Invalid guest identity certificate");
+    return certificate;
+  };
+  let certificateBytes: Buffer | undefined;
+  try { certificateBytes = checkedFile(cert); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  const existing = certificateBytes && validate(certificateBytes);
+  if (!existing || Date.parse(existing.validTo) - Date.now() <= RENEW_BEFORE_MS) {
+    const temporary = join(state, `.cert-${randomUUID()}.pem`);
+    const file = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+    closeSync(file);
+    try {
+      // Expiry changes only a certificate, never the enrolled instance key.
+      execFileSync("openssl", ["req", "-new", "-x509", "-key", key, "-sha256", "-days", "365",
+        "-subj", "/CN=nebula-instance", "-addext", "subjectAltName=DNS:nebula-instance",
+        "-addext", "basicConstraints=critical,CA:TRUE,pathlen:0",
+        "-addext", "keyUsage=critical,digitalSignature,keyCertSign", "-out", temporary], { stdio: "ignore", timeout: 15_000 });
+      const renewed = checkedFile(temporary);
+      if (Date.parse(validate(renewed).validTo) <= Date.now() + RENEW_BEFORE_MS) throw new Error("Invalid renewed guest identity");
+      const descriptor = openSync(temporary, constants.O_RDONLY | constants.O_NOFOLLOW);
+      try { fsyncSync(descriptor); } finally { closeSync(descriptor); }
+      renameSync(temporary, cert);
+      const parent = openSync(state, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+      try { fsyncSync(parent); } finally { closeSync(parent); }
+      certificateBytes = renewed;
+    } finally {
+      try { unlinkSync(temporary); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    }
+  }
+  return { key: privateBytes, cert: certificateBytes! };
+}
+
+/** Refresh only an already registered guest identity. No endpoint, key or path
+ * can be supplied by an owner request or an application. */
+export function refreshGatewayIdentity(server: ReturnType<typeof createServer>): boolean {
+  const current = identityRenewals.get(server);
+  if (!current) throw new Error("Gateway has no registered identity");
+  const credential = loadOrCreateIdentity(current.directory);
+  if (credential.cert.equals(current.cert)) return false;
+  server.setSecureContext({ ...credential, minVersion: "TLSv1.3" });
+  current.cert = credential.cert;
+  return true;
 }
 
 export function startGateway(directory = "/run/instance", storageNames: readonly string[] = [], resources: readonly string[] = [],
-  ownerClaimSha256?: string, audience?: string, browser = false, ready?: () => boolean) {
+  ownerClaimSha256?: string, audience?: string, browser = false, ready?: () => boolean, recovery?: GatewayOptions["recovery"]) {
   const credential = loadOrCreateIdentity(directory);
   if ((ownerClaimSha256 === undefined) !== (audience === undefined)) throw new Error("Incomplete owner claim configuration");
   if (browser) {
@@ -272,5 +360,13 @@ export function startGateway(directory = "/run/instance", storageNames: readonly
   }
   const claim = ownerClaimSha256 && audience ? { sha256: ownerClaimSha256, audience, directory,
     internalOwnerKey: loadInternalOwnerKey(directory) } : undefined;
-  return gateway({ ...credential, storageNames, resources, claim, browser, ready }).listen(8444, "127.0.0.1");
+  const server = gateway({ ...credential, storageNames, resources, claim, browser, ready, recovery });
+  identityRenewals.set(server, { directory, cert: credential.cert });
+  const renewal = setInterval(() => {
+    try { refreshGatewayIdentity(server); }
+    catch { server.emit("error", new Error("Guest identity renewal failed")); }
+  }, 60 * 60 * 1000);
+  renewal.unref();
+  server.once("close", () => { clearInterval(renewal); identityRenewals.delete(server); });
+  return server.listen(8444, "127.0.0.1");
 }

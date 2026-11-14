@@ -1,5 +1,6 @@
-import { createHash, createPrivateKey, createPublicKey, sign, timingSafeEqual, verify } from "node:crypto";
-import { lstatSync, mkdirSync, readFileSync, statfsSync, writeFileSync } from "node:fs";
+import { createHash, createPrivateKey, createPublicKey, randomUUID, sign, timingSafeEqual, verify } from "node:crypto";
+import { closeSync, constants, fsyncSync, linkSync, lstatSync, openSync, readFileSync, statfsSync,
+  unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const CLAIM = "claimed-owner";
@@ -29,9 +30,11 @@ export function readClaimedOwner(directory: string): string | undefined {
   const path = join(directory, CLAIM);
   try {
     const stat = lstatSync(path);
-    if (!stat.isDirectory() || stat.isSymbolicLink() || (stat.mode & PRIVATE) !== 0 ||
+    if ((!stat.isDirectory() && !stat.isFile()) || stat.isSymbolicLink() || (stat.mode & PRIVATE) !== 0 ||
         Number(statfsSync(path).type) !== 0x01021994) throw new Error("Invalid claimed owner directory");
-    const pem = privateFile(join(path, "owner.pub")).toString("utf8");
+    // Earlier releases committed a directory before its file. Keep complete
+    // legacy claims readable, but never interpret an incomplete one as unclaimed.
+    const pem = privateFile(stat.isDirectory() ? join(path, "owner.pub") : path).toString("utf8");
     publicKey(pem);
     return pem;
   } catch (error) {
@@ -89,11 +92,29 @@ export function claimOwner(config: ClaimConfig, token: string, ownerPublicKeyPem
   if (expected.length !== 32 || !timingSafeEqual(actual, expected)) throw new Error("Invalid claim token");
   const key = publicKey(ownerPublicKeyPem);
   if (!verifyOwnerJwt(authorization, ownerPublicKeyPem, config.audience)) throw new Error("Owner key proof failed");
-  // mkdir is the atomic first-claim lock. A partial write stays locked and
-  // fails closed; a guest replacement needs a new explicit owner enrollment.
-  const directory = join(config.directory, CLAIM);
-  mkdirSync(directory, { mode: 0o700 });
-  writeFileSync(join(directory, "owner.pub"), ownerPublicKeyPem, { mode: 0o600, flag: "wx" });
+  if (Number(statfsSync(config.directory).type) !== 0x01021994) throw new Error("Owner claim requires guest tmpfs");
+  const temporary = join(config.directory, `.claim-${randomUUID()}.tmp`);
+  const file = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+  let published = false;
+  try {
+    writeFileSync(file, ownerPublicKeyPem);
+    fsyncSync(file);
+    // link is atomic and refuses every existing destination, including an
+    // incomplete legacy directory. No first-winner lock can expose partial PEM.
+    try { linkSync(temporary, join(config.directory, CLAIM)); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new Error("Already claimed");
+      throw error;
+    }
+    published = true;
+    const parent = openSync(config.directory, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+    try { fsyncSync(parent); } finally { closeSync(parent); }
+  } finally {
+    closeSync(file);
+    // A committed claim remains authoritative even if its directory sync
+    // failed. Never remove or replace that selected owner as a retry strategy.
+    try { unlinkSync(temporary); } catch (error) { if (!published) throw error; }
+  }
   return createHash("sha256").update(key.export({ type: "spki", format: "der" })).digest("hex");
 }
 

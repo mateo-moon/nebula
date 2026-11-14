@@ -248,7 +248,7 @@ fn publish_status(
         "error":error.map(|e| format!("{e:#}").chars().take(1024).collect::<String>())
     });
     if let Some(report) = report {
-        for field in ["formatted", "marker_sha256", "luks_uuid"] {
+        for field in ["formatted", "marker_sha256", "luks_uuid", "supervisors"] {
             if let Some(value) = report.get(field) {
                 status[field] = value.clone();
             }
@@ -280,41 +280,22 @@ fn hold_refusal(profile: &volume::Profile, phase: &str, error: anyhow::Error) ->
     Err(error)
 }
 
-fn directories(config: &Volume, created: bool, root: &Path) -> Result<()> {
-    for client in &config.clients {
-        let path = root.join(&client.name);
-        if created {
-            fs::create_dir(&path)?;
-            fs::set_permissions(&path, Permissions::from_mode(0o700))?;
-            let name = std::ffi::CString::new(path.as_os_str().as_encoded_bytes())?;
-            ensure!(
-                unsafe { libc::chown(name.as_ptr(), client.uid, client.gid) } == 0,
-                "client directory ownership failed"
-            );
-        }
-        let stat = fs::symlink_metadata(&path)?;
-        // The app may chmod/chgrp its own exported directory. Its parent is
-        // not writable through the handoff, so only type and owner matter.
-        ensure!(
-            stat.is_dir() && stat.uid() == client.uid,
-            "invalid persistent client directory"
-        );
-    }
-    File::open(root)?.sync_all()?;
-    Ok(())
+fn directories(config: &Volume, _created: bool, root: &Path) -> Result<()> {
+    crate::initialization::recipients(root, &config.clients)
 }
 
 pub(crate) fn serve(json: &str) -> Result<()> {
     let config = Volume::parse(json)?;
     handoff::signals()?;
     let profile = volume::Profile::generic(&config.name, config.size_bytes);
-    serve_volume(config, profile, false)
+    serve_volume(config, profile, false, None)
 }
 
 pub(crate) fn serve_volume(
     config: Volume,
     profile: &'static volume::Profile,
     owner_gate: bool,
+    recovery: Option<crate::recovery::VolumeRecovery>,
 ) -> Result<()> {
     tmpfs(profile.state)?;
     volume::discover()?;
@@ -322,18 +303,69 @@ pub(crate) fn serve_volume(
     if owner_gate {
         wait_owner()?;
     }
-    let key = retrieve(&config.key_resource, profile)?;
     let format = match config.initialization {
         Initialization::Never => Format::Deny,
         Initialization::IfEmpty => Format::Allow,
     };
-    let (active, report) = match volume::open_lifecycle(key, profile, format) {
-        Ok(opened) => opened,
-        Err(error) => return hold_refusal(profile, "failed", error),
+    let (mut active, report) = loop {
+        let key = retrieve(&config.key_resource, profile)?;
+        match volume::open_lifecycle(Zeroizing::new(*key), profile, format) {
+            Ok((Some(active), report)) => break (active, report),
+            opened => {
+                let error = match opened {
+                    Err(error) => error,
+                    _ => Exit::UnlockDenied.into(),
+                };
+                let Some(control) = &recovery else {
+                    return hold_refusal(profile, "failed", error);
+                };
+                let header = volume::recovery_candidate(&key, profile).ok().flatten();
+                control.candidate(header.clone());
+                publish_status(
+                    profile,
+                    if header.is_some() {
+                        "recovery-required"
+                    } else {
+                        "manual-recovery-required"
+                    },
+                    Some(&error),
+                    None,
+                )?;
+                // A failed volume never stops the control plane. Only a native
+                // one-shot authorization for this exact candidate can retry.
+                loop {
+                    ensure!(
+                        handoff::SIGNAL.load(Ordering::SeqCst) == 0,
+                        "recovery interrupted by shutdown"
+                    );
+                    if let Some(expected) = control.requested(Duration::from_millis(100)) {
+                        publish(profile, "recovering")?;
+                        let recovered = volume::recover_empty_filesystem(
+                            Zeroizing::new(*key),
+                            profile,
+                            &expected,
+                        );
+                        if recovered.is_ok() {
+                            break;
+                        }
+                        let fresh = volume::recovery_candidate(&key, profile).ok().flatten();
+                        control.candidate(fresh.clone());
+                        publish(
+                            profile,
+                            if fresh.is_some() {
+                                "recovery-required"
+                            } else {
+                                "manual-recovery-required"
+                            },
+                        )?;
+                    }
+                }
+            }
+        }
     };
-    let Some(mut active) = active else {
-        return hold_refusal(profile, "unlock-denied", Exit::UnlockDenied.into());
-    };
+    if let Some(control) = &recovery {
+        control.candidate(None);
+    }
     // Keep the mapping alive and the failure visible if a lease or listener
     // fails. Restarting this sidecar is never an owner-authorized disk retry.
     if let Err(error) = serve_mounted(&config, profile, &mut active, &report) {
@@ -355,6 +387,9 @@ fn serve_mounted(
     ) {
         return Err(error);
     }
+    if let Some(layout) = &active.layout {
+        crate::initialization::complete(Path::new(profile.mount), &layout.uuid)?;
+    }
     fs::set_permissions(profile.state, Permissions::from_mode(0o755))?;
     let socket = Path::new(profile.state).join("mount.sock");
     if let Ok(stale) = fs::symlink_metadata(&socket) {
@@ -367,11 +402,15 @@ fn serve_mounted(
     let listener = UnixListener::bind(&socket)?;
     fs::set_permissions(&socket, Permissions::from_mode(0o666))?;
     listener.set_nonblocking(true)?;
-    publish_status(profile, "ready", None, Some(report))?;
+    let mut initial_report = report.clone();
+    initial_report["supervisors"]=serde_json::Value::Object(config.clients.iter().map(|client| (client.name.clone(),serde_json::json!({"phase":"starting","restartCount":0,"applicationReady":null}))).collect());
+    publish_status(profile, "ready", None, Some(&initial_report))?;
     let count = config.clients.len();
     let mut leases: Vec<Option<UnixStream>> = (0..count).map(|_| None).collect();
     let mut pending: Vec<Option<handoff::PendingMount>> = (0..count).map(|_| None).collect();
     let mut used = vec![false; count];
+    let mut starts = vec![0_u64; count];
+    let mut phases = vec!["starting"; count];
     let mut stopping = None;
     loop {
         if handoff::SIGNAL.load(Ordering::SeqCst) != 0 && stopping.is_none() {
@@ -418,17 +457,36 @@ fn serve_mounted(
                 }
             }
         }
-        for lease in &mut leases {
+        let mut supervision_changed = false;
+        for (index, lease) in leases.iter_mut().enumerate() {
             if let Some(stream) = lease {
                 let mut byte = [0];
                 match stream.read(&mut byte) {
+                    Ok(1) if byte == *b"B" => {
+                        starts[index] = starts[index].saturating_add(1);
+                        phases[index] = "running";
+                        supervision_changed = true;
+                    }
+                    Ok(1) if byte == *b"X" => {
+                        phases[index] = "backoff";
+                        supervision_changed = true;
+                    }
                     Ok(1) if byte == *b"D" => {
                         *lease = None;
+                        phases[index] = "stopped";
+                        supervision_changed = true;
                     }
                     Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
                     _ => bail!("mount lease ended without clean unmount"),
                 }
             }
+        }
+        if supervision_changed {
+            let mut public_report = report.clone();
+            public_report["supervisors"] = serde_json::Value::Object(config.clients.iter().enumerate().map(|(index, client)| {
+                (client.name.clone(), serde_json::json!({"phase":phases[index],"restartCount":starts[index].saturating_sub(1),"applicationReady":null}))
+            }).collect());
+            publish_status(profile, "ready", None, Some(&public_report))?;
         }
         if stopping.is_some() && leases.iter().all(Option::is_none) {
             break;
