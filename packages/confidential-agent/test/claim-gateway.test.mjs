@@ -105,12 +105,12 @@ test("claim translates only the selected owner JWT to a guest-internal Trustee J
   }
 });
 
-test("preset-owner diagnostics require KBS to verify the JWT before reading the private log", { skip: !guestMemory }, async () => {
+test("preset-owner detailed status requires actual KBS owner JWT verification", { skip: !guestMemory }, async () => {
   const directory = mkdtempSync("/dev/shm/nebula-diagnostics-owner-");
   const owner = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
   const adversary = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
   const pem = owner.publicKey.export({ type: "spki", format: "pem" }).toString();
-  let checks = 0;
+  let checks = 0, recoveryReads = 0;
   const kbs = httpServer((request, response) => {
     checks++;
     assert.equal(request.method, "GET"); assert.equal(request.url, "/kbs/v0/resource-policy");
@@ -119,14 +119,32 @@ test("preset-owner diagnostics require KBS to verify the JWT before reading the 
   });
   let publicGateway;
   try {
-    publicGateway = gateway({ ...loadOrCreateIdentity(directory), upstreamPort: await listen(kbs) });
+    publicGateway = gateway({ ...loadOrCreateIdentity(directory), upstreamPort: await listen(kbs),
+      recovery: { async plans() { recoveryReads++; return { version: 1, plans: [] }; }, async apply() { throw Error("GET fixture only"); } } });
     const port = await listen(publicGateway);
-    assert.equal(await call(port, "/nebula/v1/diagnostics"), 403);
-    assert.equal(checks, 0);
-    assert.equal(await call(port, "/nebula/v1/diagnostics", ownerToken(adversary.privateKey, "workload")), 403);
-    assert.equal(await call(port, "/nebula/v1/diagnostics", "Bearer forged.invalid.token"), 403);
-    assert.equal(await call(port, "/nebula/v1/diagnostics", ownerToken(owner.privateKey, "workload")), 200);
-    assert.equal(checks, 3);
+    const protectedPaths = ["/nebula/v1/storage", "/nebula/v1/diagnostics", "/nebula/v1/supervisors",
+      "/nebula/v1/storage-recovery", "/nebula/v1/bootstrap"];
+    for (const path of protectedPaths) {
+      const before = checks;
+      assert.equal(await call(port, path), 403, `${path} accepted a missing owner JWT`);
+      assert.equal(checks, before, "Missing credentials must not reach KBS or read private status");
+      const refused = path === "/nebula/v1/bootstrap" ? 401 : 403;
+      assert.equal(await call(port, path, ownerToken(adversary.privateKey, "workload")), refused,
+        `${path} accepted an independent but correctly shaped ES256 JWT`);
+      assert.equal(await call(port, path, "Bearer forged.invalid.token"), refused,
+        `${path} accepted JWT-shaped text without a valid signature`);
+      assert.equal(recoveryReads, 0, "Unverified owner must not read recovery state");
+    }
+    assert.equal(checks, protectedPaths.length * 2);
+    for (const path of protectedPaths) assert.equal(await call(port, path, ownerToken(owner.privateKey, "workload")), 200, path);
+    assert.equal(recoveryReads, 1);
+    assert.equal(checks, protectedPaths.length * 3);
+    // These small public bootstrap/health contracts expose no private status.
+    const beforePublic = checks;
+    assert.equal(await call(port, "/nebula/v1/ready"), 503);
+    assert.equal(await call(port, "/nebula/v1/configured"), 200);
+    assert.equal(await call(port, "/nebula/v1/instance"), 200);
+    assert.equal(checks, beforePublic);
   } finally {
     if (publicGateway) await close(publicGateway);
     await close(kbs); rmSync(directory, { recursive: true, force: true });

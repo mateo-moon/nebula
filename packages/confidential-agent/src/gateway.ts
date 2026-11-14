@@ -128,18 +128,23 @@ export function gateway(options: GatewayOptions) {
       return;
     }
     if (method === "GET" && path === "/nebula/v1/storage") {
-      if (!ownerAuthorization(incoming.headers.authorization)) { outgoing.writeHead(403).end(); incoming.resume(); return; }
-      const storage = Object.fromEntries(storageNames.map(name => {
-        let phase = "starting";
-        try {
-          const status = JSON.parse(readFileSync(`/run/nebula-storage/${name}/status.json`, "utf8"));
-          if (["awaiting-owner", "ready", "unlock-denied", "failed", "closed", "initializing", "migrating", "recovery-required", "recovering", "manual-recovery-required"].includes(status.phase)) phase = status.phase;
-        } catch { /* No status exists until the measured helper starts. */ }
-        return [name, { phase }];
-      }));
-      outgoing.setHeader("Content-Type", "application/json");
-      outgoing.end(JSON.stringify({ version: 1, storage }));
+      const authorization = ownerAuthorization(incoming.headers.authorization);
       incoming.resume();
+      if (!authorization) { outgoing.writeHead(403).end(); return; }
+      const authorized = claim ? Promise.resolve(true) : kbsOwnerAuthorized(authorization, options.upstreamPort ?? 8080);
+      authorized.then(allowed => {
+        if (!allowed) { outgoing.writeHead(403).end(); return; }
+        const storage = Object.fromEntries(storageNames.map(name => {
+          let phase = "starting";
+          try {
+            const status = JSON.parse(readFileSync(`/run/nebula-storage/${name}/status.json`, "utf8"));
+            if (["awaiting-owner", "ready", "unlock-denied", "failed", "closed", "initializing", "migrating", "recovery-required", "recovering", "manual-recovery-required"].includes(status.phase)) phase = status.phase;
+          } catch { /* No status exists until the measured helper starts. */ }
+          return [name, { phase }];
+        }));
+        outgoing.setHeader("Content-Type", "application/json");
+        outgoing.end(JSON.stringify({ version: 1, storage }));
+      }).catch(() => { if (!outgoing.headersSent) outgoing.writeHead(403); outgoing.end(); });
       return;
     }
     if (method === "GET" && path === "/nebula/v1/instance") {
