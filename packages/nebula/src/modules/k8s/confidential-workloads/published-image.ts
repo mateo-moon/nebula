@@ -77,7 +77,8 @@ export function imageProcess(image: string, supplied?: { manifest: Uint8Array; c
   for (const entry of environment) {
     if (typeof entry !== "string" || entry.length > 16384 || entry.includes("\0") || entry.includes("$(")) throw new Error("OCI environment must contain literal values without native policy placeholders");
     const split = entry.indexOf("="), name = entry.slice(0, split);
-    if (split < 1 || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) || Object.hasOwn(env, name)) throw new Error("Invalid or duplicate OCI environment name");
+    if (split < 1 || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) || Object.hasOwn(env, name) ||
+        name === "HOSTNAME" || name.startsWith("TRUSTEE_")) throw new Error("Invalid, reserved or duplicate OCI environment name");
     env[name] = entry.slice(split + 1);
   }
   if (!useImageCommand) return { command: [], env };

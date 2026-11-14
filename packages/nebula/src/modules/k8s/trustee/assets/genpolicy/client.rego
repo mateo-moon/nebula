@@ -25,6 +25,8 @@ trustee_literal_process(p, i) if {
     expected := object.get(p, "Env", [])
     actual := object.get(i, "Env", [])
     count(expected) == count(actual)
+    count([value | some value in expected; startswith(value, "HOSTNAME=")]) ==
+        count([value | some value in actual; startswith(value, "HOSTNAME=")])
     {value | some value in expected; value != "HOSTNAME=$(host-name)"} ==
         {value | some value in actual; not trustee_dynamic_hostname(expected, value)}
 }

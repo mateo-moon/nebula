@@ -12,7 +12,8 @@ import type { TrusteeConfig } from "../trustee/types";
 import { validateWorkload } from "./validation";
 import { TRUSTEE_CHART, TRUSTEE_CHART_VERSION } from "./chart";
 import { resolvePublishedImage, imageProcess } from "./published-image";
-import type { ConfidentialStorageResource, ConfidentialStorageSpec, ConfidentialWorkloadResource, WorkloadRenderOptions } from "./types";
+import type { ConfidentialStorageResource, ConfidentialWorkloadResource, WorkloadRenderOptions } from "./types";
+import { derivedLauncherConfig, derivedWorkloadConfig } from "./derived-config";
 
 const limits = { requests: { cpu: "50m", memory: "128Mi" }, limits: { memory: "512Mi" } };
 const security = (uid: number, gid = uid, capabilities: string[] = []) => ({
@@ -30,6 +31,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
   storages: readonly ConfidentialStorageResource[], options: WorkloadRenderOptions = {}) {
   validateWorkload(resource, storages);
   const { spec, metadata } = resource;
+  const derived = derivedWorkloadConfig(resource, storages);
   if (spec.accessLink) throw new TypeError("Confidential workload: access link must be resolved to its public token commitment before rendering");
   const runtime = spec.runtime ?? {};
   const config: TrusteeConfig = {
@@ -91,24 +93,14 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
   const volumes: any[] = [...structuredClone(base.spec.volumes), memory("instance"), memory("owner-tmp"),
     memory("guest-guard", "1Mi"), memory("owner-ready", "1Mi"), memory("storage-runtime", "32Mi"),
     ...(spec.agentImage ? [memory("public-kds", "1Mi")] : [])];
-  const bindings = (spec.storage ?? []).map(binding => ({ ...binding,
-    spec: storages.find(storage => storage.metadata.namespace === metadata.namespace && storage.metadata.name === binding.resource)!.spec }));
-  const encrypted = bindings.filter((binding): binding is typeof binding & { spec: Extract<ConfidentialStorageSpec, { type: "EncryptedBlock" }> } => binding.spec.type === "EncryptedBlock");
-  const ownerConfig = { storageNames: encrypted.map(binding => binding.name),
-    resources: spec.resources.map(path => path.join("/")),
-    ...(spec.browserOwner ? { browser: true } : {}),
-    ...(spec.ownerClaimSha256 ? { ownerClaimSha256: spec.ownerClaimSha256, audience: spec.profile } : {}) };
+  const { bindings, encrypted, owner: ownerConfig, resourceClients } = derived;
   gateway.args.push(JSON.stringify(ownerConfig));
   gateway.volumeMounts.push(...encrypted.map(binding =>
     mount(`state-${binding.name}`, `/run/nebula-storage/${binding.name}`, true)));
-  const resourceClients = spec.containers.filter(container => container.applicationResources?.length);
   for (const client of resourceClients) volumes.push(memory(`resource-${client.name}`, "1Mi"));
   if (!spec.agentImage && resourceClients.length) initContainers.push({ name: "nebula-resource-broker", image: spec.storageImage, imagePullPolicy: "Always",
     command: ["/usr/local/bin/nebula-confidential-storage"],
-    args: ["resource-broker", JSON.stringify({ version: 1, clients: resourceClients.map(client => ({
-      name: client.name, uid: client.uid, gid: client.gid,
-      resources: client.applicationResources!.map(path => path.join("/")),
-    })) })], restartPolicy: "Always", securityContext: security(0, 0, ["CHOWN"]), resources: limits,
+    args: ["resource-broker", JSON.stringify(derived.broker)], restartPolicy: "Always", securityContext: security(0, 0, ["CHOWN"]), resources: limits,
     volumeMounts: resourceClients.map(client => mount(`resource-${client.name}`, `/run/nebula-resources/${client.name}`)) });
   // Do not create a CDH attestation session under the initial deny policy.
   // Native clients may cache that non-affirming token until it expires.
@@ -126,13 +118,9 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
       volumes.push(memory(volumeName, binding.spec.sizeLimit));
       continue;
     }
-    const storage = binding.spec;
-    volumes.push({ name: volumeName, persistentVolumeClaim: { claimName: storage.claimName } },
+    volumes.push({ name: volumeName, persistentVolumeClaim: { claimName: binding.spec.claimName } },
       memory(`state-${binding.name}`));
-    const clients = spec.containers.filter(container => container.mounts?.some(m => m.storage === binding.name))
-      .map(container => ({ name: container.name, uid: container.uid, gid: container.gid }));
-    const storageConfig = { version: 1, name: binding.name, sizeBytes: storage.sizeBytes,
-      keyResource: storage.keyResource.join("/"), initialization: storage.initialization, clients };
+    const storageConfig = derived.volumes.find(volume => volume.name === binding.name)!;
     if (!spec.agentImage) initContainers.push({ name: `nebula-storage-${binding.name}`, image: spec.storageImage, imagePullPolicy: "Always",
       command: ["/usr/local/bin/nebula-confidential-storage"], args: ["serve", JSON.stringify(storageConfig)],
       restartPolicy: "Always", securityContext: security(0, 0, ["SYS_ADMIN", "MKNOD", "CHOWN"]),
@@ -144,10 +132,6 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
     // a regular init stage instead: KBS/TNG stay available for enrollment,
     // and kubelet cannot pull the encrypted app until the agent publishes ready.
     delete tng.startupProbe;
-    const deniedResources = [...new Set([
-      ...encrypted.map(binding => binding.spec.keyResource.join("/")),
-      ...spec.containers.flatMap(container => container.imageKeyResource ? [container.imageKeyResource.join("/")] : []),
-    ])].sort();
     const agent = { name: "nebula-agent", image: spec.agentImage, imagePullPolicy: "Always",
       // Native genpolicy currently allows SignalProcessRequest. Disable Node's
       // SIGUSR1 inspector in the measured command so a signalled helper cannot
@@ -157,15 +141,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
       // reliably return the guest's termination file to kubelet, so preserve
       // that bounded marker in the container log for first-start diagnosis.
       terminationMessagePolicy: "FallbackToLogsOnError",
-      args: [JSON.stringify({ version: 1, role: "workload", owner: ownerConfig, storage: { version: 1,
-        deniedResources,
-        volumes: encrypted.map(binding => ({ version: 1, name: binding.name, sizeBytes: binding.spec.sizeBytes,
-          keyResource: binding.spec.keyResource.join("/"), initialization: binding.spec.initialization,
-          clients: spec.containers.filter(container => container.mounts?.some(mount => mount.storage === binding.name))
-            .map(({ name, uid, gid }) => ({ name, uid, gid })) })),
-        clients: resourceClients.map(client => ({ name: client.name, uid: client.uid, gid: client.gid,
-          resources: client.applicationResources!.map(path => path.join("/")) })),
-      } })],
+      args: [JSON.stringify(derived.agent)],
       securityContext: security(0, 0, ["NET_ADMIN", "SYS_ADMIN", "MKNOD", "CHOWN", "SETUID", "SETGID", "SETPCAP"]),
       resources: { requests: { cpu: "50m", memory: "256Mi" }, limits: { memory: "1Gi" } },
       volumeMounts: [mount("instance", "/run/instance"), mount("owner-tmp", "/tmp"),
@@ -191,8 +167,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
       : [...container.command!, ...(container.args ?? [])];
     const blockMounts = (container.mounts ?? []).filter(m => encrypted.some(binding => binding.name === m.storage));
     const directMounts = (container.mounts ?? []).filter(m => !blockMounts.includes(m));
-    const launch = { version: 1, uid: container.uid, gid: container.gid,
-      mounts: blockMounts.map(m => ({ socket: `/run/nebula-mounts/${m.storage}/mount.sock`, path: m.path })) };
+    const launch = derivedLauncherConfig(container, encrypted.map(binding => binding.name));
     return {
       name: container.name,
       image,

@@ -55,7 +55,8 @@ test("generated access links remain deterministic declarations and cannot mix ow
 });
 
 test("OCI environment placeholders cannot acquire dynamic native-policy semantics", () => {
-  for (const env of [["NODE_OPTIONS=$(node-name)"], ["HOSTNAME=$(host-name)"], ["EXAMPLE=$(pod-ip)"], ["PATH=/bin", "PATH=/unapproved"]]) {
+  for (const env of [["NODE_OPTIONS=$(node-name)"], ["HOSTNAME=$(host-name)"], ["HOSTNAME=unapproved"],
+    ["TRUSTEE_ENDPOINT=unapproved"], ["EXAMPLE=$(pod-ip)"], ["PATH=/bin", "PATH=/unapproved"]]) {
     const config = Buffer.from(JSON.stringify({ architecture: "amd64", os: "linux", config: { Env: env } }));
     const manifest = Buffer.from(JSON.stringify({ schemaVersion: 2, config: { digest: `sha256:${createHash("sha256").update(config).digest("hex")}`, size: config.length } }));
     const reference = `example.invalid/app@sha256:${createHash("sha256").update(manifest).digest("hex")}`;

@@ -6,6 +6,7 @@ import { createPublicKey } from "node:crypto";
 import type { ConfidentialStorageResource, ConfidentialWorkloadResource, WorkloadContainer } from "./types";
 import { CONFIDENTIAL_API } from "./types";
 import { TRUSTEE_CHART, TRUSTEE_CHART_VERSION } from "./chart";
+import { derivedLauncherConfig, derivedWorkloadConfig } from "./derived-config";
 
 const taggedImage = (image: unknown): image is string => {
   if (typeof image !== "string" || image.length > 384) return false;
@@ -25,7 +26,22 @@ const name = (value: unknown) => typeof value === "string" && new RegExp(namePat
 export class ConfidentialValidationError extends TypeError {}
 const fail = (message: string): never => { throw new ConfidentialValidationError(`Confidential workload: ${message}`); };
 const integer = (value: unknown, low: number, high: number) => Number.isSafeInteger(value) && Number(value) >= low && Number(value) <= high;
-const path = (value: string) => new RegExp(pathPattern).test(value) && value !== "/" &&
+const memoryBytes = (value: unknown): bigint => {
+  if (typeof value !== "string" || value.length > 16 || !/^[1-9][0-9]*(Mi|Gi)$/.test(value)) fail("memory requires a positive bounded Mi/Gi quantity");
+  const text = value as string, bytes = BigInt(text.slice(0, -2)) * (text.endsWith("Gi") ? 1073741824n : 1048576n);
+  if (bytes > 2n ** 50n) fail("memory quantity exceeds 2^50 bytes");
+  return bytes;
+};
+const cpuMillicores = (value: unknown): bigint => {
+  if (typeof value !== "string" || value.length > 16 ||
+      !/^(?:[1-9][0-9]*m|(?:0|[1-9][0-9]*)(?:[.][0-9]{1,3})?)$/.test(value)) fail("CPU requires millicores or decimal cores with at most three fractional digits");
+  const text = value as string, [whole, fraction = ""] = text.split(".");
+  const amount = text.endsWith("m") ? BigInt(text.slice(0, -1)) : BigInt(whole) * 1000n + BigInt(fraction.padEnd(3, "0"));
+  if (amount < 1n || amount > 32000n) fail("CPU must be between one and 32000 millicores");
+  return amount;
+};
+const path = (value: unknown): value is string => typeof value === "string" && value.length <= 256 &&
+  new RegExp(pathPattern).test(value) && value !== "/" &&
   !value.endsWith("/") && !value.includes("//") &&
   !["/dev", "/proc", "/sys", "/run", "/bin", "/sbin", "/usr", "/etc", "/lib", "/lib64"].some(root => value === root || value.startsWith(`${root}/`));
 
@@ -42,7 +58,7 @@ export function validateStorage(resource: ConfidentialStorageResource): void {
   const spec = resource.spec;
   if (spec.type === "Memory") {
     fields(spec, ["type", "sizeLimit"]);
-    if (!/^[1-9][0-9]*(Mi|Gi)$/.test(spec.sizeLimit)) fail("memory size must be a positive Mi/Gi quantity");
+    memoryBytes(spec.sizeLimit);
   } else if (spec.type === "EncryptedBlock") {
     fields(spec, ["type", "claimName", "sizeBytes", "keyResource", "initialization", "retention"]);
     if (!name(spec.claimName) || !integer(spec.sizeBytes, 64 * 1024 * 1024, 2 ** 50) ||
@@ -60,16 +76,30 @@ function validateContainer(container: WorkloadContainer): void {
   const explicitCommand = container.commandFromImage === undefined && Array.isArray(container.command) &&
     container.command.length > 0 && [...container.command, ...(container.args ?? [])].every(value =>
       typeof value === "string" && !value.includes("\0")) && container.command[0].startsWith("/");
-  if (!name(container.name) || container.name.startsWith("nebula-") ||
+  if (!name(container.name) || container.name.startsWith("nebula-") || ["agent", "kbs", "tng", "coco-volume-marker"].includes(container.name) ||
       !(isDigestImage(container.image) || (container.imageKeyResource && taggedImage(container.image))) ||
       !(imageCommand || explicitCommand) ||
       !integer(container.uid, 11000, 65534) || !integer(container.gid, 11000, 65534)) {
     fail("containers need digest images or an owner-keyed publication tag, an explicit command or commandFromImage, and non-reserved non-root uid/gid");
   }
   if (container.imageKeyResource) resourcePath(container.imageKeyResource);
-  if (Object.entries(container.env ?? {}).some(([key, value]) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof value !== "string" || value.includes("\0") || value.includes("$("))) {
+  if (Object.entries(container.env ?? {}).some(([key, value]) => key === "HOSTNAME" || key.startsWith("TRUSTEE_") ||
+      !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof value !== "string" || value.includes("\0") || value.includes("$("))) {
     fail("environment must contain public literal strings");
   }
+  if (container.resources !== undefined) {
+    fields(container.resources, ["requests", "limits"]);
+    for (const quantities of [container.resources.requests, container.resources.limits]) {
+      if (!quantities) fail("resource requests and limits maps must both be explicit");
+      fields(quantities, ["cpu", "memory"]);
+      for (const [key, value] of Object.entries(quantities)) (key === "cpu" ? cpuMillicores : memoryBytes)(value);
+    }
+    for (const key of ["cpu", "memory"] as const) {
+      const request = container.resources.requests[key], limit = container.resources.limits[key], parse = key === "cpu" ? cpuMillicores : memoryBytes;
+      if (request !== undefined && limit !== undefined && parse(request) > parse(limit)) fail("resource requests cannot exceed limits");
+    }
+  }
+  if (!Array.isArray(container.mounts ?? []) || (container.mounts ?? []).length > 8) fail("zero to eight application mounts required");
   for (const mount of container.mounts ?? []) {
     fields(mount, ["storage", "path"]);
     if (!name(mount.storage) || !path(mount.path)) fail("invalid application mount");
@@ -208,5 +238,20 @@ export function validateWorkload(resource: ConfidentialWorkloadResource, storage
         !integer(spec.runtime.vcpus ?? 2, 1, 32)) fail("invalid guest sizing");
     if (spec.runtime.createContainerTimeoutSeconds !== undefined &&
         !integer(spec.runtime.createContainerTimeoutSeconds, 1, 3600)) fail("invalid container creation timeout");
+  }
+  const derived = derivedWorkloadConfig(resource, storages);
+  const bounded = (value: object, maximum: number, module: string) => {
+    if (Buffer.byteLength(JSON.stringify(value), "utf8") > maximum) fail(`derived ${module} configuration exceeds ${maximum} bytes`);
+  };
+  // These are the actual serialized configurations, including repeated
+  // per-client resource lists, not estimates from the declaration's size.
+  for (const volume of derived.volumes) bounded(volume, 8192, "volume");
+  if (derived.broker.clients.length) bounded(derived.broker, 16384, "resource broker");
+  for (const container of spec.containers) {
+    bounded(derivedLauncherConfig(container, derived.encrypted.map(binding => binding.name)), 8192, "launcher");
+  }
+  if (spec.agentImage) {
+    bounded(derived.storage, 65536, "native storage module");
+    bounded(derived.agent, 65536, "agent");
   }
 }

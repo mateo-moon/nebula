@@ -148,13 +148,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Install OCI metadata tools in the pinned synthesis environment
+        run: |
+          docker build --tag nebula-confidential-native-render:ci - <<'DOCKERFILE'
+          FROM ghcr.io/mateo-moon/nebula-cmp:1b67ec0@sha256:27ae309e158862e821f6de6ea7e91803d020bca81fa9e1d1ae826359fea76446
+          USER 0
+          RUN apk add --no-cache skopeo
+          DOCKERFILE
       - name: Exercise the measured renderer with the pinned native generator
         run: |
           docker run --rm --user "$(id -u):$(id -g)" \
             -v "$PWD:/workspace" -w /workspace/packages/nebula \
             -e TRUSTEE_GENPOLICY=/usr/local/bin/genpolicy \
             -e TRUSTEE_GENPOLICY_CACHE=/tmp/genpolicy-cache \
-            ghcr.io/mateo-moon/nebula-cmp:1b67ec0@sha256:27ae309e158862e821f6de6ea7e91803d020bca81fa9e1d1ae826359fea76446 \
+            nebula-confidential-native-render:ci \
             sh -ec 'pnpm install --frozen-lockfile && node --import tsx --test test/confidential-workload-render.test.ts'
 
   browser-encryption:

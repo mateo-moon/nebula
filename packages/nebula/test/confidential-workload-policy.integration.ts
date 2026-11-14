@@ -54,6 +54,7 @@ literal("literal application values and native generated hostname", expectedProc
 literal("host cannot replace a placeholder argument", expectedProcess, { ...actual, Args: ["/app/server", "unapproved"] }, false);
 literal("host cannot replace placeholder environment", expectedProcess, { ...actual, Env: ["PATH=/usr/bin", "NODE_OPTIONS=--import=unapproved", "HOSTNAME=guest-123"] }, false);
 literal("host cannot omit placeholder environment", expectedProcess, { ...actual, Env: ["PATH=/usr/bin", "HOSTNAME=guest-123"] }, false);
+literal("host cannot replace native hostname with a duplicate literal", { Args: [], Env: ["PATH=/usr/bin", "HOSTNAME=$(host-name)"] }, { Args: [], Env: ["PATH=/usr/bin", "PATH=/usr/bin"] }, false);
 literal("host cannot add a duplicate environment override", expectedProcess, { ...actual, Env: [...actual.Env, "NODE_OPTIONS=--import=unapproved"] }, false);
 literal("host cannot substitute hostname without native placeholder", { Args: [], Env: ["HOSTNAME=owner-literal"] }, { Args: [], Env: ["HOSTNAME=host-changed"] }, false);
 literal("container without arguments remains supported", { Env: [] }, { Env: [] }, true);
