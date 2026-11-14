@@ -3,6 +3,7 @@ import { newOwner, storedOwner, saveOwner, jwt, encryptedBackup, restoreBackup, 
 import { validatePreparationClaim } from "./claim";
 import profiles from "./profiles.json";
 import { manualFragment, manualSession, verifyUnusedInvitation, type ManualSession } from "./manual";
+import { preparationCandidates } from "./profile-selection";
 
 declare global { interface Window { nebula: any } }
 // Until this origin's mode is known, errors must not reveal a credential form.
@@ -93,7 +94,7 @@ async function start() {
   let channel: AttestedChannel | undefined;
   let bootstrap: { claimed?: boolean; claimSha256?: string } | undefined;
   let verificationFailure = "No independently approved preparation profile matched";
-  for (const profile of profiles.profiles as { identity: SnpIdentity }[]) {
+  for (const profile of preparationCandidates(profiles.profiles, saved)) {
     try {
       const candidate = new AttestedChannel(fetcher, target, profile.identity, saved?.preparationPin);
       const response = await candidate.request("/nebula/v1/browser");
