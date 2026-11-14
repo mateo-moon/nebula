@@ -1,5 +1,6 @@
 import { Construct } from "constructs";
 import { K0sOidcAuthentication, type K0sApiOptions } from "./oidc-authentication";
+import { apiSourceRanges } from "./api-source-ranges";
 import { BaseConstruct } from "../../../core";
 import {
   K0sCalicoConfig,
@@ -123,6 +124,8 @@ export interface K0smotronControlPlaneConfig extends K0sApiOptions {
    * NLB to "internal" and workers in another VPC cannot reach the CP.
    */
   serviceAnnotations?: Record<string, string>;
+  /** Client CIDRs allowed by the API Service, including its konnectivity listener. Include all worker and automation egress. */
+  apiSourceRanges?: readonly string[];
   /**
    * Requests/limits for the CP (kmc-*) pods. Without requests the scheduler
    * bin-packs multiple hosted CPs onto one hosting node and saturates it.
@@ -194,15 +197,18 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
           }
         : { type: "emptyDir" };
 
-    const servicePatches: K0SmotronControlPlaneV1Beta2SpecPatches[] = this.config
-      .serviceAnnotations
+    const sourceRanges = apiSourceRanges(this.config.apiSourceRanges);
+    if (sourceRanges && this.config.serviceType && this.config.serviceType !== K0SmotronControlPlaneV1Beta2SpecServiceType.LOAD_BALANCER)
+      throw new Error("apiSourceRanges requires a LoadBalancer Service");
+    const servicePatches: K0SmotronControlPlaneV1Beta2SpecPatches[] = this.config.serviceAnnotations || sourceRanges
       ? [
           {
             target: { kind: "Service", component: "control-plane" },
             patch: {
               type: K0SmotronControlPlaneV1Beta2SpecPatchesPatchType.MERGE,
               content: JSON.stringify({
-                metadata: { annotations: this.config.serviceAnnotations },
+                ...(this.config.serviceAnnotations ? { metadata: { annotations: this.config.serviceAnnotations } } : {}),
+                ...(sourceRanges ? { spec: { loadBalancerSourceRanges: sourceRanges.all } } : {}),
               }),
             },
           },

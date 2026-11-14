@@ -21,7 +21,7 @@ import {
 /** Hosted control-plane options (provider-independent — see {@link K0smotronControlPlane}). */
 export type K0smotronClusterControlPlane = Pick<K0smotronControlPlaneConfig,
   "apiExtraArgs" | "apiRawArgs" | "controllerManagerExtraArgs" | "persistence" |
-  "serviceType" | "serviceAnnotations" | "resources" | "topologySpreadConstraints" | "authentication" | "storage">;
+  "serviceType" | "serviceAnnotations" | "apiSourceRanges" | "resources" | "topologySpreadConstraints" | "authentication" | "storage">;
 
 export interface K0smotronClusterConfig<M> {
   /** Cluster name (also the CAPI Cluster / infra-cluster name). */
