@@ -5,7 +5,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { ConfidentialOperator, ConfidentialWorkload } from "../src/modules/k8s/confidential-workloads";
 import { TRUSTEE_CHART } from "../src/modules/k8s/confidential-workloads/chart";
 
-test("operator installation scopes advisory storage leases and owned Pod retirement without key or disk mutation permissions", () => {
+test("operator installation scopes storage leases, guarded Pod routing repair and retirement without key or disk mutation permissions", () => {
   const chart = new Chart(new App(), "test");
   new ConfidentialOperator(chart, "operator", { namespace: "operators", watchNamespaces: ["first", "second"],
     image: `example.invalid/operator@sha256:${"a".repeat(64)}` });
@@ -26,7 +26,7 @@ test("operator installation scopes advisory storage leases and owned Pod retirem
     if (rule.resources.includes("persistentvolumeclaims")) assert.deepEqual(rule.verbs, ["get", "list", "watch"]);
     if (rule.resources.includes("pods")) {
       assert.ok(["first", "second"].includes(role.metadata.namespace));
-      assert.deepEqual(rule.verbs, ["get", "list", "watch", "create", "delete"], "only owned-Pod retirement is added; no exec or spec mutation");
+      assert.deepEqual(rule.verbs, ["get", "list", "watch", "create", "patch", "delete"], "only guarded metadata repair and owned-Pod retirement are added; no exec or update");
     }
     if (rule.resources.includes("leases")) {
       assert.ok(["operators", "first", "second"].includes(role.metadata.namespace));

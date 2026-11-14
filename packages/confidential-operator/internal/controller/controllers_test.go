@@ -15,6 +15,7 @@ import (
 
 	api "github.com/mateo-moon/nebula/packages/confidential-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	nodev1 "k8s.io/api/node/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -51,9 +52,10 @@ func (r *testRenderer) Render(_ context.Context, w *api.ConfidentialWorkload, _ 
 	writer := gzip.NewWriter(&compressed)
 	_, _ = writer.Write([]byte(document))
 	_ = writer.Close()
+	runtimeClass := "kata-qemu-snp"
 	pod := corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: w.Namespace, GenerateName: "same-code-",
 		Annotations: map[string]string{initDataAnnotation: base64.StdEncoding.EncodeToString(compressed.Bytes())}},
-		Spec: corev1.PodSpec{RestartPolicy: corev1.RestartPolicyAlways,
+		Spec: corev1.PodSpec{RestartPolicy: corev1.RestartPolicyAlways, RuntimeClassName: &runtimeClass,
 			Containers: []corev1.Container{{Name: "app", Image: "example.invalid/test@sha256:" + strings.Repeat("a", 64)}}}}
 	hash, _ := podInitDataSHA256(&pod)
 	return &Plan{Pod: pod, SpecSHA256: fmt.Sprintf("%064d", w.Generation), InitDataSHA256: hash}, nil
@@ -62,6 +64,7 @@ func (r *testRenderer) ValidateStorage(context.Context, *api.ConfidentialStorage
 func testScheme() *runtime.Scheme {
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
+	_ = nodev1.AddToScheme(s)
 	_ = coordinationv1.AddToScheme(s)
 	_ = api.AddToScheme(s)
 	return s

@@ -7,12 +7,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"regexp"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 
 	api "github.com/mateo-moon/nebula/packages/confidential-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -124,9 +126,54 @@ func podMatchesPlan(actual, expected *corev1.Pod) bool {
 	if a.NodeSelector["kata-deploy.katacontainers.io/default"] == "true" && e.NodeSelector["kata-deploy.katacontainers.io/default"] == "" {
 		delete(a.NodeSelector, "kata-deploy.katacontainers.io/default")
 	}
+	// The supported Kata RuntimeClass admission adds fixed scheduler accounting,
+	// not guest process resources. Recognize only its exact CPU/memory tuple;
+	// Pod-level resources, declared guest sizing and all execution fields stay
+	// part of the strict comparison.
+	if a.RuntimeClassName != nil && e.RuntimeClassName != nil && *a.RuntimeClassName == "kata-qemu-snp" && *e.RuntimeClassName == *a.RuntimeClassName && len(e.Overhead) == 0 && knownKataAdmissionOverhead(a.Overhead) {
+		a.Overhead = nil
+	}
 	rawA, _ := json.Marshal(a)
 	rawE, _ := json.Marshal(e)
 	return bytes.Equal(rawA, rawE)
+}
+func knownKataAdmissionOverhead(values corev1.ResourceList) bool {
+	return len(values) == 2 && values.Cpu().Cmp(resource.MustParse("1")) == 0 && values.Memory().Cmp(resource.MustParse("2Gi")) == 0
+}
+
+// Restore only missing routing metadata on the already verified instance.
+// UID/resourceVersion tests prevent a replaced or concurrently edited object
+// from receiving a patch derived from the previous validation.
+func (r *WorkloadReconciler) ensureProfileLabel(ctx context.Context, w *api.ConfidentialWorkload, pod *corev1.Pod, profile string) error {
+	if profile == "" || pod.Labels[profileLabel] == profile {
+		return nil
+	}
+	if pod.Labels[profileLabel] != "" {
+		return &publicFailure{reason: "PodRoutingLabelMismatch", message: "The owned Pod profile routing label conflicts with its declaration"}
+	}
+	if pod.UID == "" || pod.ResourceVersion == "" || !ownedBy(pod, w) || pod.Labels[ownerLabel] != string(w.UID) {
+		return errors.New("verified Pod routing identity is unavailable")
+	}
+	before := pod.DeepCopy()
+	operations := []map[string]any{
+		{"op": "test", "path": "/metadata/uid", "value": string(pod.UID)},
+		{"op": "test", "path": "/metadata/resourceVersion", "value": pod.ResourceVersion},
+		{"op": "test", "path": "/metadata/ownerReferences", "value": pod.OwnerReferences},
+		{"op": "test", "path": "/metadata/labels/confidential.nebula.dev~1owner", "value": string(w.UID)},
+		{"op": "add", "path": "/metadata/labels/confidential.nebula.dev~1profile", "value": profile},
+	}
+	raw, _ := json.Marshal(operations)
+	if err := r.Patch(ctx, pod, client.RawPatch(types.JSONPatchType, raw)); err != nil {
+		return kubeFailure("PodRoutingLabelUpdateFailed", "workload routing label repair will retry", err)
+	}
+	originalSpec, _ := json.Marshal(before.Spec)
+	currentSpec, _ := json.Marshal(pod.Spec)
+	expectedLabels := before.Labels
+	expectedLabels[profileLabel] = profile
+	if pod.UID != before.UID || !bytes.Equal(originalSpec, currentSpec) || !reflect.DeepEqual(pod.Labels, expectedLabels) || !reflect.DeepEqual(pod.Annotations, before.Annotations) || !reflect.DeepEqual(pod.OwnerReferences, before.OwnerReferences) || !reflect.DeepEqual(pod.Finalizers, before.Finalizers) {
+		return errors.New("Pod routing repair returned unexpected execution or ownership changes")
+	}
+	return nil
 }
 func normalizePodDefaults(p *corev1.PodSpec) {
 	if p.SecurityContext == nil {

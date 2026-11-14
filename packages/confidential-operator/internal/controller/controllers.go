@@ -31,6 +31,7 @@ import (
 )
 
 const ownerLabel = "confidential.nebula.dev/owner"
+const profileLabel = "confidential.nebula.dev/profile"
 const renderLabel = "confidential.nebula.dev/spec-sha256"
 const storageIndex = "spec.storage.resource"
 const claimIndex = "spec.claimName"
@@ -38,6 +39,7 @@ const claimIndex = "spec.claimName"
 // These projections are for Kubernetes routing only. The full spec is validated
 // and rendered by the same TypeScript implementation used by the owner CLI.
 type workloadRouting struct {
+	Profile string `json:"profile"`
 	Storage []struct {
 		Name     string `json:"name"`
 		Resource string `json:"resource"`
@@ -388,6 +390,11 @@ func (r *WorkloadReconciler) reconcile(ctx context.Context, w *api.ConfidentialW
 			pod.Labels = map[string]string{}
 		}
 		pod.Labels[ownerLabel] = string(w.UID)
+		// Native and browser owner transports share profile-selected public Services.
+		// This Kubernetes routing metadata is added after native policy synthesis.
+		if routing.Profile != "" {
+			pod.Labels[profileLabel] = routing.Profile
+		}
 		if pod.Annotations == nil {
 			pod.Annotations = map[string]string{}
 		}
@@ -415,7 +422,11 @@ func (r *WorkloadReconciler) reconcile(ctx context.Context, w *api.ConfidentialW
 		}
 		return updatePending(current, reason), nil
 	}
-	if !podMatchesPlan(pod, &plan.Pod) {
+	// Canonical profile labels are repaired as routing metadata only after the
+	// complete actual execution/native checkpoint has been validated.
+	matchingPlan := plan.Pod.DeepCopy()
+	delete(matchingPlan.Labels, profileLabel)
+	if !podMatchesPlan(pod, matchingPlan) {
 		current.Phase = "Error"
 		current.Reason = "PodSpecMismatch"
 		current.Message = "The actual Pod execution settings differ from the native rendered declaration; routing was refused"
@@ -430,6 +441,9 @@ func (r *WorkloadReconciler) reconcile(ctx context.Context, w *api.ConfidentialW
 		return current, nil
 	}
 	if err := r.reserveStorage(ctx, w, storages, pod); err != nil {
+		return current, err
+	}
+	if err := r.ensureProfileLabel(ctx, w, pod, routing.Profile); err != nil {
 		return current, err
 	}
 	current.DesiredSpecSHA256 = key

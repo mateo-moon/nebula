@@ -94,7 +94,7 @@ export class ConfidentialOperator extends BaseConstruct<ConfidentialOperatorConf
           { apiGroups: [CONFIDENTIAL_GROUP], resources: ["confidentialworkloads"], verbs: ["patch"] },
           { apiGroups: [CONFIDENTIAL_GROUP], resources: ["confidentialworkloads/finalizers"], verbs: ["patch", "update"] },
           { apiGroups: [CONFIDENTIAL_GROUP], resources: ["confidentialworkloads/status", "confidentialstorages/status"], verbs: ["get", "patch", "update"] },
-          { apiGroups: [""], resources: ["pods"], verbs: ["get", "list", "watch", "create", "delete"] },
+          { apiGroups: [""], resources: ["pods"], verbs: ["get", "list", "watch", "create", "patch", "delete"] },
           { apiGroups: [""], resources: ["services"], verbs: ["get", "list", "watch", "create", "patch"] },
           { apiGroups: [""], resources: ["persistentvolumeclaims"], verbs: ["get", "list", "watch"] },
           { apiGroups: ["coordination.k8s.io"], resources: ["leases"], verbs: ["get", "list", "watch", "create", "update", "patch", "delete"] },

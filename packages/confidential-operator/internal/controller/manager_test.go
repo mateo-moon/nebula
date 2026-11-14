@@ -11,6 +11,8 @@ import (
 
 	api "github.com/mateo-moon/nebula/packages/confidential-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	nodev1 "k8s.io/api/node/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -43,6 +45,12 @@ func TestManager(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
+	if err := c.Create(ctx, &nodev1.RuntimeClass{ObjectMeta: metav1.ObjectMeta{Name: "kata-qemu-snp"}, Handler: "kata-qemu-snp",
+		Overhead:   &nodev1.Overhead{PodFixed: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("1"), corev1.ResourceMemory: resource.MustParse("2Gi")}},
+		Scheduling: &nodev1.Scheduling{NodeSelector: map[string]string{"kata-deploy.katacontainers.io/default": "true"}}}); err != nil {
+		t.Fatal(err)
+	}
+
 	for _, ns := range []string{"qualified", "outside"} {
 		if err := c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}); err != nil {
 			t.Fatal(err)
@@ -170,6 +178,11 @@ func TestManager(t *testing.T) {
 	}
 	var pods corev1.PodList
 	eventually(func() bool { _ = c.List(ctx, &pods, client.InNamespace("qualified")); return len(pods.Items) == 2 })
+	for _, pod := range pods.Items {
+		if !knownKataAdmissionOverhead(pod.Spec.Overhead) || pod.Spec.NodeSelector["kata-deploy.katacontainers.io/default"] != "true" {
+			t.Fatal("real RuntimeClass admission did not apply the accounting/scheduling fixture")
+		}
+	}
 	firstNames := map[string]bool{}
 	for _, pod := range pods.Items {
 		firstNames[pod.Name] = true
@@ -202,6 +215,27 @@ func TestManager(t *testing.T) {
 		_ = c.Get(ctx, client.ObjectKey{Namespace: "qualified", Name: owner.Name}, &w)
 		return w.Status.Phase == "Running"
 	})
+	// A real metadata-only update must restore the public selector without
+	// changing the admitted PodSpec, native measurement, UID or running status.
+	beforeRoutingRepair := pod.DeepCopy()
+	delete(pod.Labels, profileLabel)
+	if err := c.Update(ctx, pod); err != nil {
+		t.Fatal(err)
+	}
+	eventually(func() bool {
+		var repaired corev1.Pod
+		_ = c.Get(ctx, client.ObjectKeyFromObject(pod), &repaired)
+		return repaired.Labels[profileLabel] == "same-code"
+	})
+	var repaired corev1.Pod
+	if err := c.Get(ctx, client.ObjectKeyFromObject(pod), &repaired); err != nil {
+		t.Fatal(err)
+	}
+	originalSpec, _ := json.Marshal(beforeRoutingRepair.Spec)
+	repairedSpec, _ := json.Marshal(repaired.Spec)
+	if repaired.UID != beforeRoutingRepair.UID || string(originalSpec) != string(repairedSpec) || repaired.Annotations[initDataAnnotation] != beforeRoutingRepair.Annotations[initDataAnnotation] {
+		t.Fatal("metadata repair changed the actual admitted guest")
+	}
 	stop()
 	stop = start()
 	eventually(func() bool {
