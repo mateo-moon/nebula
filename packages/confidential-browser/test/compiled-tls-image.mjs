@@ -3,17 +3,21 @@ import { randomUUID } from "node:crypto";
 
 const name = `nebula-browser-tls-${randomUUID()}`;
 const image = process.env.CONFIDENTIAL_BROWSER_TLS_TEST_IMAGE ?? "nebula-browser-tls:ci";
-const docker = args => execFileSync("docker", args, { encoding: "utf8", timeout: 30_000 });
+const docker = args => execFileSync("docker", args, { encoding: "utf8", timeout: 60_000 });
 docker(["create", "--name", name, "--platform", "linux/amd64", "--network", "none", "--read-only", "--cap-drop", "ALL",
   "--security-opt", "no-new-privileges", "--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=16m",
+  "--tmpfs", "/run/browser:rw,nosuid,nodev,noexec,size=1m,uid=10001,gid=10001,mode=0700",
   image, '{"version":1,"role":"frontend","entry":{"preparationEndpoint":"https://preparation.example/","stackEndpoint":"https://stack.example/"}}']);
 try {
   docker(["start", name]);
   const result = docker(["exec", name, "node", "--input-type=module", "-e", `
     import assert from 'node:assert/strict';
     import { setTimeout } from 'node:timers/promises';
-    import { readFile } from 'node:fs/promises';
+    import { readFile, stat } from 'node:fs/promises';
     import { pathToFileURL } from 'node:url';
+    import { createServer } from 'node:http';
+    import { X509Certificate, randomBytes } from 'node:crypto';
+    import { rootCertificates } from 'node:tls';
     const base = 'http://127.0.0.1:8446';
     let response;
     for (let attempt = 0; attempt < 100; attempt++) {
@@ -45,6 +49,37 @@ try {
     // An ordinary CI container has no guest attester or TNG listener. It must
     // refuse verification material rather than inventing a successful proof.
     assert.equal((await fetch(base + '/nebula/v1/tls')).status, 503);
+    await assert.rejects(stat('/run/browser/asr-ready'), { code: 'ENOENT' }, 'no attester must never open the TNG startup gate');
+    // The compiled process must survive temporary attester failures. Public
+    // synthetic DER exercises availability only, never an AMD trust verdict.
+    const der = new X509Certificate(rootCertificates[0]).raw;
+    const nonces = []; let infoCalls = 0, evidenceCalls = 0;
+    const asr = createServer((request, response) => {
+      request.resume(); const url = new URL(request.url, 'http://127.0.0.1:8006');
+      response.setHeader('Content-Type', 'application/json');
+      if (url.pathname === '/info') {
+        if (++infoCalls === 1) { response.writeHead(503); response.end('{}'); }
+        else response.end(JSON.stringify({ tee: 'snp' }));
+      } else if (url.pathname === '/aa/evidence') {
+        const nonce = url.searchParams.get('runtime_data'); nonces.push(nonce);
+        if (++evidenceCalls === 1) { response.writeHead(503); response.end('{}'); }
+        else response.end(JSON.stringify({ attestation_report: { report_data: nonce }, cert_chain: [{ cert_type: 'VCEK', data: [...der] }] }));
+      } else { response.writeHead(404); response.end('{}'); }
+    });
+    await new Promise(resolve => asr.listen(8006, '127.0.0.1', resolve));
+    try {
+      let ready = false;
+      for (let attempt = 0; attempt < 180; attempt++) {
+        try { ready = (await readFile('/run/browser/asr-ready', 'utf8')) === 'ready\\n'; } catch {}
+        if (ready) break; await setTimeout(250);
+      }
+      assert.equal(ready, true, 'compiled frontend did not recover from attester startup failures');
+      assert.ok(infoCalls >= 2); assert.ok(evidenceCalls >= 2);
+      const keyBinding = randomBytes(32).toString('base64url');
+      const fresh = await (await fetch('http://127.0.0.1:8007/aa/evidence?encoding=base64&runtime_data=' + keyBinding)).json();
+      assert.equal(fresh.attestation_report.report_data, keyBinding);
+      assert.equal(new Set(nonces).size, nonces.length, 'prewarm must never cache a key-bound quote');
+    } finally { asr.closeAllConnections(); await new Promise(resolve => asr.close(resolve)); }
     for (const path of ['/invitation', '/tls.key', '/kbs/v0/resource-policy']) {
       assert.equal((await fetch(base + path)).status, 404, path);
     }

@@ -163,6 +163,11 @@ export async function startAgent(raw: string, lifecycle = new AgentLifecycle()):
       const { startManualTls } = await import("./frontend/server.js");
       lifecycle.signal.throwIfAborted();
       lifecycle.server(startManualTls({ ...config.entry, assets: "/app/loader" }));
+      lifecycle.server(collateralProxy());
+      const { prewarmFrontendAttestation } = await import("./frontend/attestation-ready.js");
+      agentStartupStage = "frontend-attestation";
+      lifecycle.task(prewarmFrontendAttestation(lifecycle.signal).then(() => { agentStartupStage = "running"; }));
+      return lifecycle;
     } else throw new Error("This agent release does not contain browser modules");
     if (config.role !== "workload" || config.owner.browser) lifecycle.server(collateralProxy());
     return lifecycle;

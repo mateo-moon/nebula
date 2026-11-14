@@ -5,6 +5,11 @@ import { ConfidentialBrowser, confidentialBrowserPlan } from "../src/modules/k8s
 import { INIT_DATA_ANNOTATION, initDataSha256, initDataDocument } from "../src/modules/k8s/confidential-guests/measured";
 import { parse } from "smol-toml";
 import { KUBERNETES_API_SERVICE_ENV } from "../src/modules/k8s/trustee/runtime-env";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const native = process.env.TRUSTEE_GENPOLICY;
 const image = "ghcr.io/mateo-moon/nebula-coco-canary@sha256:071b9ef9dc86c0275ffcc5cdc256ad3b87d41a42536c305855061876185827d7";
@@ -52,6 +57,36 @@ test("frontend and preparation use the same measured agent entrypoint with expli
     }
   }
   assert.throws(() => confidentialBrowserPlan({ ...config, agentImage }), /pinned images/);
+});
+
+test("unified TLS frontend waits for its shared attestation marker before one TNG exec", { skip: !native, timeout: 600_000 }, async () => {
+  const { image: agentImage, ...base } = config;
+  const plan = confidentialBrowserPlan({ ...base, agentImage, runtime: { memoryMiB: 2048 }, manualTls: {
+    preparationEndpoint: "https://preparation.example/", stackEndpoint: "https://stack.example/" } });
+  const [frontend, tng] = plan.pod.spec!.containers!;
+  const script = Buffer.from(tng.args!.join(""), "base64").toString();
+  const wait = "while [ ! -s /run/browser/asr-ready ]; do sleep 1; done";
+  assert.ok(script.includes(`${wait}\nexec tng launch`));
+  assert.equal((script.match(/exec tng launch/g) ?? []).length, 1, "Never restart TNG after creating its instance key");
+  const state = frontend.volumeMounts!.find(value => value.mountPath === "/run/browser")!;
+  assert.deepEqual(tng.volumeMounts!.find(value => value.mountPath === "/run/browser"), { name: state.name, mountPath: "/run/browser", readOnly: true });
+  assert.equal(plan.pod.spec!.volumes!.find(value => value.name === state.name)!.emptyDir!.medium, "Memory");
+  assert.deepEqual(tng.readinessProbe, { tcpSocket: { port: 10443 }, periodSeconds: 5, timeoutSeconds: 1, failureThreshold: 1 });
+  assert.equal(tng.livenessProbe, undefined); assert.equal(tng.startupProbe, undefined);
+  const preparation = confidentialBrowserPlan({ ...base, agentImage });
+  assert.equal(preparation.pod.spec!.containers![1].readinessProbe, undefined);
+  assert.equal(Buffer.from(preparation.pod.spec!.containers![1].args!.join(""), "base64").toString().includes("asr-ready"), false);
+  const directory = mkdtempSync(join(tmpdir(), "nebula-tng-wait-")), marker = join(directory, "asr-ready"), launched = join(directory, "launched");
+  // Run the exact measured wait with only its fixed path mapped to a private
+  // test directory. The fixture command stands in for the single TNG exec.
+  const child = spawn("/bin/sh", ["-ec", `${wait.replace("/run/browser/asr-ready", marker)}\nprintf ready > '${launched}'`], { stdio: "ignore" });
+  const exited = once(child, "exit");
+  try {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    assert.equal(existsSync(launched), false, "Missing attestation must never launch TNG");
+    writeFileSync(marker, "ready\n", { mode: 0o600 });
+    assert.deepEqual(await exited, [0, null]); assert.equal(existsSync(launched), true);
+  } finally { if (child.exitCode === null) child.kill("SIGTERM"); rmSync(directory, { recursive: true, force: true }); }
 });
 
 test("a 4 GiB preparation has measured guest-only workspace and RAM while legacy plans remain unchanged", {

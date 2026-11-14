@@ -80,7 +80,9 @@ export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
     attest: { aa_provider: "coco_asr", asr_addr: "http://127.0.0.1:8007", refresh_interval: certificateRefreshSeconds },
     rats_tls: { http1: true },
   }];
-  const script = config.manualTls ? tngBootstrapScript(tngConfig) : tngBootstrapScript(tngConfig).replace("exec tng launch", "while [ ! -s /run/browser/ohttp.pem ]; do sleep 1; done\nexec tng launch");
+  const script = config.manualTls ? (agent ? tngBootstrapScript(tngConfig).replace("exec tng launch",
+    "while [ ! -s /run/browser/asr-ready ]; do sleep 1; done\nexec tng launch") : tngBootstrapScript(tngConfig)) :
+    tngBootstrapScript(tngConfig).replace("exec tng launch", "while [ ! -s /run/browser/ohttp.pem ]; do sleep 1; done\nexec tng launch");
   const security = { runAsUser: 10001, runAsGroup: 10001, allowPrivilegeEscalation: false,
     readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } };
   const mounts = [{ name: "state", mountPath: "/run/browser" }, { name: "tmp", mountPath: "/tmp" }];
@@ -107,6 +109,7 @@ export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
       { name: "tng", image: config.tngImage, imagePullPolicy: "Always", command: privateCommand(["/bin/sh", "-ec", 'exec /bin/sh -ec "$(printf \'%s\' "$@" | base64 -d)"', "tng"]),
         args: measuredFragments(Buffer.from(script).toString("base64")),
         env: [{ name: "RUST_LOG", value: "error" }, { name: "RUST_BACKTRACE", value: "0" }, { name: "HOME", value: "/tmp" }],
+        ...(agent && config.manualTls ? { readinessProbe: { tcpSocket: { port: 10443 }, periodSeconds: 5, timeoutSeconds: 1, failureThreshold: 1 } } : {}),
         securityContext: security, volumeMounts: [{ name: "state", mountPath: "/run/browser", readOnly: true }, { name: "tng-tmp", mountPath: "/tmp" }] },
     ], volumes: ["state", "tmp", "tng-tmp"].map(name => ({ name, emptyDir: { medium: "Memory", sizeLimit:
       name === "tmp" ? "512Mi" : name === "state" && config.maxImageSizeMiB !== undefined ? `${workspaceMiB}Mi` : "2Gi" } })),

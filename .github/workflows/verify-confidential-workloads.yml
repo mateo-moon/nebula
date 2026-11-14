@@ -134,12 +134,14 @@ jobs:
             --cap-drop ALL --security-opt no-new-privileges --memory 256m --pids-limit 64 \
             --tmpfs /run/kbs-diagnostics:rw,nosuid,nodev,uid=10001,gid=10001,mode=0700,size=16m \
             --tmpfs /run/nebula-public-kds:rw,nosuid,nodev,uid=10001,gid=10001,mode=0700,size=1m \
+            --tmpfs /run/browser:rw,nosuid,nodev,uid=10001,gid=10001,mode=0700,size=1m \
             --mount "type=bind,src=$PWD/packages/confidential-agent,dst=/fixture,readonly" \
             --env CONFIDENTIAL_DIAGNOSTICS_TEST_TMPFS=1 \
             --env CONFIDENTIAL_COLLATERAL_TEST_TMPFS=1 \
             --env CONFIDENTIAL_STORAGE_GATE_TEST_TMPFS=1 \
+            --env CONFIDENTIAL_FRONTEND_TEST_TMPFS=1 \
             --entrypoint node nebula-confidential-agent:ci \
-            --disable-sigusr1 --test /fixture/test/diagnostics.test.mjs /fixture/test/public-collateral.test.mjs /fixture/test/storage-gate.test.mjs
+            --disable-sigusr1 --test --test-concurrency=1 /fixture/test/diagnostics.test.mjs /fixture/test/public-collateral.test.mjs /fixture/test/storage-gate.test.mjs /fixture/test/frontend-attestation.test.mjs
 
   native-render:
     name: Native confidential Pod synthesis
