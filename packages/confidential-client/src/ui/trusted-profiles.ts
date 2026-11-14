@@ -1,8 +1,11 @@
 import type { ConfidentialConnection } from "./connection";
 
 /** Runtime release trust is installed with this client, never learned from the
- * stack asking for keys. This approves helper code, not administrator-selected
- * application behavior: applicationContract needs separate owner approval. */
+ * stack asking for keys. The first profile is the current release. Older
+ * records remain historical references; new bindings never select them.
+ * Existing owners recover through their original preparation release, bound
+ * by the loader's saved instance pin and the original owner's signature.
+ * Application behavior still needs separate applicationContract approval. */
 const ACCESS_PROFILE = {
   agentImage: undefined as string | undefined,
   id: "nebula-snp-access-2026-10",
@@ -14,7 +17,14 @@ const ACCESS_PROFILE = {
   gatewayImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:5b32e3c52c94747019c24c2fd8fb3de0ce823374bb9fdad20fc9c4c7ea5cf074",
   storageImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:4d6bd8371595c90eb309099171c2c00d9051ad300663339305678de6ee931fbd",
 } as const;
-export const TRUSTED_STACKS = [ACCESS_PROFILE, { ...ACCESS_PROFILE, id: "nebula-snp-browser-2026-10",
+export const TRUSTED_STACKS = [{ ...ACCESS_PROFILE, id: "nebula-snp-agent-hardening-2026-11-14",
+  measurement: "8c33e7ed240da6571f04802dd97050d4a8ce029473931dce869ee458b1dfd7025745ed62e7391fea520db139332c0c8e",
+  minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 84 },
+  agentImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:21908d1a279697b6de6f54896074be1657ffd543cb450af873826d5cf00c4553",
+  tngImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+  gatewayImage: undefined,
+  storageImage: undefined,
+}, ACCESS_PROFILE, { ...ACCESS_PROFILE, id: "nebula-snp-browser-2026-10",
   gatewayImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:eb1b8d91dbc0729d7f0b901e7d0e8c036be3b02bd0905788fdd53b86d9031318",
 }, { ...ACCESS_PROFILE, id: "nebula-snp-browser-tested-2026-10-28",
   tngImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:104fce8e85559258eb54787d3e837a2b0e858ee9009a886ff58cb43fb91f72dc",
@@ -48,13 +58,6 @@ export const TRUSTED_STACKS = [ACCESS_PROFILE, { ...ACCESS_PROFILE, id: "nebula-
   tngImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
   gatewayImage: undefined,
   storageImage: undefined,
-}, { ...ACCESS_PROFILE, id: "nebula-snp-agent-hardening-2026-11-14",
-  measurement: "8c33e7ed240da6571f04802dd97050d4a8ce029473931dce869ee458b1dfd7025745ed62e7391fea520db139332c0c8e",
-  minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 84 },
-  agentImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:21908d1a279697b6de6f54896074be1657ffd543cb450af873826d5cf00c4553",
-  tngImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
-  gatewayImage: undefined,
-  storageImage: undefined,
 }] as const;
 
 export function trustedStack(connection: ConfidentialConnection): string {
@@ -62,12 +65,13 @@ export function trustedStack(connection: ConfidentialConnection): string {
   if (spec.containers.length !== 1 || !spec.containers[0].imageKeyResource) {
     throw new Error("Automatic discovery requires one owner-encrypted application; undeclared sidecars are not trusted");
   }
-  const match = TRUSTED_STACKS.find(profile => profile.measurement === spec.guest.measurement &&
+  const profile = TRUSTED_STACKS[0];
+  const matches = profile.measurement === spec.guest.measurement &&
     profile.chart === spec.trustee.chart && profile.kbsImage === spec.trustee.kbsImage &&
     profile.tngImage === spec.trustee.tngImage && profile.gatewayImage === spec.trustee.gatewayImage &&
     profile.storageImage === spec.storageImage && profile.agentImage === spec.agentImage &&
     Object.entries(profile.minimumReportedTcb).every(([field, value]) =>
-      spec.guest.minimumReportedTcb[field as keyof typeof profile.minimumReportedTcb] >= value));
-  if (!match) throw new Error("This stack does not match a reviewed profile installed with this client. No keys were released; install the matching reviewed client release");
-  return match.id;
+      spec.guest.minimumReportedTcb[field as keyof typeof profile.minimumReportedTcb] >= value);
+  if (!matches) throw new Error("This stack does not match the current reviewed profile installed with this client. No keys were released; install the matching reviewed client release");
+  return profile.id;
 }

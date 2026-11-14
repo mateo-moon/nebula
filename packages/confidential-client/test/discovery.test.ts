@@ -12,77 +12,62 @@ import { readConnection, type ConfidentialConnection } from "../src/ui/connectio
 import { confidentialAccessTokenHash } from "nebula-cdk8s/confidential-workloads";
 
 export function discoveredConnection(token: string): ConfidentialConnection {
-  const profile = TRUSTED_STACKS[0];
+  return profileConnection(TRUSTED_STACKS[0], token);
+}
+
+function profileConnection(profile: typeof TRUSTED_STACKS[number], token = "45".repeat(32)): ConfidentialConnection {
   return { version: 1, endpoint: { host: "127.0.0.1", port: 8443 }, storages: [], workload: {
     apiVersion: "confidential.nebula.dev/v1alpha1", kind: "ConfidentialWorkload", metadata: { name: "workload", namespace: "qualified" },
     spec: { profile: "workload", ownerClaimSha256: confidentialAccessTokenHash(token),
       guest: { measurement: profile.measurement, chipId: "1".repeat(128), minimumReportedTcb: { ...profile.minimumReportedTcb } },
       nodeSelector: { "kubernetes.io/hostname": "snp" }, network: { ipv4AddressPattern: "^[0-9.]+$", ipv6AddressPattern: "^[a-f0-9:]+$" },
       trustee: { chart: profile.chart, kbsImage: profile.kbsImage, tngImage: profile.tngImage, gatewayImage: profile.gatewayImage },
-      storageImage: profile.storageImage, containers: [{ name: "app", image: "example.invalid/app:release", imageKeyResource: ["default", "image", "app"], commandFromImage: true, uid: 11000, gid: 11000 }],
+      agentImage: profile.agentImage, storageImage: profile.storageImage, containers: [{ name: "app", image: "example.invalid/app:release", imageKeyResource: ["default", "image", "app"], commandFromImage: true, uid: 11000, gid: 11000 }],
       resources: [["default", "image", "app"]] } } };
 }
 
-test("the tested gateway and owner runtime are approved as an exact pair; earlier profiles remain usable", () => {
-  const connection = discoveredConnection("45".repeat(32));
-  assert.equal(trustedStack(connection), "nebula-snp-access-2026-10");
-  connection.workload.spec.trustee = { ...connection.workload.spec.trustee,
-    tngImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:104fce8e85559258eb54787d3e837a2b0e858ee9009a886ff58cb43fb91f72dc",
-    gatewayImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:d732ff99a900f6100fbd50392aa4cafc4226cd2389d6d3c9d9a4752f374bd410" };
-  assert.equal(trustedStack(readConnection(JSON.stringify(connection))), "nebula-snp-browser-tested-2026-10-28");
-  const approved = structuredClone(connection);
-  connection.workload.spec.trustee = { ...connection.workload.spec.trustee, tngImage: TRUSTED_STACKS[0].tngImage };
-  assert.throws(() => trustedStack(connection), /reviewed profile/);
-  connection.workload.spec.trustee = { ...approved.workload.spec.trustee, gatewayImage: TRUSTED_STACKS[0].gatewayImage };
-  assert.throws(() => trustedStack(connection), /reviewed profile/);
-  const unreviewedAgent = structuredClone(approved);
-  unreviewedAgent.workload.spec.agentImage = `example.invalid/unreviewed-agent@sha256:${"a".repeat(64)}`;
-  assert.throws(() => trustedStack(unreviewedAgent), /reviewed profile/,
-    "An additional agent image cannot inherit approval from an earlier helper layout");
-});
-
-test("the agent profile pins the complete helper layout without inheriting legacy helpers", () => {
-  const profile = TRUSTED_STACKS.find(candidate => candidate.agentImage)!;
-  const connection = discoveredConnection("45".repeat(32));
-  connection.workload.spec.agentImage = profile.agentImage;
-  const { gatewayImage: _legacyGateway, ...trustee } = connection.workload.spec.trustee;
-  connection.workload.spec.trustee = { ...trustee, tngImage: profile.tngImage };
-  delete connection.workload.spec.storageImage;
-  assert.equal(trustedStack(readConnection(JSON.stringify(connection))), profile.id);
-  const changed = structuredClone(connection);
-  changed.workload.spec.agentImage = `example.invalid/another-agent@sha256:${"f".repeat(64)}`;
-  assert.throws(() => trustedStack(changed), /reviewed profile/);
-  connection.workload.spec.storageImage = TRUSTED_STACKS[0].storageImage;
-  assert.throws(() => trustedStack(connection), /reviewed profile/);
-});
-
-test("reviewed agent releases are accepted without approving other agent images", () => {
-  for (const profile of TRUSTED_STACKS.filter(candidate => candidate.agentImage)) {
-    const connection = discoveredConnection("45".repeat(32));
-    connection.workload.spec.guest = { ...connection.workload.spec.guest,
-      measurement: profile.measurement, minimumReportedTcb: { ...profile.minimumReportedTcb } };
-    const { gatewayImage: _legacyGateway, ...trustee } = connection.workload.spec.trustee;
-    connection.workload.spec.trustee = { ...trustee, tngImage: profile.tngImage };
-    connection.workload.spec.agentImage = profile.agentImage;
-    delete connection.workload.spec.storageImage;
-    assert.equal(trustedStack(readConnection(JSON.stringify(connection))), profile.id);
-    const belowFloor = structuredClone(connection);
-    belowFloor.workload.spec.guest = { ...belowFloor.workload.spec.guest, minimumReportedTcb: {
-      ...belowFloor.workload.spec.guest.minimumReportedTcb,
-      microcode: belowFloor.workload.spec.guest.minimumReportedTcb.microcode - 1 } };
-    assert.throws(() => trustedStack(belowFloor), /reviewed profile/, "The approved microcode minimum remains enforced");
-    const wrongGuest = structuredClone(connection);
-    wrongGuest.workload.spec.guest = { ...wrongGuest.workload.spec.guest, measurement: "f".repeat(96) };
-    assert.throws(() => trustedStack(wrongGuest), /reviewed profile/, "A runtime approval cannot authorize a different guest");
-    connection.workload.spec.agentImage = `example.invalid/another-agent@sha256:${"f".repeat(64)}`;
-    assert.throws(() => trustedStack(connection), /reviewed profile/);
+test("new owner bindings accept only the current runtime and cannot enable legacy approval", () => {
+  assert.equal(trustedStack(readConnection(JSON.stringify(discoveredConnection("45".repeat(32))))), TRUSTED_STACKS[0].id);
+  for (const profile of TRUSTED_STACKS.slice(1)) {
+    const legacy = readConnection(JSON.stringify(profileConnection(profile)));
+    for (const flags of [{}, { allowLegacy: true }, { claimed: true },
+      { restored: true, preparationPin: "a".repeat(64), profile: TRUSTED_STACKS[0].id }]) {
+      assert.throws(() => trustedStack(Object.assign(structuredClone(legacy), flags)), /reviewed profile/, profile.id);
+    }
   }
 });
 
-test("the collateral-qualified browser workload binds its exact runtime and four resource paths", () => {
+test("the current agent profile pins the complete helper layout", () => {
+  const connection = discoveredConnection("45".repeat(32));
+  assert.equal(trustedStack(readConnection(JSON.stringify(connection))), TRUSTED_STACKS[0].id);
+  const legacy = TRUSTED_STACKS.find(profile => profile.gatewayImage)!;
+  for (const change of [
+    (value: ConfidentialConnection) => { value.workload.spec.agentImage = `example.invalid/unreviewed@sha256:${"f".repeat(64)}`; },
+    (value: ConfidentialConnection) => { value.workload.spec.trustee.gatewayImage = legacy.gatewayImage; },
+    (value: ConfidentialConnection) => { value.workload.spec.storageImage = legacy.storageImage; },
+    (value: ConfidentialConnection) => { value.workload.spec.trustee = { ...value.workload.spec.trustee, tngImage: legacy.tngImage }; },
+  ]) {
+    const changed = structuredClone(connection); change(changed);
+    assert.throws(() => trustedStack(changed), /reviewed profile/);
+  }
+});
+
+test("the current runtime cannot authorize a different launch measurement or lower TCB", () => {
+  const connection = discoveredConnection("45".repeat(32));
+  for (const field of ["bootloader", "snp", "microcode"] as const) {
+    const lower = structuredClone(connection);
+    lower.workload.spec.guest = { ...lower.workload.spec.guest, minimumReportedTcb: {
+      ...lower.workload.spec.guest.minimumReportedTcb, [field]: lower.workload.spec.guest.minimumReportedTcb[field] - 1 } };
+    assert.throws(() => trustedStack(lower), /reviewed profile/);
+  }
+  connection.workload.spec.guest = { ...connection.workload.spec.guest, measurement: "f".repeat(96) };
+  assert.throws(() => trustedStack(connection), /reviewed profile/);
+});
+
+test("the current browser workload binds its exact runtime and four resource paths", () => {
   const connection = discoveredConnection("45".repeat(32));
   const workload = connection.workload;
-  workload.spec.agentImage = "ghcr.io/mateo-moon/nebula-coco-canary@sha256:6f640db9370a5a42a218ab064d825304a0755986498739bd632189aef42e09c8";
+  workload.spec.agentImage = TRUSTED_STACKS[0].agentImage;
   workload.spec.guest = {
     measurement: "8c33e7ed240da6571f04802dd97050d4a8ce029473931dce869ee458b1dfd7025745ed62e7391fea520db139332c0c8e",
     chipId: "1".repeat(128), minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 84 },
@@ -104,7 +89,7 @@ test("the collateral-qualified browser workload binds its exact runtime and four
     metadata: { name, namespace: workload.metadata.namespace }, spec: { type: "Memory", sizeLimit: "64Mi" } }));
   connection.browserEndpoint = "https://127.0.0.1:8445/";
   const accepted = readConnection(JSON.stringify(connection));
-  assert.equal(trustedStack(accepted), "nebula-snp-agent-collateral-2026-11-13");
+  assert.equal(trustedStack(accepted), TRUSTED_STACKS[0].id);
   for (const field of ["bootloader", "snp", "microcode"] as const) {
     const lower = structuredClone(accepted);
     lower.workload.spec.guest = { ...lower.workload.spec.guest, minimumReportedTcb: {
@@ -118,10 +103,10 @@ test("the collateral-qualified browser workload binds its exact runtime and four
   wrongGuest.workload.spec.guest = { ...wrongGuest.workload.spec.guest, measurement: "f".repeat(96) };
   assert.throws(() => trustedStack(readConnection(JSON.stringify(wrongGuest))), /reviewed profile/);
   const legacyGateway = structuredClone(accepted);
-  legacyGateway.workload.spec.trustee.gatewayImage = TRUSTED_STACKS[0].gatewayImage;
+  legacyGateway.workload.spec.trustee.gatewayImage = TRUSTED_STACKS.find(profile => profile.gatewayImage)!.gatewayImage;
   assert.throws(() => trustedStack(legacyGateway), /reviewed profile/);
   const legacyStorage = structuredClone(accepted);
-  legacyStorage.workload.spec.storageImage = TRUSTED_STACKS[0].storageImage;
+  legacyStorage.workload.spec.storageImage = TRUSTED_STACKS.find(profile => profile.storageImage)!.storageImage;
   assert.throws(() => trustedStack(legacyStorage), /reviewed profile/);
 });
 
@@ -145,6 +130,11 @@ test("discovered declarations cannot approve their own software, CPU policy or o
   assert.equal(positive.profile, TRUSTED_STACKS[0].id);
   assert.equal(lastPath, "/.well-known/nebula/confidential", "No credential is sent in the URL");
   assert.equal(lastAuthorization, `Bootstrap ${token}`);
+  for (const profile of TRUSTED_STACKS.slice(1)) {
+    connection = profileConnection(profile, token);
+    await assert.rejects(discoverStack(endpoint, { token }), /reviewed profile/, "Discovery cannot choose " + profile.id);
+  }
+  connection = structuredClone(baseline);
   connection.workload.spec.trustee.gatewayImage = `example.invalid/hostile@sha256:${"a".repeat(64)}`;
   await assert.rejects(discoverStack(endpoint, { token }), /reviewed profile/);
   connection = structuredClone(baseline); connection.workload.spec.guest = { ...connection.workload.spec.guest, measurement: "f".repeat(96) };

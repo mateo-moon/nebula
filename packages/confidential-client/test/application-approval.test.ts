@@ -16,7 +16,7 @@ function connection(): ConfidentialConnection {
       guest: { measurement: profile.measurement, chipId: "2".repeat(128), minimumReportedTcb: profile.minimumReportedTcb },
       nodeSelector: {}, network: { ipv4AddressPattern: "^192[.]0[.]2[.][0-9]+$", ipv6AddressPattern: "^2001:db8:[0-9a-f:]+$" },
       trustee: { chart: profile.chart, kbsImage: profile.kbsImage, tngImage: profile.tngImage, gatewayImage: profile.gatewayImage },
-      storageImage: profile.storageImage,
+      agentImage: profile.agentImage, storageImage: profile.storageImage,
       containers: [{ name: "app", image: "registry.example/owner/app:reserved", imageKeyResource: ["default", "image", "app"],
         uid: 11000, gid: 11000 }], resources: [["default", "image", "app"]] } } };
 }

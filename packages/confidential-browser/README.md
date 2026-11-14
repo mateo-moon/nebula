@@ -13,7 +13,7 @@ The browser encrypts image layers locally in a worker using the native OCIcrypt 
 
 Returning users repeat the certificate check, then unlock their password-encrypted browser vault or restore the latest encrypted recovery file. This mode stores no usable signing or wrapping keys in browser storage. **Verify again & check status**, **Check key and policy isolation**, and the downloadable verification record show the final enrollment, attestation and access-control results. A saved owner that has not generated any release keys can resume setup with its original preparation instance. Current recovery files can resume before the final pin is saved by consulting the owner-authenticated journal in the same pinned preparation VM. The journal commits the first final instance before any claim or key release and refuses replacements. Older recovery files without this protocol or a final pin still fail closed; loss of the preparation VM cannot reset that trust.
 
-New setup accepts only the preparation release reviewed with the current frontend. Earlier approved releases remain available solely to recover an existing saved preparation pin, with the same instance-key and owner checks. A server response or routing URL cannot enable legacy fallback for a new owner.
+New setup accepts only the preparation release reviewed with the current frontend. Earlier approved releases remain available solely to recover an existing saved preparation pin, with the same instance-key and owner checks. A server response or routing URL cannot enable legacy fallback for a new owner. The current preparation service and client also require the current reviewed final-workload runtime for a new binding; historical runtime profiles cannot authorize a new deployment.
 
 ## Administrator
 
