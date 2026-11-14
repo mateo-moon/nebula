@@ -20,6 +20,21 @@ function k0sSpecOf(controlPlane: K0smotronClusterConfig<never>["controlPlane"]) 
   return cp[0].spec.k0sConfig;
 }
 
+test("explicit listener settings pass through the hosted cluster while omitted ports retain native defaults", () => {
+  const chart = Testing.chart();
+  new K0smotronCluster(chart, "cluster", { name: "cluster", provider,
+    controlPlane: { apiPort: 30444, konnectivityPort: 30133 } });
+  const cp = Testing.synth(chart).find(o => o.kind === "K0smotronControlPlane")!;
+  assert.deepEqual(cp.spec.service, { type: "LoadBalancer", apiPort: 30444, konnectivityPort: 30133 });
+  const defaults = Testing.chart();
+  new K0smotronControlPlane(defaults, "cp", { name: "cp" });
+  assert.deepEqual(Testing.synth(defaults)[0].spec.service, { type: "LoadBalancer" });
+  for (const port of [0, 65536, 1.5]) {
+    for (const field of ["apiPort", "konnectivityPort"])
+      assert.throws(() => new K0smotronControlPlane(Testing.chart(), "bad", { name: "bad", [field]: port }), /listener ports/);
+  }
+});
+
 test("controller-manager extra args land in the k0s spec next to the apiserver's", () => {
   const k0sConfig = k0sSpecOf({
     apiExtraArgs: { "oidc-issuer-url": "https://dex.example.test" },

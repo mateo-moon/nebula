@@ -17,6 +17,16 @@ ${OWNED_RESOURCE_ACKNOWLEDGEMENT}
 {{- end -}}{{- end -}}
 {{- and $ready $synced (not (dig "metadata" "deletionTimestamp" "" $object)) -}}
 {{- end -}}
+{{- define "nat.ipv4" -}}
+{{- $valid := kindIs "string" . -}}
+{{- if $valid -}}
+{{- $valid = regexMatch "^([0-9]{1,3}\\.){3}[0-9]{1,3}$" . -}}
+{{- range $octet := splitList "." . -}}
+{{- if or (gt (int $octet) 255) (ne (toString (int $octet)) $octet) -}}{{- $valid = false -}}{{- end -}}
+{{- end -}}
+{{- if or (hasPrefix "0." .) (hasPrefix "127." .) (eq . "255.255.255.255") -}}{{- $valid = false -}}{{- end -}}
+{{- end -}}{{- $valid -}}
+{{- end -}}
 {{- define "nat.owned" -}}
 {{- $owned := false -}}{{- $xr := .xr -}}
 {{- range (dig "metadata" "ownerReferences" (list) .rule) -}}
@@ -73,16 +83,31 @@ ${OWNED_RESOURCE_ACKNOWLEDGEMENT}
 {{- if $valid -}}
 {{- $valid = and (ge (len $ips) 1) (le (len $ips) 32) -}}
 {{- range $ip := $ips -}}
-{{- if not (kindIs "string" $ip) -}}{{- $valid = false -}}
+{{- if or (ne (include "nat.ipv4" $ip) "true") (hasKey $wanted (toString $ip)) -}}{{- $valid = false -}}
 {{- else -}}
-{{- if or (not (regexMatch "^([0-9]{1,3}\\.){3}[0-9]{1,3}$" $ip)) (hasKey $wanted $ip) -}}{{- $valid = false -}}{{- end -}}
-{{- range $octet := splitList "." $ip -}}
-{{- if or (gt (int $octet) 255) (ne (toString (int $octet)) $octet) -}}{{- $valid = false -}}{{- end -}}
-{{- end -}}
-{{- if or (hasPrefix "0." $ip) (hasPrefix "127." $ip) (eq $ip "255.255.255.255") -}}{{- $valid = false -}}{{- end -}}
 {{- $_ := set $wanted $ip true -}}
 {{- end -}}{{- end -}}{{- end -}}
 {{- $observers := list -}}{{- $sources := dict -}}{{- $known := dict -}}{{- $owned := dict -}}
+{{- range $name := ($spec.eipNames | default list) -}}
+{{- $key := printf "eip-%s" $name -}}
+{{- $observer := dig "resource" (dict) (get $resources $key | default dict) -}}
+{{- $eip := dig "status" "atProvider" "manifest" (dict) $observer -}}
+{{- $ip := dig "status" "atProvider" "publicIp" "" $eip -}}
+{{- $id := dig "status" "atProvider" "id" "" $eip -}}
+{{- $ready := and (eq (include "nat.ready" $observer) "true") (eq (include "nat.ready" $eip) "true")
+  (eq (dig "apiVersion" "" $eip) "ec2.aws.upbound.io/v1beta1") (eq (dig "kind" "" $eip) "EIP")
+  (eq (dig "metadata" "name" "" $eip) $name) (regexMatch "^eipalloc-[0-9a-f]+$" $id)
+  (eq (dig "metadata" "annotations" "crossplane.io/external-name" "" $eip) $id)
+  (eq (dig "spec" "forProvider" "region" "" $eip) $spec.region)
+  (eq (dig "status" "atProvider" "region" "" $eip) $spec.region)
+  (eq (dig "spec" "providerConfigRef" "name" "" $eip) $spec.awsProviderConfigName)
+  (eq (include "nat.ipv4" $ip) "true") -}}
+{{- if $ready -}}{{- $_ := set $wanted $ip true -}}{{- else -}}{{- $valid = false -}}{{- end -}}
+{{- $observers = append $observers (dict "apiVersion" "kubernetes.crossplane.io/v1alpha2" "kind" "Object"
+  "metadata" (dict "annotations" (dict $annotation $key))
+  "spec" (dict "managementPolicies" (list "Observe") "providerConfigRef" (dict "name" $spec.kubeProviderConfigName)
+    "forProvider" (dict "manifest" (dict "apiVersion" "ec2.aws.upbound.io/v1beta1" "kind" "EIP" "metadata" (dict "name" $name))))) -}}
+{{- end -}}
 {{- $identityVerified := dict -}}{{- $retirementIntent := dict -}}
 {{- $sourceReady := true -}}{{- $ownershipReady := true -}}{{- $rulesReady := true -}}{{- $detached := true -}}
 {{- if not $adoptionComplete -}}

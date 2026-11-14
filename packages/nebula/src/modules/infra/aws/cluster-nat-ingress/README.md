@@ -7,6 +7,14 @@ It reads `status.networkStatus.natGatewaysIPs`, the field defined by
 [CAPA's NetworkStatus](https://github.com/kubernetes-sigs/cluster-api-provider-aws/blob/main/api/v1beta2/network_types.go).
 No AWS ID or NAT address is needed in the source configuration.
 
+Optional `eipNames` adds current public addresses from named Elastic IP managed
+resources to the same native ingress rules. EIPs must be Ready/Synced, bound to
+their observed allocation ID, and use the destination region and AWS provider.
+NAT/EIP overlaps are deduplicated. Address replacement or removal revokes the
+previous grant; missing, stale or invalid observations hold the last verified
+rules without authorizing new sources. Omitting this option preserves the
+existing NAT-only behavior and resource API.
+
 ```ts
 new AwsClusterNatIngress(chart, "provisioner-ingress", {
   name: "worker-provisioner", awsClusterName: "management",
