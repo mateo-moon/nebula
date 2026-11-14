@@ -65,7 +65,7 @@ if (browserImage) new ConfidentialBrowser(chart, "preparation", { name: "example
   agentImage: browserImage, tngImage: images.tng, nodeSelector, network, maxImageSizeMiB });
 if (frontendImage) new ConfidentialBrowser(chart, "browser-ui", { name: "example-browser-ui", namespace,
   agentImage: frontendImage, tngImage: frontendTngImage!, nodeSelector, network,
-  manualTls: { preparationEndpoint: endpoints.preparation, stackEndpoint: endpoints.metadata } });
+  manualTls: { preparationEndpoint: endpoints.preparation, stackEndpoint: endpoints.metadata, attestationReady: true } });
 new SealedDisks(chart, "ciphertext-disk", {
   namespace, nodeName: node, image: images.disks,
   stateDir: "/var/lib/confidential-example", roles: [{ role: "data", claim: "example-data",

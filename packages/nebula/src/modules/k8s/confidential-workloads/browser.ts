@@ -32,7 +32,11 @@ export interface ConfidentialBrowserConfig {
   manualTls?: { preparationEndpoint: string; stackEndpoint: string;
     /** Browser certificate exceptions bind the leaf, so keep it stable during
      * owner setup. TNG's pinned certificate lifetime is six hours. */
-    certificateRefreshSeconds?: number };
+    certificateRefreshSeconds?: number;
+    /** Opt in only when the unified frontend image publishes its guest-memory
+     * attestation marker. Omission preserves earlier image startup exactly.
+     * This synthesis capability never changes owner authentication or trust. */
+    attestationReady?: boolean };
 }
 
 /** A reusable preparation TEE, containing no Trustee and no persistent disk.
@@ -58,9 +62,14 @@ export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
       !Number.isInteger(memoryMiB) || memoryMiB < minimumMemoryMiB || memoryMiB > 65536) {
     throw new Error("Browser guest memory is below its frontend or upload workspace requirement");
   }
-  if (config.manualTls && !["preparationEndpoint,stackEndpoint", "certificateRefreshSeconds,preparationEndpoint,stackEndpoint"].includes(Object.keys(config.manualTls).sort().join())) {
+  if (config.manualTls && !["preparationEndpoint,stackEndpoint", "certificateRefreshSeconds,preparationEndpoint,stackEndpoint"].includes(Object.keys(config.manualTls).filter(key => key !== "attestationReady").sort().join())) {
     throw new Error("Manual TLS requires public preparation and stack origins");
   }
+  if (config.manualTls?.attestationReady !== undefined &&
+      (typeof config.manualTls.attestationReady !== "boolean" || (config.manualTls.attestationReady && !agent))) {
+    throw new Error("Attestation readiness requires a supported unified frontend image and a boolean capability");
+  }
+  const attestationReady = config.manualTls?.attestationReady === true;
   const certificateRefreshSeconds = config.manualTls?.certificateRefreshSeconds ?? 18_000;
   if (config.manualTls && (!Number.isInteger(certificateRefreshSeconds) || certificateRefreshSeconds < 60 || certificateRefreshSeconds > 18_000)) {
     throw new Error("Manual TLS certificate refresh must be between 60 and 18000 seconds");
@@ -80,7 +89,7 @@ export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
     attest: { aa_provider: "coco_asr", asr_addr: "http://127.0.0.1:8007", refresh_interval: certificateRefreshSeconds },
     rats_tls: { http1: true },
   }];
-  const script = config.manualTls ? (agent ? tngBootstrapScript(tngConfig).replace("exec tng launch",
+  const script = config.manualTls ? (attestationReady ? tngBootstrapScript(tngConfig).replace("exec tng launch",
     "while [ ! -s /run/browser/asr-ready ]; do sleep 1; done\nexec tng launch") : tngBootstrapScript(tngConfig)) :
     tngBootstrapScript(tngConfig).replace("exec tng launch", "while [ ! -s /run/browser/ohttp.pem ]; do sleep 1; done\nexec tng launch");
   const security = { runAsUser: 10001, runAsGroup: 10001, allowPrivilegeEscalation: false,
@@ -109,7 +118,7 @@ export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
       { name: "tng", image: config.tngImage, imagePullPolicy: "Always", command: privateCommand(["/bin/sh", "-ec", 'exec /bin/sh -ec "$(printf \'%s\' "$@" | base64 -d)"', "tng"]),
         args: measuredFragments(Buffer.from(script).toString("base64")),
         env: [{ name: "RUST_LOG", value: "error" }, { name: "RUST_BACKTRACE", value: "0" }, { name: "HOME", value: "/tmp" }],
-        ...(agent && config.manualTls ? { readinessProbe: { tcpSocket: { port: 10443 }, periodSeconds: 5, timeoutSeconds: 1, failureThreshold: 1 } } : {}),
+        ...(attestationReady ? { readinessProbe: { tcpSocket: { port: 10443 }, periodSeconds: 5, timeoutSeconds: 1, failureThreshold: 1 } } : {}),
         securityContext: security, volumeMounts: [{ name: "state", mountPath: "/run/browser", readOnly: true }, { name: "tng-tmp", mountPath: "/tmp" }] },
     ], volumes: ["state", "tmp", "tng-tmp"].map(name => ({ name, emptyDir: { medium: "Memory", sizeLimit:
       name === "tmp" ? "512Mi" : name === "state" && config.maxImageSizeMiB !== undefined ? `${workspaceMiB}Mi` : "2Gi" } })),

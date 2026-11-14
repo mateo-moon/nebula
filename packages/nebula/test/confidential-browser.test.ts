@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 import { App, Chart, Testing } from "cdk8s";
 import { ConfidentialBrowser, confidentialBrowserPlan } from "../src/modules/k8s/confidential-workloads/browser";
@@ -59,11 +60,33 @@ test("frontend and preparation use the same measured agent entrypoint with expli
   assert.throws(() => confidentialBrowserPlan({ ...config, agentImage }), /pinned images/);
 });
 
+test("attestation readiness is a validated image capability, never a legacy opt-in", () => {
+  const manualTls = { preparationEndpoint: "https://preparation.example/", stackEndpoint: "https://stack.example/" };
+  const { image: agentImage, ...base } = config;
+  assert.throws(() => confidentialBrowserPlan({ ...config, manualTls: { ...manualTls, attestationReady: true } }), /supported unified frontend/);
+  for (const attestationReady of [null, "true", 1, {}, []]) {
+    assert.throws(() => confidentialBrowserPlan({ ...base, agentImage, manualTls: { ...manualTls, attestationReady: attestationReady as boolean } }), /boolean capability/);
+  }
+});
+
+test("earlier unified frontends keep their original startup without an attestation marker", { skip: !native, timeout: 600_000 }, () => {
+  const { image: agentImage, ...base } = config;
+  const manualTls = { preparationEndpoint: "https://preparation.example/", stackEndpoint: "https://stack.example/" };
+  const omitted = confidentialBrowserPlan({ ...base, agentImage, manualTls });
+  assert.deepEqual(confidentialBrowserPlan({ ...base, agentImage, manualTls: { ...manualTls, attestationReady: false } }), omitted);
+  const tng = omitted.pod.spec!.containers![1], script = Buffer.from(tng.args!.join(""), "base64").toString();
+  // Exact original manual-TLS startup from qualified SDK 21822ec, before the
+  // optional marker protocol. Older unified images cannot publish that marker.
+  assert.equal(createHash("sha256").update(script).digest("hex"), "55755a8ebb712a33e229e8162042ac2e518a9ccb4b8425f35db8f513ad965764");
+  assert.equal(script.includes("asr-ready"), false); assert.equal(tng.readinessProbe, undefined);
+});
+
 test("unified TLS frontend waits for its shared attestation marker before one TNG exec", { skip: !native, timeout: 600_000 }, async () => {
   const { image: agentImage, ...base } = config;
   const plan = confidentialBrowserPlan({ ...base, agentImage, runtime: { memoryMiB: 2048 }, manualTls: {
-    preparationEndpoint: "https://preparation.example/", stackEndpoint: "https://stack.example/" } });
+    preparationEndpoint: "https://preparation.example/", stackEndpoint: "https://stack.example/", attestationReady: true } });
   const [frontend, tng] = plan.pod.spec!.containers!;
+  assert.deepEqual(JSON.parse(frontend.args![0]).entry, { preparationEndpoint: "https://preparation.example/", stackEndpoint: "https://stack.example/" }, "A synthesis capability must not become guest configuration or a trust flag");
   const script = Buffer.from(tng.args!.join(""), "base64").toString();
   const wait = "while [ ! -s /run/browser/asr-ready ]; do sleep 1; done";
   assert.ok(script.includes(`${wait}\nexec tng launch`));

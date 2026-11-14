@@ -26,9 +26,12 @@ new ConfidentialBrowser(chart, "browser-ui", {
   manualTls: {
     preparationEndpoint: "https://preparation.example.org/",
     stackEndpoint: "https://stack.example.org/",
+    attestationReady: true, // Current frontend publishes the guest-memory readiness marker.
   },
 });
 ```
+
+Enable `manualTls.attestationReady` only for a frontend release that supports attestation prewarming. Older frontend images omit it and retain their original startup. This setting coordinates startup; it does not approve an image or replace attestation.
 
 Pin the images and generate native policy during synthesis. The frontend image contains the reviewed browser assets and approved preparation profiles. Forward public TCP directly to its TNG service on port 10443; TLS must terminate inside the guest. This first-page path needs no ACME, DNS-custodian key or administrator-controlled CA. Do not put TLS private keys in Kubernetes.
 
