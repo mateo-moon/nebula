@@ -124,7 +124,7 @@ func TestActualTypeScriptRendererProtocol(t *testing.T) {
 	}
 	storage.Spec.Raw = []byte(`{"type":"Memory","sizeLimit":"invalid"}`)
 	err = renderer.ValidateStorage(context.Background(), storage)
-	if err == nil || err.Error() != "Confidential workload: memory size must be a positive Mi/Gi quantity" {
+	if err == nil || err.Error() != "Confidential workload: memory requires a positive bounded Mi/Gi quantity" {
 		t.Fatalf("real renderer did not return its fixed public validation diagnostic: %v", err)
 	}
 }

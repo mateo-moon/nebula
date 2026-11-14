@@ -51,8 +51,8 @@ export class CiphertextBlobUpload {
     if (state) {
       if (state.size !== size) throw new ImageUploadError(409, "This preparation instance is bound to another archive");
     } else {
-      if (existsSync(this.archive) || existsSync(this.partial)) throw new ImageUploadError(409, "An image archive already exists");
-      writeFileSync(this.partial, Buffer.alloc(0), { mode: 0o600, flag: "wx" });
+      if (existsSync(this.archive) || existsSync(this.partial) && statSync(this.partial).size !== 0) throw new ImageUploadError(409, "An image archive already exists");
+      if (!existsSync(this.partial)) writeFileSync(this.partial, Buffer.alloc(0), { mode: 0o600, flag: "wx" });
       state = { version: 1, size: size as number, received: 0 };
       this.save(state);
     }

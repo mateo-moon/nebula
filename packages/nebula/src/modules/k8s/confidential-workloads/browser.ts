@@ -19,6 +19,9 @@ export interface ConfidentialBrowserConfig {
    * workspace and RAM for native encryption and policy generation. Omission
    * preserves the existing 256 MiB / 4 GiB VM deployment exactly. */
   maxImageSizeMiB?: number;
+  /** Namespace and Pod labels of the operator allowed to fetch an unused
+   * invitation. Omission preserves the same-namespace default operator. */
+  invitationAccess?: { namespace?: string; podSelector: Readonly<Record<string, string>> };
   /** Optional budget for a small preparation or diskless frontend. Defaults
    * preserve enrolled guests; larger upload limits retain their RAM floor. */
   runtime?: { memoryMiB: number };
@@ -36,6 +39,12 @@ export interface ConfidentialBrowserConfig {
  * owner image/credential is sent. The final combined workload retains its own
  * unmodified Trustee, native genpolicy and owner enrollment. */
 export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
+  if (config.invitationAccess && (config.manualTls || Object.keys(config.invitationAccess).some(key => !["namespace", "podSelector"].includes(key)) ||
+      (config.invitationAccess.namespace !== undefined && !/^[a-z][a-z0-9-]{0,62}$/.test(config.invitationAccess.namespace)) ||
+      !config.invitationAccess.podSelector || !Object.keys(config.invitationAccess.podSelector).length ||
+      Object.entries(config.invitationAccess.podSelector).some(([key, value]) => !/^[A-Za-z0-9_.\/-]{1,253}$/.test(key) || typeof value !== "string" || !/^[A-Za-z0-9_.-]{1,63}$/.test(value)))) {
+    throw new Error("Invitation access requires explicit operator Pod labels and an optional namespace");
+  }
   const agent = config.agentImage !== undefined, image = config.agentImage ?? config.image ?? "";
   if ((agent && config.image !== undefined) || ![image, config.tngImage].every(isDigestImage) || !/^[a-z][a-z0-9-]{0,39}$/.test(config.name) ||
       !/^[a-z][a-z0-9-]{0,39}$/.test(config.namespace)) throw new Error("Browser preparation requires pinned images and valid names");
@@ -135,6 +144,7 @@ export class ConfidentialBrowser extends BaseConstruct<ConfidentialBrowserConfig
       metadata: { name: config.name, namespace: config.namespace }, spec: { podSelector: { matchLabels: { "confidential.nebula.dev/browser": config.name } },
         policyTypes: ["Ingress"], ingress: config.manualTls ? [{ ports: [{ protocol: "TCP", port: 10443 }] }] : [
           { ports: [{ protocol: "TCP", port: 8445 }] },
-          { from: [{ podSelector: { matchLabels: { app: "confidential-operator" } } }], ports: [{ protocol: "TCP", port: 8089 }] }] } });
+          { from: [{ ...(config.invitationAccess?.namespace ? { namespaceSelector: { matchLabels: { "kubernetes.io/metadata.name": config.invitationAccess.namespace } } } : {}),
+            podSelector: { matchLabels: config.invitationAccess?.podSelector ?? { app: "confidential-operator" } } }], ports: [{ protocol: "TCP", port: 8089 }] }] } });
   }
 }

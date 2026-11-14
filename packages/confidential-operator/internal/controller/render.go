@@ -17,9 +17,10 @@ import (
 )
 
 type Plan struct {
-	Pod            corev1.Pod `json:"pod"`
-	SpecSHA256     string     `json:"specSha256"`
-	InitDataSHA256 string     `json:"initDataSha256"`
+	Pod                  corev1.Pod        `json:"pod"`
+	SpecSHA256           string            `json:"specSha256"`
+	InitDataSHA256       string            `json:"initDataSha256"`
+	ResolvedImageDigests map[string]string `json:"resolvedImageDigests,omitempty"`
 }
 
 type Renderer interface {
@@ -42,8 +43,9 @@ type renderDiagnostic struct {
 	message string
 }
 
-func (d *renderDiagnostic) Error() string  { return d.message }
-func (d *renderDiagnostic) Reason() string { return d.reason }
+func (d *renderDiagnostic) Error() string   { return d.message }
+func (d *renderDiagnostic) Reason() string  { return d.reason }
+func (d *renderDiagnostic) Permanent() bool { return d.reason == "InvalidDeclaration" }
 
 func (b *boundedOutput) Write(p []byte) (int, error) {
 	if b.Len()+len(p) > 16*1024*1024 {
@@ -101,12 +103,18 @@ func (r CommandRenderer) Render(ctx context.Context, w *api.ConfidentialWorkload
 		items = append(items, s)
 	}
 	var plan Plan
-	err := r.run(ctx, map[string]any{"operation": "render-workload", "workload": clean, "storages": items}, &plan)
+	err := r.run(ctx, map[string]any{"operation": "render-workload", "workload": clean, "storages": items, "resolvedImageDigests": w.Status.ResolvedImageDigests}, &plan)
 	if err != nil {
 		return nil, err
 	}
 	if !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(plan.SpecSHA256) || !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(plan.InitDataSHA256) || plan.Pod.Namespace != w.Namespace || plan.Pod.GenerateName == "" || plan.Pod.Name != "" || len(plan.Pod.Spec.Containers) == 0 {
 		return nil, errors.New("invalid rendered Pod or identity")
+	}
+	if len(plan.ResolvedImageDigests) == 0 {
+		plan.ResolvedImageDigests = nil
+	}
+	if !checkedResolutions(w, &plan.Pod, plan.ResolvedImageDigests) {
+		return nil, errors.New("invalid rendered image resolution")
 	}
 	return &plan, nil
 }

@@ -10,16 +10,18 @@ import (
 // make manifests exports them without weakening admission validation.
 // Neither this API nor the controller accepts private provisioning material.
 type Status struct {
-	ObservedGeneration int64  `json:"observedGeneration,omitempty"`
-	Phase              string `json:"phase,omitempty"`
-	Reason             string `json:"reason,omitempty"`
-	Message            string `json:"message,omitempty"`
-	PodName            string `json:"podName,omitempty"`
-	PodUID             string `json:"podUid,omitempty"`
-	SpecSHA256         string `json:"specSha256,omitempty"`
-	InitDataSHA256     string `json:"initDataSha256,omitempty"`
-	AccessTokenSHA256  string `json:"accessTokenSha256,omitempty"`
-	AccessSecretName   string `json:"accessSecretName,omitempty"`
+	ObservedGeneration   int64             `json:"observedGeneration,omitempty"`
+	DesiredSpecSHA256    string            `json:"desiredSpecSha256,omitempty"`
+	ResolvedImageDigests map[string]string `json:"resolvedImageDigests,omitempty"`
+	Phase                string            `json:"phase,omitempty"`
+	Reason               string            `json:"reason,omitempty"`
+	Message              string            `json:"message,omitempty"`
+	PodName              string            `json:"podName,omitempty"`
+	PodUID               string            `json:"podUid,omitempty"`
+	SpecSHA256           string            `json:"specSha256,omitempty"`
+	InitDataSHA256       string            `json:"initDataSha256,omitempty"`
+	AccessTokenSHA256    string            `json:"accessTokenSha256,omitempty"`
+	AccessSecretName     string            `json:"accessSecretName,omitempty"`
 }
 
 // +kubebuilder:object:root=true

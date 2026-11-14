@@ -9,7 +9,9 @@ export interface OwnerState {
   invitationReplaced?: boolean;
   finalClaimed?: boolean; provisioned?: boolean; restored?: boolean;
   imageKey?: string; volumeKeys?: Record<string, string>; resources?: Record<string, string>; connection?: any; prepared?: any;
-  encryptedImage?: { id: string; manifestDigest: string };
+  encryptedImage?: { id: string; manifestDigest: string; recovery?: import("../ui/image-encryption").LocalEncryptionResult };
+  applicationApproval?: unknown; approvedRegistry?: string;
+  enrollmentJournalVersion?: 1; cipherCacheAttempt?: string;
 }
 async function seal(key: CryptoKey, value: Uint8Array, context: string) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -77,7 +79,7 @@ export async function newOwner(): Promise<OwnerState> {
   const publicDer = new Uint8Array(await crypto.subtle.exportKey("spki", pair.publicKey));
   const pemLabel = "PUBLIC KEY";
   const publicKeyPem = `-----BEGIN ${pemLabel}-----\n${b64(publicDer).match(/.{1,64}/g)!.join("\n")}\n-----END ${pemLabel}-----\n`;
-  return { privateKey, wrappingKey, privateExport, publicKeyPem };
+  return { privateKey, wrappingKey, privateExport, publicKeyPem, enrollmentJournalVersion: 1 };
 }
 export async function jwt(owner: OwnerState, audience: string, discovery = false) {
   const now = Math.floor(Date.now() / 1000), encode = (value: unknown) => url64(utf8(JSON.stringify(value)));
@@ -125,8 +127,9 @@ export async function restoreBackup(text: string, password: string): Promise<Own
     if (!await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, publicKey, signature, challenge)) throw new Error("Recovery owner keys disagree");
     // An owner saved before release secrets exist may resume initial setup.
     // Its preparation pin and the preparation job still prevent substitution.
-    // Once any release state exists, an old unpinned backup must never adopt
-    // a final instance and send those saved secrets to a replacement.
+    // Release state remains marked as recovery. A journal-aware client may
+    // resume only through its pinned preparation journal; legacy unpinned
+    // backups must never adopt a replacement and send saved secrets to it.
     const releaseStarted = data.imageKey !== undefined || data.encryptedImage !== undefined ||
       data.prepared !== undefined || data.finalPin !== undefined || data.finalClaimed || data.provisioned ||
       Object.keys(data.volumeKeys ?? {}).length > 0 || Object.keys(data.resources ?? {}).length > 0;

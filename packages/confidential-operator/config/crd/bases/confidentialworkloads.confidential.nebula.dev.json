@@ -203,11 +203,47 @@
                     "properties": {
                       "ipv4AddressPattern": {
                         "type": "string",
-                        "maxLength": 256
+                        "maxLength": 256,
+                        "x-kubernetes-validations": [
+                          {
+                            "rule": "self.startsWith('^') && self.endsWith('$') && self.matches('^[ -~]+$')",
+                            "message": "CNI patterns must be anchored ASCII expressions"
+                          },
+                          {
+                            "rule": "!self.replace('(?:', '').contains('(?')",
+                            "message": "CNI patterns do not support lookarounds or inline flags"
+                          },
+                          {
+                            "rule": "!self.replace(\"\\\\d\", '').replace(\"\\\\D\", '').replace(\"\\\\s\", '').replace(\"\\\\S\", '').replace(\"\\\\w\", '').replace(\"\\\\W\", '').matches(\"\\\\\\\\[A-Za-z0-9]\")",
+                            "message": "CNI patterns do not support backreferences or unsupported escapes"
+                          },
+                          {
+                            "rule": "''.matches(self) || !''.matches(self)",
+                            "message": "CNI patterns must compile as bounded RE2 expressions"
+                          }
+                        ]
                       },
                       "ipv6AddressPattern": {
                         "type": "string",
-                        "maxLength": 256
+                        "maxLength": 256,
+                        "x-kubernetes-validations": [
+                          {
+                            "rule": "self.startsWith('^') && self.endsWith('$') && self.matches('^[ -~]+$')",
+                            "message": "CNI patterns must be anchored ASCII expressions"
+                          },
+                          {
+                            "rule": "!self.replace('(?:', '').contains('(?')",
+                            "message": "CNI patterns do not support lookarounds or inline flags"
+                          },
+                          {
+                            "rule": "!self.replace(\"\\\\d\", '').replace(\"\\\\D\", '').replace(\"\\\\s\", '').replace(\"\\\\S\", '').replace(\"\\\\w\", '').replace(\"\\\\W\", '').matches(\"\\\\\\\\[A-Za-z0-9]\")",
+                            "message": "CNI patterns do not support backreferences or unsupported escapes"
+                          },
+                          {
+                            "rule": "''.matches(self) || !''.matches(self)",
+                            "message": "CNI patterns must compile as bounded RE2 expressions"
+                          }
+                        ]
                       }
                     },
                     "required": [
@@ -326,7 +362,13 @@
                           "additionalProperties": {
                             "type": "string",
                             "maxLength": 4096
-                          }
+                          },
+                          "x-kubernetes-validations": [
+                            {
+                              "rule": "self.all(k, k.matches('^[A-Za-z_][A-Za-z0-9_]*$') && k != 'HOSTNAME' && !k.startsWith('TRUSTEE_'))",
+                              "message": "Environment names must be valid and must not override reserved runtime names"
+                            }
+                          ]
                         },
                         "uid": {
                           "type": "integer",
@@ -350,7 +392,7 @@
                               },
                               "path": {
                                 "type": "string",
-                                "maxLength": 4096,
+                                "maxLength": 256,
                                 "pattern": "^/[A-Za-z0-9_/-]+$"
                               }
                             },
@@ -405,24 +447,58 @@
                           "properties": {
                             "requests": {
                               "type": "object",
-                              "maxProperties": 64,
+                              "maxProperties": 2,
                               "additionalProperties": {
                                 "type": "string",
-                                "maxLength": 4096
-                              }
+                                "maxLength": 16
+                              },
+                              "x-kubernetes-validations": [
+                                {
+                                  "rule": "self.all(k, k == 'cpu' || k == 'memory')",
+                                  "message": "Only CPU and memory resources are supported"
+                                },
+                                {
+                                  "rule": "self.all(k, k != 'cpu' || (self[k].matches('^([1-9][0-9]*m|(0|[1-9][0-9]*)([.][0-9]{1,3})?)$') && quantity(self[k]).compareTo(quantity('1m')) >= 0 && quantity(self[k]).compareTo(quantity('32')) <= 0))",
+                                  "message": "CPU must be between 1 and 32000 millicores"
+                                },
+                                {
+                                  "rule": "self.all(k, k != 'memory' || (self[k].matches('^[1-9][0-9]*(Mi|Gi)$') && quantity(self[k]).compareTo(quantity('1048576Gi')) <= 0))",
+                                  "message": "Memory must be positive Mi/Gi and at most 2^50 bytes"
+                                }
+                              ]
                             },
                             "limits": {
                               "type": "object",
-                              "maxProperties": 64,
+                              "maxProperties": 2,
                               "additionalProperties": {
                                 "type": "string",
-                                "maxLength": 4096
-                              }
+                                "maxLength": 16
+                              },
+                              "x-kubernetes-validations": [
+                                {
+                                  "rule": "self.all(k, k == 'cpu' || k == 'memory')",
+                                  "message": "Only CPU and memory resources are supported"
+                                },
+                                {
+                                  "rule": "self.all(k, k != 'cpu' || (self[k].matches('^([1-9][0-9]*m|(0|[1-9][0-9]*)([.][0-9]{1,3})?)$') && quantity(self[k]).compareTo(quantity('1m')) >= 0 && quantity(self[k]).compareTo(quantity('32')) <= 0))",
+                                  "message": "CPU must be between 1 and 32000 millicores"
+                                },
+                                {
+                                  "rule": "self.all(k, k != 'memory' || (self[k].matches('^[1-9][0-9]*(Mi|Gi)$') && quantity(self[k]).compareTo(quantity('1048576Gi')) <= 0))",
+                                  "message": "Memory must be positive Mi/Gi and at most 2^50 bytes"
+                                }
+                              ]
                             }
                           },
                           "required": [
                             "requests",
                             "limits"
+                          ],
+                          "x-kubernetes-validations": [
+                            {
+                              "rule": "self.requests.all(k, !(k in self.limits) || quantity(self.requests[k]).compareTo(quantity(self.limits[k])) <= 0)",
+                              "message": "Resource requests must not exceed their limits"
+                            }
                           ]
                         }
                       },
@@ -438,12 +514,20 @@
                           "message": "A publication tag requires an image key resource"
                         },
                         {
-                          "rule": "has(self.command) != has(self.commandFromImage)",
+                          "rule": "!self.name.startsWith('nebula-') && self.name != 'agent' && self.name != 'kbs' && self.name != 'tng' && self.name != 'coco-volume-marker'",
+                          "message": "Application names cannot shadow runtime helpers"
+                        },
+                        {
+                          "rule": "!has(self.ports) || self.ports.all(p, self.ports.filter(q, p.name == q.name).size() == 1 && self.ports.filter(q, p.port == q.port).size() == 1)",
+                          "message": "Application port names and numbers must be unique"
+                        },
+                        {
+                          "rule": "!has(self.command) || !has(self.commandFromImage)",
                           "message": "Choose an explicit command or the image entrypoint"
                         },
                         {
-                          "rule": "!has(self.commandFromImage) || !has(self.args)",
-                          "message": "Image entrypoint includes the image Cmd; do not supply args"
+                          "rule": "has(self.command) || !has(self.args)",
+                          "message": "Image entrypoint includes the image Cmd; args require an explicit command"
                         }
                       ]
                     },
@@ -564,6 +648,18 @@
                 ],
                 "x-kubernetes-validations": [
                   {
+                    "rule": "self.containers.all(c, self.containers.filter(other, other.name == c.name).size() == 1 && self.containers.filter(other, other.uid == c.uid).size() == 1 && self.containers.filter(other, other.gid == c.gid).size() == 1)",
+                    "message": "Container names and application identities must be unique"
+                  },
+                  {
+                    "rule": "self.containers.all(c, !has(c.ports) || c.ports.all(p, self.containers.all(other, c.name == other.name || !has(other.ports) || other.ports.all(q, p.name != q.name && p.port != q.port))))",
+                    "message": "Ports must be unique across all application containers"
+                  },
+                  {
+                    "rule": "!has(self.storage) || self.storage.all(b, self.storage.filter(other, b.name == other.name).size() == 1)",
+                    "message": "Storage binding names must be unique"
+                  },
+                  {
                     "rule": "has(self.agentImage) || (has(self.storageImage) && has(self.trustee.gatewayImage))",
                     "message": "Specify the measured agent image"
                   },
@@ -608,6 +704,20 @@
                   "initDataSha256": {
                     "type": "string",
                     "maxLength": 4096
+                  },
+                  "desiredSpecSha256": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "resolvedImageDigests": {
+                    "type": "object",
+                    "maxProperties": 32,
+                    "additionalProperties": {
+                      "type": "string",
+                      "maxLength": 4096,
+                      "pattern": "^sha256:[a-f0-9]{64}$"
+                    }
                   },
                   "accessTokenSha256": {
                     "type": "string",

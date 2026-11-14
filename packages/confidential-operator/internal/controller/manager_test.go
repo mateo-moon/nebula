@@ -111,6 +111,57 @@ func TestManager(t *testing.T) {
 		"containers":   []any{map[string]any{"name": "app", "image": "example.invalid/image@sha256:" + strings.Repeat("a", 64), "command": []string{"/app"}, "uid": 11000, "gid": 11000}},
 		"storage":      []any{map[string]string{"name": "scratch", "resource": "memory"}}, "resources": [][]string{{"default", "image", "generic"}},
 	}
+
+	// The actual API server must reject the same unsafe public declarations as
+	// the shared TypeScript validator; these cases never reach a guest renderer.
+	invalidMemory := &api.ConfidentialStorage{ObjectMeta: metav1.ObjectMeta{Name: "oversized-memory", Namespace: "qualified"}, Spec: runtime.RawExtension{Raw: []byte(`{"type":"Memory","sizeLimit":"1048577Gi"}`)}}
+	if c.Create(ctx, invalidMemory) == nil {
+		t.Fatal("CRD admitted memory above the shared safe byte bound")
+	}
+	cases := []struct {
+		name   string
+		change func(map[string]any)
+	}{
+		{"reserved-name", func(s map[string]any) { s["containers"].([]any)[0].(map[string]any)["name"] = "kbs" }},
+		{"reserved-env", func(s map[string]any) {
+			s["containers"].([]any)[0].(map[string]any)["env"] = map[string]any{"HOSTNAME": "wrong"}
+		}},
+		{"reserved-trustee-env", func(s map[string]any) {
+			s["containers"].([]any)[0].(map[string]any)["env"] = map[string]any{"TRUSTEE_FAKE": "wrong"}
+		}},
+		{"resources", func(s map[string]any) {
+			s["containers"].([]any)[0].(map[string]any)["resources"] = map[string]any{"requests": map[string]any{"cpu": "2"}, "limits": map[string]any{"cpu": "1"}}
+		}},
+		{"cpu-bound", func(s map[string]any) {
+			s["containers"].([]any)[0].(map[string]any)["resources"] = map[string]any{"requests": map[string]any{"cpu": "32001m"}, "limits": map[string]any{}}
+		}},
+		{"lookaround", func(s map[string]any) { s["network"].(map[string]any)["ipv4AddressPattern"] = "^(?=10).+$" }},
+		{"backref", func(s map[string]any) { s["network"].(map[string]any)["ipv4AddressPattern"] = `^(10)\1$` }},
+		{"unsupported-escape", func(s map[string]any) { s["network"].(map[string]any)["ipv4AddressPattern"] = `^10[.][\p{L}]+$` }},
+		{"repetition", func(s map[string]any) { s["network"].(map[string]any)["ipv4AddressPattern"] = "^10[.][0-9]{1001}$" }},
+	}
+	original, _ := json.Marshal(spec)
+	for _, cpu := range []string{"1m", "0.001", "32", "32000m"} {
+		var copy map[string]any
+		_ = json.Unmarshal(original, &copy)
+		copy["containers"].([]any)[0].(map[string]any)["resources"] = map[string]any{"requests": map[string]any{"cpu": cpu, "memory": "1Mi"}, "limits": map[string]any{"cpu": "32", "memory": "1048576Gi"}}
+		data, _ := json.Marshal(copy)
+		w := &api.ConfidentialWorkload{ObjectMeta: metav1.ObjectMeta{Name: "valid-quantity", Namespace: "qualified"}, Spec: runtime.RawExtension{Raw: data}}
+		if err := c.Create(ctx, w, &client.CreateOptions{DryRun: []string{metav1.DryRunAll}}); err != nil {
+			t.Fatalf("CRD refused valid common quantity %s: %v", cpu, err)
+		}
+	}
+
+	for _, candidate := range cases {
+		var copy map[string]any
+		_ = json.Unmarshal(original, &copy)
+		candidate.change(copy)
+		data, _ := json.Marshal(copy)
+		w := &api.ConfidentialWorkload{ObjectMeta: metav1.ObjectMeta{Name: candidate.name, Namespace: "qualified"}, Spec: runtime.RawExtension{Raw: data}}
+		if c.Create(ctx, w) == nil {
+			t.Fatalf("CRD admitted invalid %s declaration", candidate.name)
+		}
+	}
 	data, _ := json.Marshal(spec)
 	for _, item := range []struct{ ns, name string }{{"qualified", "first"}, {"qualified", "second"}, {"outside", "ignored"}} {
 		if err := c.Create(ctx, &api.ConfidentialWorkload{ObjectMeta: metav1.ObjectMeta{Name: item.name, Namespace: item.ns}, Spec: runtime.RawExtension{Raw: data}}); err != nil {
@@ -135,6 +186,17 @@ func TestManager(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner := metav1.GetControllerOf(pod)
+	var current api.ConfidentialWorkload
+	_ = c.Get(ctx, client.ObjectKey{Namespace: "qualified", Name: owner.Name}, &current)
+	publicPlan, _ := (&testRenderer{}).Render(ctx, &current, nil)
+	if !podMatchesPlan(pod, &publicPlan.Pod) {
+		a, e := pod.Spec.DeepCopy(), publicPlan.Pod.Spec.DeepCopy()
+		normalizePodDefaults(a)
+		normalizePodDefaults(e)
+		ar, _ := json.Marshal(a)
+		er, _ := json.Marshal(e)
+		t.Fatalf("API-defaulted Pod differs from plan: actual=%s expected=%s", ar, er)
+	}
 	eventually(func() bool {
 		var w api.ConfidentialWorkload
 		_ = c.Get(ctx, client.ObjectKey{Namespace: "qualified", Name: owner.Name}, &w)

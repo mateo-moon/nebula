@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { validateEncryptedManifest } from "@nebula/confidential-client";
+import { writeCheckpoint } from "./checkpoint";
 import { CiphertextBlobUpload, ImageUploadError } from "./image-upload";
 import type { ImageUploadLimits } from "@nebula/confidential-client/image-protocol";
 import { KEY_ANNOTATION, PUBLIC_ANNOTATION, LAYER_MEDIA_TYPE, MAX_METADATA_BYTES, type EncryptedImageMetadata, type EncryptedManifest } from "@nebula/confidential-client/image-protocol";
@@ -57,17 +58,20 @@ export class EncryptedImageUpload {
     if (previous && (!previous.manifest.equals(next.manifest) || !previous.config.equals(next.config))) throw new ImageUploadError(409, "This instance is bound to another encrypted image");
     if (!previous) {
       mkdirSync(this.directory, { recursive: true, mode: 0o700 });
-      writeFileSync(join(this.directory, "manifest.json"), next.manifest, { mode: 0o600, flag: "wx" });
-      writeFileSync(join(this.directory, next.parsed.config.digest.slice(7)), next.config, { mode: 0o600, flag: "wx" });
-      writeFileSync(this.receipt, JSON.stringify(input), { mode: 0o600, flag: "wx" });
+      writeCheckpoint(this.receipt, JSON.stringify(input), true);
     }
-    const seen = new Map<string, number>();
+    for (const [path, value] of [[join(this.directory, "manifest.json"), next.manifest], [join(this.directory, next.parsed.config.digest.slice(7)), next.config]] as const) {
+      if (existsSync(path)) { if (!readFileSync(path).equals(value)) throw new ImageUploadError(409, "Committed encrypted image metadata changed"); }
+      else writeCheckpoint(path, value, true);
+    }
+    const seen = new Map<string, number>(), layers = [];
     for (const layer of next.parsed.layers) {
       if (seen.has(layer.digest) && seen.get(layer.digest) !== layer.size) throw new ImageUploadError(400, "Duplicate layer size differs");
       seen.set(layer.digest, layer.size);
-      this.layer(layer.digest, layer.size).begin(layer.size);
+      const state = this.layer(layer.digest, layer.size).begin(layer.size);
+      layers.push({ digest: layer.digest, size: layer.size, received: state.received, complete: state.complete });
     }
-    return { version: 2, digest: next.digest, totalBytes: next.total };
+    return { version: 2, digest: next.digest, totalBytes: next.total, layers };
   }
   private layer(digest: string, size: number) {
     return new CiphertextBlobUpload(this.directory, { ...this.limits, maxBytes: size }, digest.slice(7));
@@ -80,6 +84,12 @@ export class EncryptedImageUpload {
   complete() {
     const state = this.state();
     return !!state && state.parsed.layers.every(layer => this.layer(layer.digest, layer.size).complete());
+  }
+  recovery() {
+    const state = this.state();
+    if (!state) throw new ImageUploadError(404, "No encrypted release has been uploaded");
+    return { version: 2, manifest: state.manifest.toString("base64"), config: state.config.toString("base64"), manifestDigest: state.digest,
+      layers: state.parsed.layers.map((layer, index) => ({ name: `layer-${index}.enc`, digest: layer.digest, size: layer.size })) };
   }
   async verified() {
     const state = this.state();

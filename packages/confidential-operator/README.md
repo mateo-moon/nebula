@@ -8,18 +8,20 @@ in the [module guide](../nebula/src/modules/k8s/confidential-workloads/README.md
 
 The controller watches declarations, Pods, Services and block claims in explicit
 namespaces. A namespace-scoped leader lease serializes reconciliation. It
-reuses existing guests after restarts, repairs owned Service ports, and reports
+persists resolved image digests on the actual Pod, reuses those exact bindings after restarts, repairs owned Service ports, and reports
 `UpdatePending` for changed workload declarations or measured renderer output.
 `status.initDataSha256` is decoded from the existing Pod, so an operator
 upgrade never advertises a future measurement for an older guest. Retire the current Pod
 explicitly, then enroll and provision its replacement. Storage claims are never
-deleted or adopted by the controller.
+deleted or adopted by the controller. Raw PVCs have a non-expiring, namespace-scoped advisory consumer Lease. Explicit workload deletion retires its owned Pod normally, waits for it to disappear, then releases the Lease. This prevents normal orchestration from mounting one claim in two workloads; it does not replace guest MMP or provide a hardware singleton against administrators.
 
 The bundled TypeScript renderer uses the pinned official Trustee chart and
 native genpolicy. The owner CLI independently uses that same implementation.
 Its bounded JSON protocol carries public declarations and rendered manifests;
 Kubernetes status does not establish trust in a guest.
-Fixed public validation errors appear in status; native registry output is
+Existing-Pod adoption compares actual execution fields and native init-data, including images, commands, environment, security settings, volumes and RuntimeClass. Declaration edits preserve the guest as `UpdatePending`; they never replace an enrolled instance automatically. Public Pod annotations retain the digest checkpoint even if an older CRD prunes the optional status fields.
+
+Fixed public validation errors appear in status; invalid declarations wait for an edit, while transient native rendering uses bounded backoff. Native registry output is
 discarded. Workload status also exposes a machine-readable `reason`, and
 Kubernetes events report phase changes. For guest-side diagnosis, use the
 owner-authorized `bootstrap-status` and `storage-status` CLI commands plus
@@ -37,7 +39,7 @@ authorize Trustee operations.
 Secret reads/updates are restricted to `accessLinkSecrets` named in the operator
 installation; Secrets are never listed or watched. Kubernetes cannot restrict
 Secret creation by name, so enabling this feature also grants namespace-scoped
-Secret creation. Exec, attach, Pod update/delete and disk mutation remain denied.
+Secret creation. Exec, attach, Pod spec updates and disk mutation remain denied. Pod deletion is granted only for the controller's explicit retirement path; the implementation checks exact workload ownership and UID preconditions. Lease operations remain limited to the watched namespaces.
 The optional port 8083 serves bootstrap metadata through ordinary HTTPS. Each
 workload has a unique public endpoint. It is not an attestation authority: the
 local client checks a bundled reviewed profile, independently synthesizes native

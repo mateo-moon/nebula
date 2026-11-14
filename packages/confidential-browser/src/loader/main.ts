@@ -1,5 +1,6 @@
 import { AttestedChannel, endpoint, hash, type AttestedFetch, type SnpIdentity } from "./transport";
 import { newOwner, storedOwner, saveOwner, jwt, encryptedBackup, restoreBackup, discoveryAudience, type OwnerState } from "./owner";
+import { validatePreparationClaim } from "./claim";
 import profiles from "./profiles.json";
 import { manualFragment, manualSession, verifyUnusedInvitation, type ManualSession } from "./manual";
 
@@ -109,8 +110,9 @@ async function start() {
   const assets = await verifiedAssets(channel);
   const owner: OwnerState = saved ?? await newOwner();
   if (saved?.preparationPin && saved.preparationPin !== channel.pin) throw new Error("The preparation instance changed");
-  owner.preparationPin = channel.pin;
   owner.token ??= token; token = "";
+  await validatePreparationClaim(channel, owner, bootstrap ?? {});
+  owner.preparationPin = channel.pin;
   if (manual) await manual.save(owner);
   const bound = channel;
   Object.defineProperty(window, "nebula", { value: Object.freeze({

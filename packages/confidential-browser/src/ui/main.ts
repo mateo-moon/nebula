@@ -1,6 +1,8 @@
 import { bytes, hash, hex, utf8, b64, AttestedChannel } from "../loader/transport";
+import { applicationContract, assertApplicationApproval } from "@nebula/confidential-client/application-approval";
 import { discoveryAudience } from "../loader/owner";
 import { checkedImageUploadLimits, imageUploadLimits, imageSizeLabel } from "@nebula/confidential-client/image-protocol";
+import { checkedSupervisors, storageClientsRunning, checkedStorageRecovery } from "./storage-status";
 import { prepareLocalImage, uploadEncryptedImage, removeCipherCache } from "./upload";
 const api = window.nebula, owner = api.owner;
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id)! as T;
@@ -94,6 +96,7 @@ async function connect() {
   evidence();
   const bootstrap = await (await api.channel.request("/nebula/v1/browser")).json();
   if (bootstrap.imageEncryption?.protocol !== "oci-encrypted-v2" || bootstrap.imageEncryption.location !== "owner-browser" || bootstrap.imageEncryption.preparationReceivesImageKey !== false) throw new Error("This preparation service does not support browser-only image encryption");
+  if (bootstrap.finalEnrollmentJournal !== 1) throw new Error("This preparation release does not support safe resumable final-instance enrollment");
   imageLimits = checkedImageUploadLimits(bootstrap.imageUpload);
   evidence();
   text("archive-hint", `Choose a local linux/amd64 Docker save archive, up to ${imageSizeLabel(imageLimits.maxBytes)}. Your browser encrypts its layers before upload. Only ciphertext leaves your computer; standard OCI configuration metadata remains readable.`);
@@ -101,7 +104,7 @@ async function connect() {
     if (bootstrap.claimed) {
       await request(api.channel, "/nebula/v1/job"); // proves the persisted owner, or fails closed
     }
-    if (await hash(Uint8Array.from(owner.token.match(/../g), (h: any) => parseInt(h, 16))) !== bootstrap.claimSha256) throw new Error("The invitation does not match the attested VM");
+    if (!bootstrap.claimed && await hash(Uint8Array.from((owner.token ?? "").match(/../g) ?? [], (h: any) => parseInt(h, 16))) !== bootstrap.claimSha256) throw new Error("The invitation does not match the attested VM");
     // Persist the exact instance and owner before claiming, so a reload cannot
     // silently generate another owner or adopt a replacement instance.
     await api.save();
@@ -122,6 +125,11 @@ async function connect() {
   text("stack-name", connection.workload.spec.profile);
   text("destination", "Encrypted image destination: " + connection.workload.spec.containers[0].image);
   text("configuration", JSON.stringify(connection, null, 2));
+  const contract = applicationContract(connection);
+  text("application-contract", JSON.stringify(contract, null, 2));
+  const hasOverrides = contract.containers.some(container => container.execution.source === "override" || Object.keys(container.env).length > 0);
+  el("override-review").hidden = !hasOverrides;
+  if (owner.approvedRegistry) input("approved-registry").value = owner.approvedRegistry;
   text("security-values", "Preparation instance: " + api.channel.pin);
   text("storage-summary", connection.storages.map((s: any) => `${s.metadata.name}: ${s.spec.type}`).join(" · "));
   for (const storage of connection.storages) {
@@ -140,7 +148,13 @@ async function connect() {
   }
   const currentJob = await (await request(api.channel, "/nebula/v1/job")).json();
   if (currentJob.state === "ready" && !owner.prepared) {
-    if (!owner.encryptedImage || currentJob.result.digest !== owner.encryptedImage.manifestDigest) throw new Error("The prepared image does not match your saved browser-encrypted release");
+    if (!owner.imageKey) throw new Error("Restore the encrypted backup containing this release image key before resuming");
+    if (!owner.encryptedImage) {
+      const recovery = await (await request(api.channel, "/nebula/v1/image")).json();
+      if (recovery.manifestDigest !== currentJob.result.digest) throw new Error("The encrypted recovery metadata differs from the prepared release");
+      owner.encryptedImage = { id: "nebula-cipher-" + crypto.randomUUID(), manifestDigest: recovery.manifestDigest, recovery };
+    }
+    if (currentJob.result.digest !== owner.encryptedImage.manifestDigest) throw new Error("The prepared image does not match your saved browser-encrypted release");
     owner.prepared = currentJob.result; await api.save();
   }
   connected = true;
@@ -170,11 +184,36 @@ function progress(phase: Phase, title: string) {
   text("job-title", title);
   activePhase = phase; completed.delete(phase); renderSteps();
 }
+async function approveApplication() {
+  if (!owner.applicationApproval) {
+    if (!input("reviewed").checked) throw new Error("Review and approve the full application command, arguments, environment and storage contract first");
+    const contract = applicationContract(connection);
+    if (contract.containers.some(container => container.execution.source === "override" || Object.keys(container.env).length > 0) && !input("approve-overrides").checked) {
+      throw new Error("This stack requests explicit command or environment overrides. Approve those exact displayed values separately, or use a stack with image defaults.");
+    }
+    owner.applicationApproval = contract; await api.save();
+  }
+  assertApplicationApproval(connection, owner.applicationApproval);
+}
+function approvedRegistry() {
+  const host = input("approved-registry").value.trim();
+  if (!/^[a-z0-9.-]+(?::[0-9]{1,5})?$/.test(host) || host !== connection.workload.spec.containers[0].image.split("/")[0]) throw new Error("Enter the registry host you independently trust for these credentials; it must match the displayed destination");
+  if (owner.approvedRegistry && owner.approvedRegistry !== host) throw new Error("This owner checkpoint is already bound to another registry host");
+  owner.approvedRegistry = host; return host;
+}
 async function finalConnection() {
   progress(owner.finalPin ? "attesting" : "waiting", owner.finalPin ? "Verifying your enrolled confidential workload…" : "Waiting for your confidential workload…");
+  await approveApplication();
   const prepared = owner.prepared;
+  const enrollmentResponse = await api.channel.request("/nebula/v1/enrollment", { headers: { Authorization: `Bearer ${await api.jwt("nebula-browser")}` } });
+  if (enrollmentResponse.status !== 200 && enrollmentResponse.status !== 404) throw new Error("The attested preparation enrollment journal is unavailable");
+  const enrollment = enrollmentResponse.status === 404 ? undefined : await enrollmentResponse.json();
+  if (enrollment && (enrollment.version !== 1 || enrollment.manifestDigest !== prepared.digest || !/^[a-f0-9]{64}$/.test(enrollment.transportPublicKey))) throw new Error("The preparation enrollment checkpoint differs from this release");
+  if (owner.finalPin && enrollment && owner.finalPin !== enrollment.transportPublicKey) throw new Error("The saved final pin differs from the attested preparation journal");
+  if (!enrollment && !owner.finalPin && owner.restored && owner.enrollmentJournalVersion !== 1) throw new Error("This older recovery file predates final instance enrollment. Restore the updated backup; no replacement instance was adopted.");
+  const expectedPin = owner.finalPin ?? enrollment?.transportPublicKey;
   const origin = connection.browserEndpoint ?? `${api.target.startsWith("https:") ? "https:" : "http:"}//${connection.endpoint.host}:${connection.endpoint.port}`;
-  final = api.finalChannel(origin, prepared.identity, owner.finalPin);
+  final = api.finalChannel(origin, prepared.identity, expectedPin);
   const deadline = Date.now() + 900_000;
   while (true) {
     try {
@@ -182,17 +221,19 @@ async function finalConnection() {
       if (response.status !== 200) throw new Error("Owner authentication failed");
       break;
     } catch (error) {
-      if (owner.finalPin) throw error;
+      if (expectedPin) throw error;
       if (Date.now() >= deadline) throw new Error("Your encrypted image and release checkpoint are saved. The final confidential workload is not reachable yet; use Verify again & check status to retry. No keys were sent to an unverified instance.");
       await sleep(4000);
     }
   }
   complete("waiting");
   progress("attesting", "Attestation passed. Checking final instance enrollment…");
-  if (!owner.finalPin) {
-    if (owner.restored) throw new Error("This recovery file predates final instance enrollment. Restore the updated backup; no replacement instance was adopted.");
-    owner.finalPin = final!.pin; await api.save();
+  if (!enrollment) {
+    const committed = await (await request(api.channel, "/nebula/v1/enrollment", "POST", JSON.stringify({
+      version: 1, manifestDigest: prepared.digest, transportPublicKey: final!.pin }))).json();
+    if (committed.manifestDigest !== prepared.digest || committed.transportPublicKey !== final!.pin) throw new Error("Final instance enrollment was not committed by the pinned preparation VM");
   }
+  if (!owner.finalPin) { owner.finalPin = final!.pin; await api.save(); }
   if (!owner.finalClaimed) {
     const claimed = await final!.request("/nebula/v1/claim", { method: "POST", headers: { Authorization: `Bearer ${await api.jwt(prepared.audience)}` },
       body: JSON.stringify({ token: owner.token, ownerPublicKeyPem: owner.publicKeyPem }) });
@@ -204,6 +245,7 @@ async function finalConnection() {
   evidence(); text("final-status", "Final workload verified"); return final!;
 }
 async function provision() {
+  await approveApplication();
   const channel = await finalConnection(), prepared = owner.prepared;
   progress("provisioning", "Verified final instance. Provisioning keys…");
   const encode = (text: string) => b64(utf8(text)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
@@ -239,7 +281,18 @@ async function inspect() {
   while (true) {
     const status = await (await request(channel, "/nebula/v1/bootstrap", "GET", undefined, owner.prepared.audience)).json();
     text("result", JSON.stringify(status, null, 2)); evidence();
-    if (status.phase !== "awaiting-configuration" && resources.length > 0 &&
+    const helperResponse = await channel.request("/nebula/v1/supervisors", { headers: { Authorization: `Bearer ${await api.jwt(owner.prepared.audience)}` } });
+    let clientsRunning = false;
+    if (helperResponse.status === 200) {
+      const report = checkedSupervisors(await helperResponse.json());
+      text("supervisor-status", "Process supervision only; application readiness is unknown.\n" + JSON.stringify(report, null, 2));
+      clientsRunning = storageClientsRunning(report, encryptedStorage);
+    } else if (helperResponse.status === 404) {
+      text("supervisor-status", "This release has no supervisor report. Bootstrap readiness does not prove application health.");
+      clientsRunning = true;
+    } else if (helperResponse.status === 503) text("supervisor-status", "Supervisor status is temporarily unavailable; startup cannot be reported complete.");
+    else throw new Error("Owner-authenticated supervisor status is unavailable");
+    if (clientsRunning && status.phase !== "awaiting-configuration" && resources.length > 0 &&
         resources.every((path: string) => status.resources?.[path]?.status === 200) &&
         encryptedStorage.every((name: string) => status.storage?.[name]?.phase === "ready")) break;
     if (Date.now() >= deadline) throw new Error("Keys reached the verified VM. Startup is still pending; use Verify again for status.");
@@ -256,7 +309,8 @@ el("deploy-form").addEventListener("submit", event => {
     if (!archive || !archive.size || archive.size > imageLimits.maxBytes) {
       throw new Error(`Choose one nonempty local image archive up to ${imageSizeLabel(imageLimits.maxBytes)}`);
     }
-    if (!input("reviewed").checked) throw new Error("Review and approve the stack first");
+    await approveApplication();
+    const registry = approvedRegistry();
     owner.imageKey ??= hex(crypto.getRandomValues(new Uint8Array(32))); owner.volumeKeys ??= {};
     for (const storage of connection.storages) if (storage.spec.type === "EncryptedBlock" && !owner.volumeKeys[storage.metadata.name]) {
       const selected = (document.getElementById("key-" + storage.metadata.name) as HTMLInputElement | null)?.files?.[0];
@@ -281,15 +335,21 @@ el("deploy-form").addEventListener("submit", event => {
     try {
     completed.clear();
     progress("encrypting", "Encrypting image locally in your browser…");
+    if (!owner.encryptedImage) {
+      if (owner.cipherCacheAttempt) await removeCipherCache({ id: owner.cipherCacheAttempt, manifestDigest: "" });
+      owner.cipherCacheAttempt = "nebula-cipher-" + crypto.randomUUID(); await api.save();
+    }
     const local = await prepareLocalImage(archive, owner.imageKey, `kbs:///${connection.workload.spec.containers[0].imageKeyResource.join("/")}`,
-      imageLimits, owner.encryptedImage, (done, total) => progress("encrypting", `Encrypting locally: ${imageSizeLabel(done)} / ${imageSizeLabel(total)} (${Math.floor(done * 100 / total)}%)`));
-    owner.encryptedImage = local.cache; await api.save();
+      imageLimits, owner.encryptedImage, (done, total) => progress("encrypting", `Encrypting locally: ${imageSizeLabel(done)} / ${imageSizeLabel(total)} (${Math.floor(done * 100 / total)}%)`), owner.cipherCacheAttempt);
+    owner.encryptedImage = local.cache; delete owner.cipherCacheAttempt; await api.save();
+    download("nebula-owner-recovery-updated.json", await api.backup(recoveryPassword));
     await uploadEncryptedImage(local.image, imageLimits,
       (path, method, body, headers) => request(api.channel, path, method, body, "nebula-browser", headers),
       (sent, total) => progress("encrypting", `Uploading encrypted layers: ${imageSizeLabel(sent)} / ${imageSizeLabel(total)} (${Math.floor(sent * 100 / total)}%)`));
     progress("encrypting", "Publishing your encrypted image…");
     await request(api.channel, "/nebula/v1/publish", "POST", JSON.stringify({
-      registryUsername: input("registry-username").value, registryPassword: input("registry-password").value }));
+      registryUsername: input("registry-username").value, registryPassword: input("registry-password").value,
+      approvedRegistry: registry, applicationApproval: owner.applicationApproval }));
     input("registry-password").value = "";
     const deadline = Date.now() + imageLimits.jobTimeoutMs;
     while (true) {
@@ -315,5 +375,44 @@ el("deploy-form").addEventListener("submit", event => {
   })().catch(failure);
 });
 el("inspect").addEventListener("click", () => { if (!busy && connected) { busy = true; el("notice").hidden = true; void (owner.provisioned ? inspect() : provision()).then(() => { busy = false; }).catch(failure); } });
+el("storage-recovery").addEventListener("click", () => {
+  if (busy || !owner.finalPin || !owner.prepared) return;
+  void (async () => {
+    const channel = final ?? await finalConnection();
+    const resources: Record<string,string> = {};
+    for (const binding of connection.workload.spec.storage ?? []) {
+      const storage = connection.storages.find((value: any) => value.metadata.name === binding.resource && value.metadata.namespace === connection.workload.metadata.namespace);
+      if (storage?.spec.type === "EncryptedBlock") resources[binding.name] = storage.spec.keyResource.join("/");
+    }
+    const instance = await (await request(channel, "/nebula/v1/instance", "GET", undefined, owner.prepared.audience)).json();
+    const plans = checkedStorageRecovery(await (await request(channel, "/nebula/v1/storage-recovery", "GET", undefined, owner.prepared.audience)).json(), instance.publicKeySha256, resources);
+    const output = el("storage-recovery-plans"); output.replaceChildren();
+    if (!plans.length) { output.textContent = "No interrupted empty-filesystem initialization is eligible for automatic recovery. Existing or nonzero data requires manual recovery."; return; }
+    for (const plan of plans) {
+      const expires = Date.now() + plan.expiresInSeconds * 1000;
+      const panel = document.createElement("section"), details = document.createElement("pre"), label = document.createElement("label"), approval = document.createElement("input"), button = document.createElement("button");
+      details.textContent = JSON.stringify(plan, null, 2); approval.type = "checkbox"; button.type = "button"; button.className = "secondary";
+      label.append(approval, document.createTextNode(" I authorize resuming only this verified empty filesystem. The enrolled guest must refuse existing filesystems or nonzero payloads."));
+      button.textContent = "Resume verified empty initialization";
+      button.addEventListener("click", () => {
+        if (!approval.checked || Date.now() >= expires) { text("notice", "Approve this exact empty-filesystem recovery, or refresh an expired challenge first."); el("notice").hidden = false; return; }
+        button.disabled = true;
+        void request(channel, "/nebula/v1/storage-recovery", "POST", JSON.stringify({ version: 1, storage: plan.storage, instance: plan.instance, headerSha256: plan.headerSha256, challenge: plan.challenge, action: plan.action, acknowledgement: "RESUME ONLY THIS VERIFIED EMPTY FILESYSTEM" }), owner.prepared.audience)
+          .then(() => { panel.textContent = "Recovery accepted by the same enrolled guest. Verify startup status again; this is not application health proof."; }).catch(error => { button.disabled = false; failure(error); });
+      });
+      panel.append(details, label, button); output.append(panel);
+    }
+  })().catch(failure);
+});
+el("clear-local-cache").addEventListener("click", () => {
+  if (busy) return;
+  void (async () => {
+    if (owner.encryptedImage) await removeCipherCache(owner.encryptedImage);
+    if (owner.cipherCacheAttempt) await removeCipherCache({ id: owner.cipherCacheAttempt, manifestDigest: "" });
+    delete owner.cipherCacheAttempt; await api.save();
+    text("notice", "Local ciphertext cache cleared. Keep your latest encrypted recovery backup and original image archive; their saved metadata can recreate the identical encrypted release.");
+    el("notice").hidden = false;
+  })().catch(failure);
+});
 el("download-verification").addEventListener("click", () => download("nebula-verification.json", evidence()));
 void connect().catch(failure);

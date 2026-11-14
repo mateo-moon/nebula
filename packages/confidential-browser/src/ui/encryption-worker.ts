@@ -4,7 +4,7 @@ import { hash, utf8 } from "../loader/transport";
 /** OPFS contains only ciphertext and standard public OCI metadata, never a
  * usable image key. The owner vault separately binds the cache's manifest. */
 self.onmessage = event => { void (async () => {
-  const { archive, imageKey, keyId, cacheId, manifestDigest, maxBytes } = event.data;
+  const { archive, imageKey, keyId, cacheId, manifestDigest, recovery, maxBytes } = event.data;
   if (!(archive instanceof Blob) || !archive.size || archive.size > maxBytes || !Number.isSafeInteger(maxBytes) || maxBytes > 2 ** 32 ||
       typeof imageKey !== "string" || !/^[a-f0-9]{64}$/.test(imageKey) || !/^nebula-cipher-[a-f0-9-]{36}$/.test(cacheId)) throw new Error("Invalid local encryption request");
   if (!navigator.storage?.getDirectory) throw new Error("This browser needs private file storage for large-image encryption");
@@ -23,11 +23,11 @@ self.onmessage = event => { void (async () => {
       result = saved.result;
       if ("sha256:" + await hash(Uint8Array.from(atob(result.manifest), c => c.charCodeAt(0))) !== manifestDigest) throw new Error("The local encrypted manifest changed");
     } else {
-      if (manifestDigest) throw new Error("The saved encrypted image is missing. Restore its local browser storage before retrying this publication");
+      if (manifestDigest && (!recovery || recovery.manifestDigest !== manifestDigest)) throw new Error("The saved ciphertext is missing. Restore the latest encrypted recovery backup and select the original archive");
       result = await encryptDockerArchive(archive, key, keyId, async name => {
         const output = await (await directory.getFileHandle(name, { create: true })).createWritable();
         return { write: async data => { await output.write(data as FileSystemWriteChunkType); }, close: () => output.close() };
-      }, (done, total) => self.postMessage({ type: "progress", done, total }));
+      }, (done, total) => self.postMessage({ type: "progress", done, total }), recovery);
       const receipt = await (await directory.getFileHandle("receipt.json", { create: true })).createWritable();
       await receipt.write(JSON.stringify({ version: 2, keySha256, sourceSize: archive.size, sourceName: (archive as File).name, result })); await receipt.close();
     }

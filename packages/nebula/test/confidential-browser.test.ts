@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { confidentialBrowserPlan } from "../src/modules/k8s/confidential-workloads/browser";
+import { App, Chart, Testing } from "cdk8s";
+import { ConfidentialBrowser, confidentialBrowserPlan } from "../src/modules/k8s/confidential-workloads/browser";
 import { INIT_DATA_ANNOTATION, initDataSha256, initDataDocument } from "../src/modules/k8s/confidential-guests/measured";
 import { parse } from "smol-toml";
 
@@ -114,4 +115,20 @@ test("manual frontend native policy binds routing and runs only the guest TLS se
   assert.equal(refresh(retained), 600);
   assert.notEqual(retained.initDataSha256, first.initDataSha256, "Certificate renewal is bound by native policy");
   assert.equal(retained.pod.spec!.containers![0].env!.find(entry => entry.name === "NEBULA_MANUAL_TLS_ENTRY")!.value, JSON.stringify(manualTls));
+});
+
+
+test("invitation access rejects empty or malformed operator selectors before native generation", () => {
+  for (const invitationAccess of [{ podSelector: {} }, { podSelector: { app: "bad value" } }, { namespace: "bad/namespace", podSelector: { app: "custom" } }]) {
+    assert.throws(() => confidentialBrowserPlan({ ...config, invitationAccess }), /Invitation access/);
+  }
+});
+test("invitation policy supports a custom operator name and namespace without changing the measured guest", { skip: !native, timeout: 600_000 }, () => {
+  const chart = new Chart(new App(), "invitation");
+  const custom = { ...config, invitationAccess: { namespace: "operators", podSelector: { app: "custom-operator" } } };
+  new ConfidentialBrowser(chart, "browser", custom);
+  const resources = Testing.synth(chart), policy = resources.find(value => value.kind === "NetworkPolicy")!;
+  const invitation = policy.spec.ingress.find((rule: any) => rule.ports.some((port: any) => port.port === 8089));
+  assert.deepEqual(invitation.from, [{ namespaceSelector: { matchLabels: { "kubernetes.io/metadata.name": "operators" } }, podSelector: { matchLabels: { app: "custom-operator" } } }]);
+  assert.equal(confidentialBrowserPlan(custom).initDataSha256, confidentialBrowserPlan(config).initDataSha256);
 });

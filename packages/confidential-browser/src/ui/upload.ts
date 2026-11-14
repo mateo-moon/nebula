@@ -8,12 +8,13 @@ type Send = (path: string, method: string, body: BodyInit, headers?: Record<stri
 export interface LocalCipherImage extends Omit<LocalEncryptionResult, "layers"> {
   layers: (LocalEncryptionResult["layers"][number] & { file: Blob })[];
 }
-export interface CipherCache { id: string; manifestDigest: string }
+export interface CipherCache { id: string; manifestDigest: string; recovery?: LocalEncryptionResult }
 
 export async function prepareLocalImage(archive: File, imageKey: string, keyId: string, limits: ImageUploadLimits,
-  cache: CipherCache | undefined, progress: (done: number, total: number) => void) {
+  cache: CipherCache | undefined, progress: (done: number, total: number) => void, attemptId?: string) {
   if (!archive.size || archive.size > limits.maxBytes) throw new Error("The image archive exceeds this stack's upload limit");
-  const id = cache?.id ?? "nebula-cipher-" + crypto.randomUUID();
+  const id = cache?.id ?? attemptId ?? "nebula-cipher-" + crypto.randomUUID();
+  if (!/^nebula-cipher-[a-f0-9-]{36}$/.test(id)) throw new Error("Invalid local ciphertext cache identity");
   const url = URL.createObjectURL(new Blob([NEBULA_IMAGE_WORKER], { type: "text/javascript" }));
   const worker = new Worker(url);
   try {
@@ -25,10 +26,12 @@ export async function prepareLocalImage(archive: File, imageKey: string, keyId: 
         else if (message.type === "ready") resolve(message.result);
         else if (message.type === "error") reject(new Error(message.error));
       };
-      worker.postMessage({ archive, imageKey, keyId, cacheId: id, manifestDigest: cache?.manifestDigest, maxBytes: limits.maxBytes });
+      worker.postMessage({ archive, imageKey, keyId, cacheId: id, manifestDigest: cache?.manifestDigest, recovery: cache?.recovery, maxBytes: limits.maxBytes });
     });
     if (!/^sha256:[a-f0-9]{64}$/.test(image.manifestDigest) || !image.layers.length || image.layers.some(l => l.file.size !== l.size)) throw new Error("The local encrypted image is incomplete");
-    return { image, cache: { id, manifestDigest: image.manifestDigest } };
+    const { layers, ...metadata } = image;
+    const recovery = { ...metadata, layers: layers.map(({ file: _, ...layer }) => layer) };
+    return { image, cache: { id, manifestDigest: image.manifestDigest, recovery } };
   } finally { worker.terminate(); URL.revokeObjectURL(url); }
 }
 
@@ -37,11 +40,15 @@ export async function uploadEncryptedImage(image: LocalCipherImage, limits: Imag
   progress: (sent: number, total: number) => void) {
   const total = image.layers.reduce((sum, layer) => sum + layer.size, 0);
   if (!total || total > limits.maxBytes) throw new Error("Encrypted layers exceed this stack's upload limit");
-  await send("/nebula/v1/image", "POST", JSON.stringify({ version: 2, manifest: image.manifest, config: image.config }));
+  const acknowledgement = await (await send("/nebula/v1/image", "POST", JSON.stringify({ version: 2, manifest: image.manifest, config: image.config }))).json();
+  if (acknowledgement.version !== 2 || acknowledgement.digest !== image.manifestDigest || !Array.isArray(acknowledgement.layers) || acknowledgement.layers.length !== image.layers.length) throw new Error("The attested upload checkpoint differs from your encrypted image");
   let sent = 0; progress(sent, total);
-  for (const layer of image.layers) {
+  for (const [index, layer] of image.layers.entries()) {
     if (!/^sha256:[a-f0-9]{64}$/.test(layer.digest) || layer.file.size !== layer.size) throw new Error("Invalid local encrypted layer");
-    for (let offset = 0; offset < layer.size; offset += limits.chunkBytes) {
+    const checkpoint = acknowledgement.layers[index];
+    if (checkpoint.digest !== layer.digest || checkpoint.size !== layer.size || !Number.isSafeInteger(checkpoint.received) || checkpoint.received < 0 || checkpoint.received > layer.size || (checkpoint.received !== layer.size && checkpoint.received % limits.chunkBytes !== 0)) throw new Error("Invalid attested encrypted-layer checkpoint");
+    progress(sent + checkpoint.received, total);
+    for (let offset = checkpoint.received; offset < layer.size; offset += limits.chunkBytes) {
       const end = Math.min(offset + limits.chunkBytes, layer.size), raw = await layer.file.slice(offset, end).arrayBuffer();
       try {
         await send(`/nebula/v1/image/${layer.digest.slice(7)}/${offset}`, "PUT", raw, {
@@ -56,6 +63,7 @@ export async function uploadEncryptedImage(image: LocalCipherImage, limits: Imag
 export async function removeCipherCache(cache: CipherCache | undefined) {
   if (cache && /^nebula-cipher-[a-f0-9-]{36}$/.test(cache.id)) {
     const root = await navigator.storage.getDirectory();
-    await root.removeEntry(cache.id, { recursive: true });
+    try { await root.removeEntry(cache.id, { recursive: true }); }
+    catch (error) { if ((error as DOMException).name !== "NotFoundError") throw error; }
   }
 }

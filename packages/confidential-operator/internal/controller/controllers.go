@@ -1,10 +1,7 @@
 package controller
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +12,7 @@ import (
 	"time"
 
 	api "github.com/mateo-moon/nebula/packages/confidential-operator/api/v1alpha1"
+	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,6 +23,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -55,8 +54,11 @@ type storageRouting struct {
 	ClaimName string `json:"claimName"`
 }
 type cachedPlan struct {
-	key  string
-	plan *Plan
+	key      string
+	plan     *Plan
+	err      error
+	retryAt  time.Time
+	failures int
 }
 
 type publicFailure struct {
@@ -82,12 +84,14 @@ func kubeFailure(reason, action string, err error) error {
 
 type WorkloadReconciler struct {
 	client.Client
-	Reader   client.Reader // uncached read before creation prevents duplicate Pods
-	Scheme   *runtime.Scheme
-	Renderer Renderer
-	Recorder record.EventRecorder
-	mu       sync.Mutex
-	plans    map[types.NamespacedName]cachedPlan
+	Reader           client.Reader // uncached read before creation prevents duplicate Pods
+	Scheme           *runtime.Scheme
+	Renderer         Renderer
+	Recorder         record.EventRecorder
+	Now              func() time.Time
+	mu               sync.Mutex
+	plans            map[types.NamespacedName]cachedPlan
+	resolutionStatus int
 }
 
 func (r *WorkloadReconciler) forget(key types.NamespacedName) {
@@ -96,40 +100,87 @@ func (r *WorkloadReconciler) forget(key types.NamespacedName) {
 	delete(r.plans, key)
 }
 func (r *WorkloadReconciler) plan(ctx context.Context, w *api.ConfidentialWorkload, s []api.ConfidentialStorage) (*Plan, error) {
-	data, _ := json.Marshal(struct {
-		UID     types.UID
-		Spec    runtime.RawExtension
-		Storage []json.RawMessage
-	}{w.UID, w.Spec, storageSpecs(s)})
-	// API merge patches may reorder object fields without changing the spec.
-	var canonical any
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.UseNumber()
-	if err := decoder.Decode(&canonical); err != nil {
-		return nil, errors.New("invalid declaration JSON")
+	key, err := declarationKey(w, s)
+	if err != nil {
+		return nil, &renderDiagnostic{reason: "InvalidDeclaration", message: "Confidential workload: invalid declaration JSON"}
 	}
-	data, _ = json.Marshal(canonical)
-	hash := sha256.Sum256(data)
-	key := hex.EncodeToString(hash[:])
 	name := client.ObjectKeyFromObject(w)
+	now := time.Now()
+	if r.Now != nil {
+		now = r.Now()
+	}
 	r.mu.Lock()
 	cached, ok := r.plans[name]
 	r.mu.Unlock()
 	if ok && cached.key == key {
-		return cached.plan, nil
+		if cached.err == nil {
+			return cached.plan, nil
+		}
+		if permanentError(cached.err) || now.Before(cached.retryAt) {
+			return nil, &renderBackoff{cause: cached.err, after: cached.retryAt.Sub(now)}
+		}
 	}
-	p, err := r.Renderer.Render(ctx, w, s)
+	effective := w.DeepCopy()
+	if effective.Status.DesiredSpecSHA256 != key {
+		effective.Status.ResolvedImageDigests = nil
+	}
+	p, err := r.Renderer.Render(ctx, effective, s)
+	entry := cachedPlan{key: key, plan: p, err: err}
 	if err != nil {
-		return nil, err
+		entry.failures = 1
+		if ok && cached.key == key {
+			entry.failures = cached.failures + 1
+		}
+		delay := 15 * time.Second
+		for n := 1; n < entry.failures && delay < 5*time.Minute && !isPublicationPending(err); n++ {
+			delay *= 2
+		}
+		if delay > 5*time.Minute {
+			delay = 5 * time.Minute
+		}
+		entry.retryAt = now.Add(delay)
 	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if r.plans == nil {
 		r.plans = map[types.NamespacedName]cachedPlan{}
 	}
-	r.plans[name] = cachedPlan{key, p}
+	if len(r.plans) >= 128 {
+		for k := range r.plans {
+			delete(r.plans, k)
+			break
+		}
+	}
+	r.plans[name] = entry
+	r.mu.Unlock()
+	if err != nil {
+		return nil, &renderBackoff{cause: err, after: entry.retryAt.Sub(now)}
+	}
 	return p, nil
 }
+func isPublicationPending(err error) bool {
+	var r interface{ Reason() string }
+	return errors.As(err, &r) && r.Reason() == "ImageNotPublished"
+}
+func permanentError(err error) bool {
+	var p interface{ Permanent() bool }
+	return errors.As(err, &p) && p.Permanent()
+}
+
+type renderBackoff struct {
+	cause error
+	after time.Duration
+}
+
+func (e *renderBackoff) Error() string { return e.cause.Error() }
+func (e *renderBackoff) Unwrap() error { return e.cause }
+func (e *renderBackoff) Reason() string {
+	var r interface{ Reason() string }
+	if errors.As(e.cause, &r) {
+		return r.Reason()
+	}
+	return "NativeRenderFailed"
+}
+func (e *renderBackoff) Permanent() bool { return permanentError(e.cause) }
 func storageSpecs(items []api.ConfidentialStorage) []json.RawMessage {
 	result := make([]json.RawMessage, 0, len(items))
 	for _, s := range items {
@@ -150,8 +201,14 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	if !w.DeletionTimestamp.IsZero() {
-		r.forget(req.NamespacedName)
-		return ctrl.Result{}, nil
+		return r.retire(ctx, &w)
+	}
+	if !controllerutil.ContainsFinalizer(&w, storageFinalizer) {
+		before := w.DeepCopy()
+		controllerutil.AddFinalizer(&w, storageFinalizer)
+		if err := r.Patch(ctx, &w, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 	effective := w.DeepCopy()
 	accessHash, accessName := w.Status.AccessTokenSHA256, w.Status.AccessSecretName
@@ -170,19 +227,28 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		state, err = r.reconcile(ctx, effective)
 	}
 	if err != nil {
-		state = w.Status
+		if state.PodName == "" {
+			state = w.Status
+		}
 		state.Phase = "Error"
 		state.Reason = "ReconcileFailed"
 		var reasoned interface{ Reason() string }
 		if errors.As(err, &reasoned) {
 			state.Reason = reasoned.Reason()
 		}
-		if state.Reason == "ImageNotPublished" {
+		if state.Reason == "StorageInUse" {
+			state.Phase = "AwaitingStorage"
+			state.Message = "Encrypted block storage is reserved by another workload"
+		} else if state.Reason == "ImageNotPublished" {
 			state.Phase = "AwaitingPublication"
 			state.Message = "Waiting for the encrypted image tag to appear in the registry"
 		} else {
 			state.Message = err.Error()
 		}
+	}
+	if r.resolutionStatusPruned() {
+		state.DesiredSpecSHA256 = ""
+		state.ResolvedImageDigests = nil
 	}
 	state.AccessTokenSHA256, state.AccessSecretName = accessHash, accessName
 	state.ObservedGeneration = w.Generation
@@ -195,6 +261,7 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		if e := r.Status().Patch(ctx, &w, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})); e != nil {
 			return ctrl.Result{}, kubeFailure("StatusUpdateFailed", "workload status update failed", e)
 		}
+		r.observeResolutionStatus(ctx, &w, state)
 		if r.Recorder != nil {
 			kind := corev1.EventTypeNormal
 			if state.Phase == "Error" || state.Phase == "Stopped" {
@@ -208,6 +275,20 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		// diagnostic. Native stderr and raw API response bodies stay private.
 		log.FromContext(ctx).Info("workload reconciliation failed", "reason", state.Reason, "message", state.Message)
 	}
+	if permanentError(err) {
+		return ctrl.Result{}, nil
+	}
+	var backoff *renderBackoff
+	if errors.As(err, &backoff) {
+		delay := backoff.after
+		if delay < time.Second {
+			delay = time.Second
+		}
+		return ctrl.Result{RequeueAfter: delay}, nil
+	}
+	if state.Phase == "AwaitingStorage" {
+		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+	}
 	if state.Phase == "AwaitingPublication" {
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
@@ -216,7 +297,7 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 func (r *WorkloadReconciler) reconcile(ctx context.Context, w *api.ConfidentialWorkload) (api.Status, error) {
 	var routing workloadRouting
 	if json.Unmarshal(w.Spec.Raw, &routing) != nil || w.UID == "" {
-		return api.Status{}, errors.New("invalid workload declaration")
+		return api.Status{}, &renderDiagnostic{reason: "InvalidDeclaration", message: "Confidential workload: invalid workload declaration"}
 	}
 	storages := []api.ConfidentialStorage{}
 	seen := map[string]bool{}
@@ -234,7 +315,7 @@ func (r *WorkloadReconciler) reconcile(ctx context.Context, w *api.ConfidentialW
 		}
 		var spec storageRouting
 		if json.Unmarshal(s.Spec.Raw, &spec) != nil {
-			return api.Status{}, errors.New("invalid storage declaration")
+			return api.Status{}, &renderDiagnostic{reason: "InvalidDeclaration", message: "Confidential workload: invalid storage declaration"}
 		}
 		if spec.Type == "EncryptedBlock" {
 			if _, err := blockClaim(ctx, r.Reader, s.Namespace, spec.ClaimName); err != nil {
@@ -244,24 +325,59 @@ func (r *WorkloadReconciler) reconcile(ctx context.Context, w *api.ConfidentialW
 		storages = append(storages, s)
 	}
 	sort.Slice(storages, func(i, j int) bool { return storages[i].Name < storages[j].Name })
-	plan, err := r.plan(ctx, w, storages)
+	key, err := declarationKey(w, storages)
 	if err != nil {
 		return api.Status{}, err
 	}
-	var pods corev1.PodList
-	if err := r.Reader.List(ctx, &pods, client.InNamespace(w.Namespace), client.MatchingLabels{ownerLabel: string(w.UID)}); err != nil {
-		return api.Status{}, kubeFailure("PodLookupFailed", "workload Pod lookup failed", err)
+	all, err := r.namespacePods(ctx, w.Namespace)
+	if err != nil {
+		return api.Status{}, err
+	}
+	pods := corev1.PodList{}
+	for i := range all {
+		if ownedBy(&all[i], w) || all[i].Labels[ownerLabel] == string(w.UID) {
+			pods.Items = append(pods.Items, all[i])
+		}
 	}
 	if len(pods.Items) > 1 {
 		return api.Status{}, errors.New("conflicting workload Pods; owner intervention required")
 	}
 	var pod *corev1.Pod
+	effective := w.DeepCopy()
 	if len(pods.Items) == 1 {
 		pod = &pods.Items[0]
 		if !ownedBy(pod, w) {
 			return api.Status{}, errors.New("conflicting Pod ownership; owner intervention required")
 		}
-	} else {
+		current := actualStatus(pod)
+		if !pod.DeletionTimestamp.IsZero() {
+			current.Phase = "Retiring"
+			current.Reason = "PodTerminating"
+			current.Message = "Waiting for the current Pod to terminate before creating a replacement"
+			return current, nil
+		}
+		if current.DesiredSpecSHA256 != "" && current.DesiredSpecSHA256 != key {
+			return updatePending(current, "DeclarationChanged"), nil
+		}
+		if current.DesiredSpecSHA256 == key && checkedResolutions(w, pod, current.ResolvedImageDigests) {
+			effective.Status.DesiredSpecSHA256 = key
+			effective.Status.ResolvedImageDigests = current.ResolvedImageDigests
+		} else if w.Status.DesiredSpecSHA256 == key && checkedResolutions(w, pod, w.Status.ResolvedImageDigests) {
+			effective.Status.DesiredSpecSHA256 = key
+			effective.Status.ResolvedImageDigests = w.Status.ResolvedImageDigests
+		}
+	}
+	plan, err := r.plan(ctx, effective, storages)
+	if err != nil {
+		if pod != nil {
+			return actualStatus(pod), err
+		}
+		return api.Status{}, err
+	}
+	if pod == nil {
+		if err := r.reserveStorage(ctx, w, storages, nil); err != nil {
+			return api.Status{}, err
+		}
 		pod = plan.Pod.DeepCopy()
 		actualHash, err := podInitDataSHA256(pod)
 		if err != nil || actualHash != plan.InitDataSHA256 {
@@ -277,55 +393,51 @@ func (r *WorkloadReconciler) reconcile(ctx context.Context, w *api.ConfidentialW
 		}
 		pod.Annotations[renderLabel] = plan.SpecSHA256
 		pod.Annotations[measurementAnnotation] = actualHash
+		pod.Annotations[desiredAnnotation] = key
+		resolutions, _ := json.Marshal(plan.ResolvedImageDigests)
+		pod.Annotations[resolvedAnnotation] = string(resolutions)
 		if err := r.Create(ctx, pod); err != nil {
 			return api.Status{}, kubeFailure("PodCreateFailed", "workload Pod creation failed", err)
 		}
 	}
+	current := actualStatus(pod)
 	actualHash, measurementErr := podInitDataSHA256(pod)
-	current := api.Status{PodName: pod.Name, PodUID: string(pod.UID),
-		SpecSHA256: pod.Annotations[renderLabel], InitDataSHA256: actualHash}
-	if measurementErr != nil || (pod.Annotations[measurementAnnotation] != "" &&
-		pod.Annotations[measurementAnnotation] != actualHash) {
+	if measurementErr != nil || (pod.Annotations[measurementAnnotation] != "" && pod.Annotations[measurementAnnotation] != actualHash) {
 		current.Phase = "Error"
 		current.Reason = "PodMeasurementUnavailable"
 		current.Message = "The running Pod init-data cannot be verified; owner inspection is required"
 		return current, nil
 	}
-	if !pod.DeletionTimestamp.IsZero() {
-		current.Phase = "Retiring"
-		current.Reason = "PodTerminating"
-		current.Message = "Waiting for the current Pod to terminate before creating a replacement"
-		return current, nil
-	}
 	if current.SpecSHA256 != plan.SpecSHA256 || actualHash != plan.InitDataSHA256 {
-		current.Phase = "UpdatePending"
-		current.Reason = "MeasurementChanged"
+		reason := "MeasurementChanged"
 		if current.SpecSHA256 != plan.SpecSHA256 {
-			current.Reason = "DeclarationChanged"
+			reason = "DeclarationChanged"
 		}
-		current.Message = "Configuration or measured runtime changed. Explicitly retire the current Pod and enroll its replacement."
+		return updatePending(current, reason), nil
+	}
+	if !podMatchesPlan(pod, &plan.Pod) {
+		current.Phase = "Error"
+		current.Reason = "PodSpecMismatch"
+		current.Message = "The actual Pod execution settings differ from the native rendered declaration; routing was refused"
 		return current, nil
 	}
+	// Persist tracking through routing errors: neither an occupied Service name nor
+	// a temporary API denial may erase the actual existing Pod/measurement.
+	if pod.Labels[ownerLabel] != string(w.UID) {
+		current.Phase = "Error"
+		current.Reason = "PodOwnershipLabelMismatch"
+		current.Message = "The owned Pod routing label changed; owner inspection is required"
+		return current, nil
+	}
+	if err := r.reserveStorage(ctx, w, storages, pod); err != nil {
+		return current, err
+	}
+	current.DesiredSpecSHA256 = key
+	current.ResolvedImageDigests = plan.ResolvedImageDigests
 	if err := r.service(ctx, w, routing); err != nil {
-		return api.Status{}, err
+		return current, err
 	}
-	state := current
-	state.Phase = "AwaitingOwner"
-	state.Reason = "OwnerEnrollmentRequired"
-	state.Message = "Owner verification and enrollment are required before provisioning keys"
-	for _, c := range pod.Status.Conditions {
-		if c.Type == corev1.PodReady && c.Status == corev1.ConditionTrue {
-			state.Phase = "Running"
-			state.Reason = "PodReady"
-			state.Message = "Kubernetes reports ready; verify guest attestation with the owner CLI"
-		}
-	}
-	if pod.Status.Phase == corev1.PodFailed || pod.Status.Phase == corev1.PodSucceeded {
-		state.Phase = "Stopped"
-		state.Reason = podStopReason(pod)
-		state.Message = "Explicitly retire the stopped Pod and enroll its replacement"
-	}
-	return state, nil
+	return workloadState(pod, current), nil
 }
 func podStopReason(pod *corev1.Pod) string {
 	for _, container := range pod.Status.InitContainerStatuses {
@@ -438,6 +550,16 @@ func (r *StorageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		pvc, err = blockClaim(ctx, r.Reader, s.Namespace, spec.ClaimName)
 		if err == nil {
 			state.Message = "Ciphertext claim only; key custody and volume opening remain inside the guest"
+			if pvc.Status.Phase == corev1.ClaimBound {
+				var lease coordinationv1.Lease
+				if err := r.Reader.Get(ctx, types.NamespacedName{Namespace: s.Namespace, Name: reservationName(pvc)}, &lease); err == nil && lease.Spec.HolderIdentity != nil {
+					state.Phase = "Reserved"
+					state.Reason = "StorageReserved"
+					state.Message = "Ciphertext claim has an advisory workload reservation; guest MMP and owner key protections remain required"
+				} else if err != nil && !apierrors.IsNotFound(err) {
+					return ctrl.Result{}, kubeFailure("StorageReservationLookupFailed", "storage reservation lookup failed", err)
+				}
+			}
 			if pvc.Status.Phase != corev1.ClaimBound {
 				state.Phase = "AwaitingBinding"
 				state.Reason = "ClaimUnbound"
@@ -488,7 +610,17 @@ func (r *WorkloadReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				requests = append(requests, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&w)})
 			}
 			return requests
-		})).Complete(r)
+		})).Watches(&coordinationv1.Lease{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []reconcile.Request {
+		var items api.ConfidentialWorkloadList
+		if r.List(ctx, &items, client.InNamespace(o.GetNamespace())) != nil {
+			return nil
+		}
+		requests := []reconcile.Request{}
+		for _, w := range items.Items {
+			requests = append(requests, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&w)})
+		}
+		return requests
+	}), builder.WithPredicates(predicate.NewPredicateFuncs(func(o client.Object) bool { return o.GetLabels()[reservationLabel] != "" }))).Complete(r)
 }
 func (r *StorageReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &api.ConfidentialStorage{}, claimIndex, func(o client.Object) []string {
@@ -511,7 +643,17 @@ func (r *StorageReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				requests = append(requests, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&s)})
 			}
 			return requests
-		})).Complete(r)
+		})).Watches(&coordinationv1.Lease{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []reconcile.Request {
+		var items api.ConfidentialStorageList
+		if r.List(ctx, &items, client.InNamespace(o.GetNamespace())) != nil {
+			return nil
+		}
+		requests := []reconcile.Request{}
+		for _, s := range items.Items {
+			requests = append(requests, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&s)})
+		}
+		return requests
+	}), builder.WithPredicates(predicate.NewPredicateFuncs(func(o client.Object) bool { return o.GetLabels()[reservationLabel] != "" }))).Complete(r)
 }
 
 // Namespace restrictions are validated before any informer or client is started.

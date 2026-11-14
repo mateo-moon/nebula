@@ -67,7 +67,7 @@ test("an owner saved before generating release secrets can resume the same prepa
   assert.equal(verifyOwnerJwt(`Bearer ${await jwt(restored, "nebula-browser")}`, owner.publicKeyPem, "nebula-browser"), true);
 });
 
-test("restoring any release state retains the prohibition on first final-instance enrollment", async () => {
+test("restoring release state retains recovery classification for journal and instance checks", async () => {
   for (const state of [
     { imageKey: "c".repeat(64) }, { encryptedImage: { id: "test-cache", manifestDigest: "sha256:" + "d".repeat(64) } },
     { prepared: {} }, { finalPin: "e".repeat(64) }, { finalClaimed: true }, { provisioned: true },

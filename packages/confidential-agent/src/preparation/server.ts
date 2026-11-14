@@ -1,12 +1,14 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createHash, generateKeyPairSync, randomBytes } from "node:crypto";
-import { readFileSync, writeFileSync, mkdirSync, statfsSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, statfsSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { readConnection, trustedStack, type ConfidentialConnection } from "@nebula/confidential-client";
 import { claimOwner, readClaimedOwner, verifyOwnerJwt } from "../claim.js";
 import { publish, type PublishInput } from "./publish";
 import { imageUploadLimits } from "@nebula/confidential-client/image-protocol";
 import { ImageUploadError } from "./image-upload";
+import { writeCheckpoint } from "./checkpoint";
+import { readFinalEnrollment, commitFinalEnrollment } from "./enrollment";
 import { EncryptedImageUpload } from "./encrypted-upload";
 
 const root = "/run/browser", audience = "nebula-browser";
@@ -32,6 +34,8 @@ export function startPreparation(assets: string, maxImageSizeMiB = 256, signal?:
   const imageLimits = imageUploadLimits(maxImageSizeMiB);
 
   let receivingImage = false;
+  // Registry credentials are deliberately not restart/recovery state.
+  rmSync(join(directory, "publish", "config.json"), { force: true });
   if (!existsSync(directory)) {
     mkdirSync(directory, { mode: 0o700 });
     writeFileSync(join(directory, "token"), randomBytes(32).toString("hex"), { mode: 0o600, flag: "wx" });
@@ -54,14 +58,17 @@ export function startPreparation(assets: string, maxImageSizeMiB = 256, signal?:
     return new EncryptedImageUpload(directory, imageLimits, "kbs:///" + connection.workload.spec.containers[0].imageKeyResource!.join("/"));
   };
   let job: { state: "running" | "ready" | "failed"; phase?: string; error?: string; result?: unknown } | undefined;
-  if (existsSync(join(directory, "job.json"))) job = JSON.parse(readFileSync(join(directory, "job.json"), "utf8"));
-  const saveJob = () => writeFileSync(join(directory, "job.json"), JSON.stringify(job), { mode: 0o600 });
+  if (existsSync(join(directory, "job.json"))) {
+    job = JSON.parse(readFileSync(join(directory, "job.json"), "utf8"));
+    if (job?.state === "running") job = { state: "failed", phase: job.phase, error: "Preparation was interrupted. Retry with the same encrypted image and registry approval." };
+  }
+  const saveJob = () => writeCheckpoint(join(directory, "job.json"), JSON.stringify(job));
   const server = createServer(async (request, response) => {
     const path = request.url ?? "";
     response.setHeader("Cache-Control", "no-store");
     try {
       if (request.method === "GET" && path === "/nebula/v1/browser") {
-        json(response, 200, { version: 1, audience, claimed: !!readClaimedOwner(directory), claimSha256: commitment, imageUpload: imageLimits,
+        json(response, 200, { version: 1, audience, finalEnrollmentJournal: 1, claimed: !!readClaimedOwner(directory), claimSha256: commitment, imageUpload: imageLimits,
           imageEncryption: { protocol: "oci-encrypted-v2", location: "owner-browser", preparationReceivesImageKey: false } }); return;
       }
       if (request.method === "GET" && (path === "/ui/manifest.json" || path === "/ui/index.html" || path === "/ui/app.js" || path === "/ui/style.css")) {
@@ -79,6 +86,16 @@ export function startPreparation(assets: string, maxImageSizeMiB = 256, signal?:
         return;
       }
       if (!authorized(request.headers.authorization)) { request.resume(); json(response, 403, { error: "Owner authentication required" }); return; }
+      if (request.method === "GET" && path === "/nebula/v1/enrollment") { const saved = readFinalEnrollment(directory); json(response, saved ? 200 : 404, saved ?? {}); return; }
+      if (request.method === "POST" && path === "/nebula/v1/enrollment") {
+        const raw = await body(request, 1024);
+        try {
+          const digest = (job?.result as { digest?: string } | undefined)?.digest;
+          if (job?.state !== "ready" || !digest) throw new Error("Prepare the release before enrollment");
+          json(response, 200, commitFinalEnrollment(directory, JSON.parse(raw.toString()), digest));
+        } finally { raw.fill(0); }
+        return;
+      }
       if (request.method === "GET" && path === "/nebula/v1/connection") { json(response, connection ? 200 : 404, connection ?? {}); return; }
       if (request.method === "POST" && path === "/nebula/v1/connection") {
         if (connection) { json(response, 409, { error: "This preparation instance is already bound to a release" }); return; }
@@ -87,11 +104,12 @@ export function startPreparation(assets: string, maxImageSizeMiB = 256, signal?:
           const value = readConnection(raw.toString());
           trustedStack(value);
           if (value.workload.spec.ownerClaimSha256 !== commitment || value.workload.spec.browserOwner !== true) throw new Error("Stack invitation differs");
-          writeFileSync(join(directory, "connection.json"), JSON.stringify(value), { mode: 0o600, flag: "wx" });
+          writeCheckpoint(join(directory, "connection.json"), JSON.stringify(value), true);
           connection = value; json(response, 200, { version: 1, trustedProfile: trustedStack(value) });
         } finally { raw.fill(0); }
         return;
       }
+      if (connection && request.method === "GET" && path === "/nebula/v1/image") { json(response, 200, imageUpload().recovery()); return; }
       if (connection && ((request.method === "POST" && path === "/nebula/v1/image") ||
           (request.method === "PUT" && /^\/nebula\/v1\/image\/[a-f0-9]{64}\/[0-9]+$/.test(path)))) {
         if (receivingImage || (job && job.state !== "failed")) { request.resume(); json(response, 409, { error: "An image operation is already active" }); return; }
@@ -120,19 +138,19 @@ export function startPreparation(assets: string, maxImageSizeMiB = 256, signal?:
         let input: PublishInput;
         receivingImage = true;
         try {
-          const raw = await body(request, 16384);
+          const raw = await body(request, 2 * 1024 * 1024 + 16384);
           try { input = JSON.parse(raw.toString()); }
           finally { raw.fill(0); }
-          if (!input || Object.keys(input).sort().join() !== "registryPassword,registryUsername") throw new Error("Publication accepts registry credentials only; encrypt the image locally first");
+          if (!input || Object.keys(input).sort().join() !== "applicationApproval,approvedRegistry,registryPassword,registryUsername") throw new Error("Publication accepts registry credentials only; encrypt the image locally first");
           if (!imageUpload().complete()) throw new ImageUploadError(409, "Complete the encrypted layer upload before publishing");
-          job = { state: "running" };
+          job = { state: "running" }; saveJob();
         } finally { receivingImage = false; }
-        const operation = publish(directory, connection, input, { phase: phase => { if (job) job.phase = phase; },
+        const operation = publish(directory, connection, input, { phase: phase => { if (job) { job.phase = phase; saveJob(); } },
           timeoutMs: Math.max(600_000, imageLimits.jobTimeoutMs / 2), limits: imageLimits, signal }).then(result => {
           job = { state: "ready", result }; saveJob();
         })
           .catch(error => { job = { state: "failed", phase: job?.phase,
-            error: error instanceof Error ? error.message.slice(0, 2048) : "Native preparation failed" }; saveJob(); });
+            error: "Encrypted publication or native policy preparation failed. Retry the same release; enrollment and ciphertext were preserved." }; saveJob(); });
         background(operation);
         json(response, 202, { state: "running" }); return;
       }
@@ -147,8 +165,10 @@ export function startPreparation(assets: string, maxImageSizeMiB = 256, signal?:
   // or the public service. Kubernetes stores bootstrap authority, never keys.
   const invitation = createServer((request, response) => {
     request.resume();
-    if (request.method !== "GET" || request.url !== "/invitation" || readClaimedOwner(directory)) { response.writeHead(404).end(); return; }
-    json(response, 200, { token, commitment });
+    try {
+      if (request.method !== "GET" || request.url !== "/invitation" || readClaimedOwner(directory)) { response.writeHead(404).end(); return; }
+      json(response, 200, { token, commitment });
+    } catch { json(response, 503, { error: "Preparation ownership state is unavailable" }); }
   }).listen(8089, "0.0.0.0");
   return [server, invitation];
 }

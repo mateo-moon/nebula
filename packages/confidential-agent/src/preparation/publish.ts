@@ -4,7 +4,9 @@ import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import type { ConfidentialStorageResource, ConfidentialWorkloadResource } from "nebula-cdk8s/confidential-workloads";
+import { assertApplicationApproval } from "@nebula/confidential-client/application-approval";
 import { validateEncryptedManifest } from "@nebula/confidential-client";
+import { writeCheckpoint } from "./checkpoint";
 import { EncryptedImageUpload } from "./encrypted-upload";
 import { imageUploadLimits, type ImageUploadLimits } from "@nebula/confidential-client/image-protocol";
 import { measure } from "./measure";
@@ -22,7 +24,7 @@ export interface PublicConnection {
   workload: ConfidentialWorkloadResource; storages: ConfidentialStorageResource[];
   vcekCertificate?: string; browserEndpoint?: string;
 }
-export interface PublishInput { registryUsername: string; registryPassword: string }
+export interface PublishInput { registryUsername: string; registryPassword: string; approvedRegistry: string; applicationApproval: unknown }
 export interface PublishOptions {
   phase?: (name: string) => void; timeoutMs?: number; limits?: ImageUploadLimits; signal?: AbortSignal;
 }
@@ -34,10 +36,12 @@ export async function publish(directory: string, connection: PublicConnection, i
   options: PublishOptions = {}) {
   const { phase = () => {}, timeoutMs = 600_000, limits = imageUploadLimits(), signal } = options;
   signal?.throwIfAborted();
-  if (!input || Object.keys(input).sort().join() !== "registryPassword,registryUsername" || typeof input.registryUsername !== "string" ||
+  if (!input || Object.keys(input).sort().join() !== "applicationApproval,approvedRegistry,registryPassword,registryUsername" || typeof input.registryUsername !== "string" ||
       typeof input.registryPassword !== "string" || input.registryUsername.length > 256 || !input.registryPassword.length || input.registryPassword.length > 8192) throw new Error("Invalid registry credentials; image keys are never accepted");
+  assertApplicationApproval(connection, input.applicationApproval);
   const application = connection.workload.spec.containers[0], keyId = `kbs:///${application.imageKeyResource!.join("/")}`;
   const destination = application.image, host = destination.split("/")[0], work = join(directory, "publish"), auth = join(work, "config.json");
+  if (typeof input.approvedRegistry !== "string" || !/^[a-z0-9.-]+(?::[0-9]{1,5})?$/.test(input.approvedRegistry) || input.approvedRegistry !== host) throw new Error("The registry host differs from your independent credential approval");
   const upload = new EncryptedImageUpload(directory, limits, keyId);
   phase("checking-ciphertext");
   const { manifest, config: imageConfig, digest } = await upload.verified();
@@ -47,7 +51,7 @@ export async function publish(directory: string, connection: PublicConnection, i
   try { receipt = JSON.parse(await readFile(receiptPath, "utf8")); }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
   if (receipt && Object.entries(expected).some(([k, value]) => receipt[k] !== value)) throw new Error("This instance is bound to another release");
-  if (!receipt) { receipt = expected; await writeFile(receiptPath, JSON.stringify(receipt), { mode: 0o600, flag: "wx" }); }
+  if (!receipt) { receipt = expected; writeCheckpoint(receiptPath, JSON.stringify(receipt), true); }
   try {
     await writeFile(auth, JSON.stringify({ auths: { [host]: { auth: Buffer.from(`${input.registryUsername}:${input.registryPassword}`).toString("base64") } } }), { mode: 0o600 });
     input.registryPassword = "";
@@ -63,7 +67,7 @@ export async function publish(directory: string, connection: PublicConnection, i
     }
     const remote = await run("skopeo", ["inspect", "--raw", "--authfile", auth, `docker://${destination}`], work, 600_000, signal);
     if (validateEncryptedManifest(Buffer.from(remote.stdout), keyId) !== digest) throw new Error("Published image digest changed");
-    receipt.published = true; await writeFile(receiptPath, JSON.stringify(receipt), { mode: 0o600 });
+    receipt.published = true; writeCheckpoint(receiptPath, JSON.stringify(receipt));
     phase("measuring");
     const plan = await measure(connection, manifest, imageConfig, digest, join(directory, "genpolicy-cache"), work, signal);
     return { version: 1, digest, identity: plan.identity, policies: plan.policies,

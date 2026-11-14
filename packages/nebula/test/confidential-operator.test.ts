@@ -5,7 +5,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { ConfidentialOperator, ConfidentialWorkload } from "../src/modules/k8s/confidential-workloads";
 import { TRUSTEE_CHART } from "../src/modules/k8s/confidential-workloads/chart";
 
-test("operator installation scopes watches and leader lease without key or disk mutation permissions", () => {
+test("operator installation scopes advisory storage leases and owned Pod retirement without key or disk mutation permissions", () => {
   const chart = new Chart(new App(), "test");
   new ConfidentialOperator(chart, "operator", { namespace: "operators", watchNamespaces: ["first", "second"],
     image: `example.invalid/operator@sha256:${"a".repeat(64)}` });
@@ -24,8 +24,16 @@ test("operator installation scopes watches and leader lease without key or disk 
   for (const role of roles) for (const rule of role.rules) {
     assert.ok(rule.resources.every((name: string) => !["*", "secrets", "pods/exec", "pods/attach"].includes(name)));
     if (rule.resources.includes("persistentvolumeclaims")) assert.deepEqual(rule.verbs, ["get", "list", "watch"]);
-    if (rule.resources.includes("pods")) assert.ok(!rule.verbs.some((verb: string) => ["delete", "update", "patch"].includes(verb)));
-    if (rule.resources.includes("leases")) assert.equal(role.metadata.namespace, "operators");
+    if (rule.resources.includes("pods")) {
+      assert.ok(["first", "second"].includes(role.metadata.namespace));
+      assert.deepEqual(rule.verbs, ["get", "list", "watch", "create", "delete"], "only owned-Pod retirement is added; no exec or spec mutation");
+    }
+    if (rule.resources.includes("leases")) {
+      assert.ok(["operators", "first", "second"].includes(role.metadata.namespace));
+      assert.deepEqual(rule.verbs, role.metadata.namespace === "operators" ? ["get", "create", "update"] : ["get", "list", "watch", "create", "update", "patch", "delete"]);
+    }
+    if (rule.resources.includes("confidentialworkloads/finalizers")) assert.deepEqual(rule.verbs, ["patch", "update"]);
+    if (rule.resources.includes("confidentialstorages")) assert.deepEqual(rule.verbs, ["get", "list", "watch"], "the operator cannot change encrypted storage declarations");
   }
 });
 

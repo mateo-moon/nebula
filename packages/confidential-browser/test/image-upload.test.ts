@@ -72,7 +72,7 @@ for (const size of [257 * 1024 * 1024 + 13, ...(process.env.LARGE_IMAGE_UPLOAD_T
       const image = { version: 2 as const, manifest: "e30=", config: "e30=", manifestDigest: "sha256:" + "0".repeat(64),
         layers: [{ name: "layer-0.enc", size, digest: "sha256:" + "0".repeat(64), file: archive }] };
       await uploadEncryptedImage(image, limits, async (path, method, body, headers) => {
-        if (method === "POST") { assert.equal(JSON.parse(body as string).version, 2); upload.begin(size); }
+        if (method === "POST") { assert.equal(JSON.parse(body as string).version, 2); const checkpoint = upload.begin(size); return new Response(JSON.stringify({ version: 2, digest: image.manifestDigest, layers: [{ digest: image.layers[0].digest, size, received: checkpoint.received }] })); }
         else {
           const raw = Buffer.from(body as ArrayBuffer);
           largestBody = Math.max(largestBody, raw.length); calls++;

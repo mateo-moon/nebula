@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	coordinationv1 "k8s.io/api/coordination/v1"
 	"strings"
 	"testing"
+	"time"
 
 	api "github.com/mateo-moon/nebula/packages/confidential-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -60,6 +62,7 @@ func (r *testRenderer) ValidateStorage(context.Context, *api.ConfidentialStorage
 func testScheme() *runtime.Scheme {
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
+	_ = coordinationv1.AddToScheme(s)
 	_ = api.AddToScheme(s)
 	return s
 }
@@ -67,7 +70,7 @@ func fixture(ns, name string) (*api.ConfidentialWorkload, *api.ConfidentialStora
 	w := &api.ConfidentialWorkload{TypeMeta: metav1.TypeMeta{APIVersion: api.GroupVersion.String(), Kind: "ConfidentialWorkload"}, ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns, UID: types.UID(name + "-uid"), Generation: 1}, Spec: runtime.RawExtension{Raw: []byte(`{"storage":[{"name":"data","resource":"disk"}],"containers":[{"ports":[{"name":"proof","port":9080}]}]}`)}}
 	s := &api.ConfidentialStorage{ObjectMeta: metav1.ObjectMeta{Name: "disk", Namespace: ns}, Spec: runtime.RawExtension{Raw: []byte(`{"type":"EncryptedBlock","claimName":"disk-pvc"}`)}}
 	mode := corev1.PersistentVolumeBlock
-	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: "disk-pvc", Namespace: ns}, Spec: corev1.PersistentVolumeClaimSpec{VolumeMode: &mode}, Status: corev1.PersistentVolumeClaimStatus{Phase: corev1.ClaimPending}}
+	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: "disk-pvc", Namespace: ns, UID: types.UID(ns + "-pvc-uid")}, Spec: corev1.PersistentVolumeClaimSpec{VolumeMode: &mode}, Status: corev1.PersistentVolumeClaimStatus{Phase: corev1.ClaimPending}}
 	return w, s, pvc
 }
 func run(t *testing.T, r *WorkloadReconciler, w *api.ConfidentialWorkload) error {
@@ -97,7 +100,8 @@ func TestUnpublishedImageRetriesWithoutCreatingAPod(t *testing.T) {
 	scheme := testScheme()
 	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(w, s).WithObjects(w, s, pvc).Build()
 	render := &publicationRenderer{pending: true}
-	r := &WorkloadReconciler{Client: c, Reader: c, Scheme: scheme, Renderer: render}
+	now := time.Now()
+	r := &WorkloadReconciler{Client: c, Reader: c, Scheme: scheme, Renderer: render, Now: func() time.Time { return now }}
 	result, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: client.ObjectKeyFromObject(w)})
 	if err != nil || result.RequeueAfter <= 0 || len(getPods(t, c)) != 0 {
 		t.Fatalf("unpublished image did not wait safely: result=%+v err=%v", result, err)
@@ -106,6 +110,7 @@ func TestUnpublishedImageRetriesWithoutCreatingAPod(t *testing.T) {
 		t.Fatalf("wrong publication status: %+v", got.Status)
 	}
 	render.pending = false
+	now = now.Add(16 * time.Second)
 	if err := run(t, r, w); err != nil || len(getPods(t, c)) != 1 {
 		t.Fatalf("published image did not boot automatically: %v", err)
 	}
@@ -291,6 +296,7 @@ func TestKubernetesFailureExposesOnlyItsStatusCategory(t *testing.T) {
 }
 func TestIdenticalWorkloadsSeparatePodsAndServices(t *testing.T) {
 	w, s, pvc := fixture("qualified", "first")
+	s.Spec.Raw = []byte(`{"type":"Memory","sizeLimit":"32Mi"}`)
 	other := w.DeepCopy()
 	other.Name = "second"
 	other.UID = "second-uid"
@@ -420,7 +426,7 @@ func TestServiceDriftAndStorageStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = c.Get(ctx, client.ObjectKeyFromObject(s), s)
-	if s.Status.Phase != "Available" {
+	if s.Status.Phase != "Reserved" || s.Status.Reason != "StorageReserved" {
 		t.Fatal(s.Status)
 	}
 }

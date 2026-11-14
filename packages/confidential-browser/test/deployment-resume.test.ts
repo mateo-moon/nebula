@@ -11,6 +11,7 @@ const bundle = await build({ entryPoints: [new URL("../src/ui/main.ts", import.m
 // Exercise the real UI event handlers. The attested channel is a test double;
 // transport/evidence verification is covered separately by the security tests.
 async function deployment(restored = false, rejectedConnection = false, options: {
+  newRecovery?: boolean; journalPin?: string;
   provisionedCheckpoint?: boolean; preparationFailure?: "publishing" | "measuring"; keyWriteFailure?: boolean;
   pendingCheckpoint?: "running" | "failed";
   missingResource?: boolean; missingDisk?: "audit" | "all" | "resource-names";
@@ -35,12 +36,14 @@ async function deployment(restored = false, rejectedConnection = false, options:
   el("inspect").hidden = true; el("reviewed").checked = true;
   el("final-status").textContent = "Final workload pending";
   el("archive").files = [new Blob(["test-only local image"])];
+  el("approved-registry").value = "ghcr.io";
   el("registry-username").value = "test-owner"; el("registry-password").value = "test-token";
   el("recovery-password").value = "test-only-recovery-password";
   const resourcePaths = ["default/image/app", "default/volume/data", "default/volume/audit"];
   const connection = { version: 1, browserEndpoint: "https://final.example", endpoint: { host: "final.example", port: 8443 },
     workload: { metadata: { name: "test", namespace: "qualified" }, spec: { profile: "test",
-      containers: [{ image: "ghcr.io/example/final:release", imageKeyResource: ["default", "image", "app"] }],
+      network: { ipv4AddressPattern: "^10[.].+$", ipv6AddressPattern: "^fd42:.+$" },
+      containers: [{ name: "app", uid: 11000, gid: 11000, image: "ghcr.io/example/final:release", imageKeyResource: ["default", "image", "app"] }],
       resources: resourcePaths.map(path => path.split("/")),
       storage: [{ name: "data", resource: "data-store" }, { name: "audit", resource: "audit-store" }, { name: "scratch", resource: "memory-store" }] } },
     storages: [
@@ -50,7 +53,9 @@ async function deployment(restored = false, rejectedConnection = false, options:
     ] };
   const prepared = { digest: "sha256:" + "d".repeat(64), identity: {}, audience: "final-test", imageKeyResource: ["default", "image", "app"],
     policies: { attestationPolicy: "test attestation policy", resourcePolicy: "test resource policy" } };
-  const owner: any = { connection, imageKey: "9".repeat(64), token: "8".repeat(64), restored };
+  const owner: any = { connection, imageKey: "9".repeat(64), token: "8".repeat(64), restored,
+    ...(!restored || options.newRecovery ? { enrollmentJournalVersion: 1 } : {}) };
+  let enrollment: any = options.journalPin ? { version: 1, manifestDigest: prepared.digest, transportPublicKey: options.journalPin } : undefined;
   if (options.provisionedCheckpoint) Object.assign(owner, { prepared, finalPin: "b".repeat(64), finalClaimed: true, provisioned: true });
   if (options.pendingCheckpoint) owner.encryptedImage = { id: "test-only-cache", manifestDigest: prepared.digest };
   let now = 0, available = false, storageReady = true, publishes = options.provisionedCheckpoint ? 1 : 0, keyWrites = 0, uploadRequests = 0, finalAttempts = 0;
@@ -59,11 +64,15 @@ async function deployment(restored = false, rejectedConnection = false, options:
   const steps = phases.map(phase => { const step = el("step-" + phase); step.dataset.phase = phase; return step; });
   const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
   const channel = { identity: {}, pin: "a".repeat(64), request: async (path: string, init?: RequestInit) => {
-    if (path === "/nebula/v1/browser") return response({ imageUpload: imageUploadLimits(), imageEncryption: { protocol: "oci-encrypted-v2", location: "owner-browser", preparationReceivesImageKey: false } });
+    if (path === "/nebula/v1/browser") return response({ finalEnrollmentJournal: 1, imageUpload: imageUploadLimits(), imageEncryption: { protocol: "oci-encrypted-v2", location: "owner-browser", preparationReceivesImageKey: false } });
     if (path === "/nebula/v1/connection") return response(connection, rejectedConnection ? 400 : 200);
-    if (path.startsWith("/nebula/v1/image")) { uploadRequests++; return response({}); }
+    if (path === "/nebula/v1/enrollment") {
+      if (init?.method === "POST") { const value = JSON.parse(init.body as string); if (enrollment && enrollment.transportPublicKey !== value.transportPublicKey) return response({}, 409); enrollment ??= value; return response(enrollment); }
+      return response(enrollment ?? {}, enrollment ? 200 : 404);
+    }
+    if (path.startsWith("/nebula/v1/image")) { uploadRequests++; return response(init?.method === "POST" ? { version: 2, digest: prepared.digest, layers: [{ digest: "sha256:" + "e".repeat(64), size: 1, received: 0 }] } : {}); }
     if (path === "/nebula/v1/publish") {
-      assert.deepEqual(Object.keys(JSON.parse(init!.body as string)).sort(), ["registryPassword", "registryUsername"]);
+      assert.deepEqual(Object.keys(JSON.parse(init!.body as string)).sort(), ["applicationApproval", "approvedRegistry", "registryPassword", "registryUsername"]);
       publishes++; return response({}, 202);
     }
     if (path === "/nebula/v1/job" && options.pendingCheckpoint) return response({ state: options.pendingCheckpoint, phase: "measuring" });
@@ -77,6 +86,7 @@ async function deployment(restored = false, rejectedConnection = false, options:
     if (path.startsWith("/kbs/v0/resource/") && init.method === "POST") {
       keyWrites++; if (options.keyWriteFailure) return response({}, 403);
     }
+    if (path === "/nebula/v1/supervisors") return response({ version: 1, storage: Object.fromEntries(["data", "audit"].map(name => [name, { available: true, clients: { app: { phase: "running", restartCount: 0, applicationReady: null } } }])) });
     if (path === "/nebula/v1/bootstrap") {
       const resources = Object.fromEntries(resourcePaths.filter(path => !missingResource || path !== "default/volume/audit").map(path => [path, { status: 200 }]));
       const storage = missingDisk === "all" ? {} : Object.fromEntries(["data", "audit"].filter(name => missingDisk !== name).map(name =>
@@ -94,7 +104,7 @@ async function deployment(restored = false, rejectedConnection = false, options:
   class Clock extends Date { static now() { return now; } }
   const document = { getElementById: el, querySelectorAll: (selector: string) => selector === "[data-phase]" ? steps : [], createElement: () => new Element() };
   runInNewContext(bundle.outputFiles[0].text, { window: { nebula: { owner, channel, target: "https://prep.example",
-    finalChannel: () => final, save: async () => {}, backup: async () => ({}), jwt: async () => "test-owner-proof" } },
+    finalChannel: (_origin: string, _identity: unknown, pin?: string) => { if (pin && pin !== final.pin) throw new Error("The enrolled final transport key changed"); return final; }, save: async () => {}, backup: async () => ({}), jwt: async () => "test-owner-proof" } },
     document, crypto: webcrypto, TextEncoder, TextDecoder, Blob, Response, atob, btoa, Date: Clock, Worker: LocalWorker,
     navigator: { storage: { getDirectory: async () => ({ removeEntry: async () => {} }) } },
     URL: { createObjectURL: () => "blob:test-backup", revokeObjectURL() {} },
@@ -193,11 +203,12 @@ for (const missing of ["resource", "audit", "all", "resource-names"] as const) t
 test("retry still refuses first enrollment from a restored pre-enrollment backup", async () => {
   const ui = await deployment(true);
   ui.restoreConnectivity(); ui.el("inspect").click();
-  await ui.wait(() => ui.el("notice").textContent.includes("predates final instance enrollment"));
+  await ui.wait(() => !ui.el("notice").hidden && ui.el("notice").textContent.includes("predates final instance enrollment"));
   assert.equal(ui.owner.finalPin, undefined);
   assert.equal(ui.counts().keyWrites, 0);
+  assert.equal(ui.counts().finalAttempts, 0, "An old unjournaled recovery is refused before contacting a candidate");
   assert.equal(ui.counts().publishes, 1);
-  assert.deepEqual(ui.completed(), ["encrypting", "measuring", "waiting"]);
+  assert.deepEqual(ui.completed(), ["encrypting", "measuring"]);
   assert.deepEqual(ui.active(), []);
 });
 
@@ -236,4 +247,20 @@ test("refused key delivery does not finish provisioning or startup", async () =>
   assert.deepEqual(ui.completed(), ["encrypting", "measuring", "waiting", "attesting"]);
   assert.deepEqual(ui.active(), []);
   assert.equal(ui.owner.provisioned, undefined);
+});
+
+
+test("a journal-aware pre-pin recovery can finish the original release without republishing", async () => {
+  const ui = await deployment(true, false, { newRecovery: true });
+  ui.restoreConnectivity(); ui.el("inspect").click();
+  await ui.wait(() => ui.owner.provisioned === true);
+  assert.equal(ui.owner.finalPin, "b".repeat(64));
+  assert.equal(ui.counts().publishes, 1);
+  assert.equal(ui.counts().keyWrites, 3);
+});
+test("the pinned preparation journal refuses a different final instance from an older backup", async () => {
+  const ui = await deployment(true, false, { newRecovery: true, journalPin: "c".repeat(64) });
+  assert.ok(ui.el("notice").textContent.length > 0);
+  assert.equal(ui.owner.finalPin, undefined);
+  assert.equal(ui.counts().keyWrites, 0);
 });

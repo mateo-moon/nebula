@@ -67,7 +67,13 @@
                   "sizeLimit": {
                     "type": "string",
                     "maxLength": 16,
-                    "pattern": "^[1-9][0-9]*(Mi|Gi)$"
+                    "pattern": "^[1-9][0-9]*(Mi|Gi)$",
+                    "x-kubernetes-validations": [
+                      {
+                        "rule": "quantity(self).compareTo(quantity('1048576Gi')) <= 0",
+                        "message": "Memory must not exceed 2^50 bytes"
+                      }
+                    ]
                   },
                   "claimName": {
                     "type": "string",
@@ -158,6 +164,20 @@
                   "initDataSha256": {
                     "type": "string",
                     "maxLength": 4096
+                  },
+                  "desiredSpecSha256": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "resolvedImageDigests": {
+                    "type": "object",
+                    "maxProperties": 32,
+                    "additionalProperties": {
+                      "type": "string",
+                      "maxLength": 4096,
+                      "pattern": "^sha256:[a-f0-9]{64}$"
+                    }
                   },
                   "accessTokenSha256": {
                     "type": "string",

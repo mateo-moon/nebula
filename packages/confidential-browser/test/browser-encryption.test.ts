@@ -9,6 +9,7 @@ import { uploadEncryptedImage } from "../src/ui/upload";
 import { EncryptedImageUpload } from "@nebula/confidential-agent/preparation/encrypted-upload";
 import { imageUploadLimits } from "@nebula/confidential-client/image-protocol";
 import { KEY_ANNOTATION, PUBLIC_ANNOTATION } from "@nebula/confidential-client/image-protocol";
+import { applicationContract } from "@nebula/confidential-client/application-approval";
 import { publish } from "@nebula/confidential-agent/preparation/publish";
 
 const sha = (data: Uint8Array) => "sha256:" + createHash("sha256").update(data).digest("hex");
@@ -79,7 +80,7 @@ test("only encrypted layers cross the upload interface; preparation has no image
     const image = { ...value.result, layers: value.result.layers.map(layer => ({ ...layer, file: new Blob([new Uint8Array(value.files.get(layer.name)!)]) })) };
     let sent = 0;
     await uploadEncryptedImage(image, limits, async (path, method, body, headers) => {
-      if (method === "POST") upload.begin(JSON.parse(body as string));
+      if (method === "POST") return new Response(JSON.stringify(upload.begin(JSON.parse(body as string))));
       else {
         const segments = path.split("/"), raw = Buffer.from(body as ArrayBuffer);
         assert.notEqual(sha(raw), sha(value.layers[0][1]));
@@ -112,4 +113,44 @@ test("local archive parser refuses duplicate entries, malformed headers and spar
 test("independent encryption of identical layers uses fresh layer keys and ciphertext", async () => {
   const value = await encrypted([Buffer.from("same"), Buffer.from("same")]);
   assert.notEqual(value.result.layers[0].digest, value.result.layers[1].digest);
+});
+
+test("encrypted recovery metadata regenerates identical ciphertext after local cache loss", async () => {
+  const value = await encrypted(), files = new Map<string, Buffer>();
+  const restored = await encryptDockerArchive(value.archive, value.key, keyId, async name => {
+    const chunks: Buffer[] = []; return { write: async raw => { chunks.push(Buffer.from(raw)); }, close: async () => { files.set(name, Buffer.concat(chunks)); } };
+  }, () => {}, value.result);
+  assert.deepEqual(restored, value.result);
+  for (const [name, raw] of value.files) assert.deepEqual(files.get(name), raw);
+});
+test("recovery refuses changed plaintext before creating any ciphertext sink", async () => {
+  const value = await encrypted([Buffer.from("original")]), changed = fixture([Buffer.from("different")]);
+  let sinks = 0;
+  await assert.rejects(encryptDockerArchive(changed.archive, value.key, keyId, async () => { sinks++; throw new Error("Must not encrypt changed plaintext"); }, () => {}, value.result), /differs|original/);
+  assert.equal(sinks, 0);
+  await assert.rejects(encryptDockerArchive(value.archive, randomBytes(32), keyId, async () => { sinks++; throw new Error("Must not encrypt with another recovery key"); }, () => {}, value.result));
+  assert.equal(sinks, 0);
+});
+
+
+test("all original plaintext layers are checked before any recovery cipher is reused", async () => {
+  const value = await encrypted([Buffer.from("first original"), Buffer.from("second original")]);
+  const altered = Buffer.from(await value.archive.arrayBuffer());
+  const position = altered.indexOf(Buffer.from("second original")); assert.ok(position >= 0); altered[position] ^= 1;
+  let sinks = 0;
+  await assert.rejects(encryptDockerArchive(new Blob([altered]), value.key, keyId, async () => { sinks++; throw new Error("No cipher reuse before all plaintext is verified"); }, () => {}, value.result), /unchanged original/);
+  assert.equal(sinks, 0);
+});
+
+
+test("publication refuses unapproved application settings and a different registry before using credentials", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "nebula-registry-binding-"));
+  const connection: any = { workload: { spec: { containers: [{ name: "app", image: "ghcr.io/owner/app:release", imageKeyResource: ["default", "image", "app"], uid: 11000, gid: 11000 }],
+    network: { ipv4AddressPattern: "^10[.].+$", ipv6AddressPattern: "^fd42:.+$" }, resources: [["default", "image", "app"]] } }, storages: [] };
+  const credentials = { registryUsername: "test-owner", registryPassword: "test-only-credential" };
+  try {
+    await assert.rejects(publish(directory, connection, { ...credentials, approvedRegistry: "ghcr.io", applicationApproval: {} }), /Explicit owner approval/);
+    await assert.rejects(publish(directory, connection, { ...credentials, approvedRegistry: "another.example", applicationApproval: applicationContract(connection) }), /independent credential approval/);
+    assert.equal(existsSync(join(directory, "publish", "config.json")), false);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });

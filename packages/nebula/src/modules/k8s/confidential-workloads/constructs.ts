@@ -91,10 +91,13 @@ export class ConfidentialOperator extends BaseConstruct<ConfidentialOperatorConf
       new ApiObject(this, `role-${target}`, { apiVersion: "rbac.authorization.k8s.io/v1", kind: "Role", metadata: role,
         rules: [
           { apiGroups: [CONFIDENTIAL_GROUP], resources: ["confidentialworkloads", "confidentialstorages"], verbs: ["get", "list", "watch"] },
+          { apiGroups: [CONFIDENTIAL_GROUP], resources: ["confidentialworkloads"], verbs: ["patch"] },
+          { apiGroups: [CONFIDENTIAL_GROUP], resources: ["confidentialworkloads/finalizers"], verbs: ["patch", "update"] },
           { apiGroups: [CONFIDENTIAL_GROUP], resources: ["confidentialworkloads/status", "confidentialstorages/status"], verbs: ["get", "patch", "update"] },
-          { apiGroups: [""], resources: ["pods"], verbs: ["get", "list", "watch", "create"] },
+          { apiGroups: [""], resources: ["pods"], verbs: ["get", "list", "watch", "create", "delete"] },
           { apiGroups: [""], resources: ["services"], verbs: ["get", "list", "watch", "create", "patch"] },
           { apiGroups: [""], resources: ["persistentvolumeclaims"], verbs: ["get", "list", "watch"] },
+          { apiGroups: ["coordination.k8s.io"], resources: ["leases"], verbs: ["get", "list", "watch", "create", "update", "patch", "delete"] },
           { apiGroups: [""], resources: ["events"], verbs: ["create", "patch"] },
           ...(accessSecrets.some(secret => secret.namespace === target) ? [
             // Kubernetes cannot restrict Secret create by resourceNames. Reads
