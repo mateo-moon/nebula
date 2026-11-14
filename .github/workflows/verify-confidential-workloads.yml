@@ -1,0 +1,240 @@
+name: Validate confidential workloads
+
+on:
+  pull_request:
+    paths:
+      - packages/confidential-operator/**
+      - packages/confidential-agent/**
+      - packages/confidential-storage/**
+      - packages/confidential-storage-devices/**
+      - packages/nebula/**
+      - packages/confidential-client/**
+      - packages/confidential-browser/**
+      - tools/tng-browser/**
+      - docker/confidential-operator/**
+      - docker/confidential-agent/**
+      - docker/confidential-storage/**
+      - docker/confidential-storage-devices/**
+      - docker/confidential-browser/**
+      - .dockerignore
+      - .github/workflows/verify-confidential-workloads.yml
+      - scripts/check-confidential-docker-bases.mjs
+  push:
+    branches: [main]
+    paths:
+      - packages/confidential-operator/**
+      - packages/confidential-agent/**
+      - packages/confidential-storage/**
+      - packages/confidential-storage-devices/**
+      - packages/nebula/**
+      - packages/confidential-client/**
+      - packages/confidential-browser/**
+      - tools/tng-browser/**
+      - docker/confidential-operator/**
+      - docker/confidential-agent/**
+      - docker/confidential-storage/**
+      - docker/confidential-storage-devices/**
+      - docker/confidential-browser/**
+      - .dockerignore
+      - .github/workflows/verify-confidential-workloads.yml
+      - scripts/check-confidential-docker-bases.mjs
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: confidential-workloads-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  operator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - name: Pin every external container build base
+        run: node scripts/check-confidential-docker-bases.mjs
+      - run: npm install -g pnpm@11.9.0
+      - run: pnpm --dir packages/confidential-operator install --frozen-lockfile
+      - run: pnpm --dir packages/confidential-operator typecheck
+      - run: pnpm --dir packages/confidential-operator test
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: packages/confidential-operator/go.mod
+          cache-dependency-path: packages/confidential-operator/go.sum
+      - name: Controller race tests and generated API parity
+        working-directory: packages/confidential-operator
+        run: |
+          make generate manifests
+          git diff --exit-code -- api config/crd
+          go test -race ./...
+      - name: Kubernetes API reconciliation tests
+        working-directory: packages/confidential-operator
+        run: |
+          KUBEBUILDER_ASSETS=$(go run sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.25.3-0.20261012174806-32759fab3119 use -p path 1.35.0)
+          export KUBEBUILDER_ASSETS
+          make envtest
+      - run: pnpm --dir packages/confidential-agent install --frozen-lockfile
+      - run: pnpm --dir packages/confidential-agent build
+      - run: pnpm --dir packages/confidential-agent test
+      - run: pnpm --dir packages/confidential-browser install --frozen-lockfile
+      - run: pnpm --dir packages/confidential-browser typecheck
+      - name: Build the actual Rego and EAR test evaluator
+        run: cargo build --locked --manifest-path packages/nebula/test/support/broker-policy-runner/Cargo.toml
+      - run: pnpm --dir packages/confidential-browser test
+      - run: pnpm --dir packages/confidential-browser build
+      - name: Check public runtime sources
+        run: node scripts/publication-guard.mjs packages/confidential-operator packages/confidential-agent packages/confidential-storage packages/confidential-storage-devices packages/confidential-browser/src packages/confidential-browser/test packages/confidential-browser/package.json packages/confidential-browser/pnpm-lock.yaml tools/tng-browser packages/nebula/src/modules/k8s/confidential-workloads docker/confidential-operator docker/confidential-agent docker/confidential-storage docker/confidential-storage-devices docker/confidential-browser
+
+  images:
+    needs: operator
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        role: [operator, agent, storage, storage-devices, browser]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: docker/confidential-${{ matrix.role }}/Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: ${{ matrix.role == 'operator' || matrix.role == 'agent' }}
+          tags: nebula-confidential-${{ matrix.role }}:ci
+          cache-from: type=gha,scope=confidential-${{ matrix.role }}
+          cache-to: type=gha,mode=max,scope=confidential-${{ matrix.role }}
+      - name: Exercise the compiled operator image
+        if: matrix.role == 'operator'
+        run: node packages/confidential-operator/test/compiled-image.mjs
+      - name: Exercise the compiled agent and native privilege boundaries
+        if: matrix.role == 'agent'
+        run: |
+          # This job has its own disposable GitHub runner. Match the guest's
+          # mandatory swap-free prerequisite without weakening runtime checks.
+          sudo swapoff --all
+          node packages/confidential-agent/test/compiled-image.mjs
+      - name: Exercise private diagnostic and public collateral file bounds without guest privileges
+        if: matrix.role == 'agent'
+        run: |
+          # Reuse the just-built agent's pinned Node24 runtime. The explicit
+          # fixture flag fails rather than skipping if tmpfs/UID wiring breaks.
+          docker run --rm --network none --read-only --user 10001:10001 \
+            --cap-drop ALL --security-opt no-new-privileges --memory 256m --pids-limit 64 \
+            --tmpfs /run/kbs-diagnostics:rw,nosuid,nodev,uid=10001,gid=10001,mode=0700,size=16m \
+            --tmpfs /run/nebula-public-kds:rw,nosuid,nodev,uid=10001,gid=10001,mode=0700,size=1m \
+            --tmpfs /run/browser:rw,nosuid,nodev,uid=10001,gid=10001,mode=0700,size=1m \
+            --mount "type=bind,src=$PWD/packages/confidential-agent,dst=/fixture,readonly" \
+            --env CONFIDENTIAL_DIAGNOSTICS_TEST_TMPFS=1 \
+            --env CONFIDENTIAL_COLLATERAL_TEST_TMPFS=1 \
+            --env CONFIDENTIAL_STORAGE_GATE_TEST_TMPFS=1 \
+            --env CONFIDENTIAL_FRONTEND_TEST_TMPFS=1 \
+            --entrypoint node nebula-confidential-agent:ci \
+            --disable-sigusr1 --test --test-concurrency=1 /fixture/test/diagnostics.test.mjs /fixture/test/public-collateral.test.mjs /fixture/test/storage-gate.test.mjs /fixture/test/frontend-attestation.test.mjs
+
+  native-render:
+    name: Native confidential Pod synthesis
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install OCI metadata tools in the pinned synthesis environment
+        run: |
+          docker build --tag nebula-confidential-native-render:ci - <<'DOCKERFILE'
+          FROM ghcr.io/mateo-moon/nebula-cmp:1b67ec0@sha256:27ae309e158862e821f6de6ea7e91803d020bca81fa9e1d1ae826359fea76446
+          USER 0
+          RUN apk add --no-cache skopeo
+          DOCKERFILE
+      - name: Exercise the measured renderer with the pinned native generator
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$PWD:/workspace" -w /workspace/packages/nebula \
+            -e TRUSTEE_GENPOLICY=/usr/local/bin/genpolicy \
+            -e TRUSTEE_GENPOLICY_CACHE=/tmp/genpolicy-cache \
+            nebula-confidential-native-render:ci \
+            sh -ec 'pnpm install --frozen-lockfile && node --import tsx --test test/confidential-workload-render.test.ts'
+
+  browser-encryption:
+    name: Browser OCI encryption interoperability
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: docker/confidential-browser/Dockerfile
+          target: native-test
+          platforms: linux/amd64
+          load: true
+          tags: nebula-browser-encryption:ci
+          cache-from: type=gha,scope=confidential-browser
+          cache-to: type=gha,mode=max,scope=confidential-browser
+      - name: Decrypt browser output with native OCIcrypt and reject tampering offline
+        run: >-
+          docker run --rm --network none --read-only --cap-drop ALL
+          --tmpfs /tmp:rw,nosuid,nodev,size=128m nebula-browser-encryption:ci
+
+  storage-headers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: docker/confidential-storage/Dockerfile
+          target: test
+          platforms: linux/amd64
+          load: true
+          tags: nebula-storage-tests:ci
+          cache-from: type=gha,scope=confidential-storage-tests
+          cache-to: type=gha,mode=max,scope=confidential-storage-tests
+      - name: Reject hostile LUKS headers on owned temporary files
+        run: >-
+          docker run --rm --network none --cap-drop ALL --read-only
+          --security-opt no-new-privileges
+          --tmpfs /tmp:rw,nosuid,nodev,noexec,size=256m
+          nebula-storage-tests:ci
+
+      - name: Restart only the measured child inside its original private PID namespace
+        run: |
+          for fixture in \
+            mount_handoff::supervisor_tests::isolated_pid1_supervisor_restart_reaps_descendants_and_retains_original_lease \
+            mount_handoff::supervisor_tests::isolated_pid1_supervisor_lease_loss_stops_without_restart
+          do
+            docker run --rm --network none --read-only --user 0:0 \
+              --cap-drop ALL --cap-add SYS_ADMIN --cap-add SETUID --cap-add SETGID --cap-add SETPCAP \
+              --security-opt no-new-privileges --memory 256m --pids-limit 64 \
+              --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m,mode=1777 \
+              --env COCO_SUPERVISOR_TEST=isolated-pid1 nebula-storage-tests:ci \
+              --ignored --exact "$fixture" --test-threads=1 --nocapture
+          done
+      - name: Resume private recipient publication with only native storage capabilities
+        run: >-
+          docker run --rm --network none --read-only --user 0:0
+          --cap-drop ALL --cap-add CHOWN --cap-add SYS_ADMIN --cap-add MKNOD --cap-add SETPCAP
+          --security-opt no-new-privileges --memory 256m --pids-limit 64
+          --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m,mode=1777
+          --env COCO_RECIPIENT_TEST=isolated-tmpfs nebula-storage-tests:ci
+          --ignored --exact initialization::tests::isolated_private_recipient_staging_survives_chown_interruption
+          --test-threads=1 --nocapture

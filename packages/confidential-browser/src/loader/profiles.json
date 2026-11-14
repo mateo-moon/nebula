@@ -1,0 +1,350 @@
+{
+  "version": 1,
+  "profiles": [
+    {
+      "id": "nebula-snp-agent-preparation-owner-auth-2026-11-14",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:fc9ba88ad771a15ea1637d72ffe1773e3940e1a0a313177e20eb7829d3a80891",
+      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+      "identity": {
+        "measurement": "e17cb86d23c57635b2fa4540bc44c411c2ef7b1836ad9fb05906f57d3692292c32645a61e913e80b618abc1d40f54149",
+        "initDataSha256": "5046ae310625decb4b5e60223c0cd9a1299dfde028578e34dc1025a55530463a",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 84
+        }
+      },
+      "sourceRevision": "d78afe5047ed5c273e6f166978e3ea8f89099a54",
+      "tngSourceRevision": "cc494fd65fe22817e20a39c04b173efa14bc316a"
+    },
+    {
+      "id": "nebula-snp-agent-preparation-literal-env-2026-11-14",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:87484ab814fd09fbae6020c1ac0f26445642dfe6c61bca6bfdaee019ea5ce16c",
+      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+      "identity": {
+        "measurement": "e17cb86d23c57635b2fa4540bc44c411c2ef7b1836ad9fb05906f57d3692292c32645a61e913e80b618abc1d40f54149",
+        "initDataSha256": "a5dd8b08053fce0a7d534b8d72fb59c1c430f20c3779809793df8778c86e7cc0",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 84
+        }
+      },
+      "sourceRevision": "34680e7390dc34e9497c2fc59b0769afed1fdb38",
+      "tngSourceRevision": "cc494fd65fe22817e20a39c04b173efa14bc316a"
+    },
+    {
+      "id": "nebula-snp-agent-preparation-hardening-2026-11-14",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:93e04113bb088c98ba75593300815224af5f4c59c4df8f60b15174b89f76f256",
+      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+      "identity": {
+        "measurement": "e17cb86d23c57635b2fa4540bc44c411c2ef7b1836ad9fb05906f57d3692292c32645a61e913e80b618abc1d40f54149",
+        "initDataSha256": "670f9bc9c64e4c1d6adab51e85f1dcf8ad8e4046d82c1d7095cdc0a8d11d728f",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 84
+        }
+      },
+      "sourceRevision": "6781e1e0dbc4f91573616c37fadf08868a7fd848",
+      "tngSourceRevision": "cc494fd65fe22817e20a39c04b173efa14bc316a"
+    },
+    {
+      "id": "nebula-snp-agent-preparation-collateral-2026-11-13",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:fa865b499f280006ccfe5083e713fc8932cd8b6c253309b2788d2485b2fa8db4",
+      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+      "identity": {
+        "measurement": "e17cb86d23c57635b2fa4540bc44c411c2ef7b1836ad9fb05906f57d3692292c32645a61e913e80b618abc1d40f54149",
+        "initDataSha256": "c95445090996c3e2052eefc9501d15da686c3ec456a89728bc7b68f7f07a26da",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 84
+        }
+      },
+      "sourceRevision": "342bf050942ca89148590fc86b83d739a14fe96f",
+      "tngSourceRevision": "cc494fd65fe22817e20a39c04b173efa14bc316a"
+    },
+    {
+      "id": "nebula-snp-agent-preparation-progress-2026-11-13",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:3d747ed70af845a846d4443611273abfc61974d97665826933c64631e8c3e0f6",
+      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+      "identity": {
+        "measurement": "e17cb86d23c57635b2fa4540bc44c411c2ef7b1836ad9fb05906f57d3692292c32645a61e913e80b618abc1d40f54149",
+        "initDataSha256": "b71d1bdf8e501974ce68f8aa650ff4518707b99868bd18581556a137ab8c387d",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 84
+        }
+      },
+      "sourceRevision": "b7dd7f7af8291a8cf3ef2b82d19aaa6409edbcfa",
+      "tngSourceRevision": "cc494fd65fe22817e20a39c04b173efa14bc316a"
+    },
+    {
+      "id": "nebula-snp-agent-preparation-reporting-2026-11-12",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:11d3262a86e8b0ca69cb0e57b66ac709484bff2d935cb1552f85002b774f6220",
+      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+      "identity": {
+        "measurement": "e17cb86d23c57635b2fa4540bc44c411c2ef7b1836ad9fb05906f57d3692292c32645a61e913e80b618abc1d40f54149",
+        "initDataSha256": "307ea69fa1d29e41c1920e3cca1eb87e13a75b4d79d929dc6510ac45d2d5dc36",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 84
+        }
+      },
+      "sourceRevision": "bb5b417c85342bbbdceeb77329cdf8ff22edae11",
+      "tngSourceRevision": "cc494fd65fe22817e20a39c04b173efa14bc316a"
+    },
+    {
+      "id": "nebula-snp-agent-preparation-owner-gate-2026-11-06",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:3c770a06c942c1782f9d20db9b2bac9698c67239ede1ef18ca4cd0b8ca28089d",
+      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+      "identity": {
+        "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+        "initDataSha256": "cca6a7d7a727e2897f47453d8d802f83e6ac1a9f0a6fda500a8ee44dfbd7f326",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 88
+        }
+      },
+      "sourceRevision": "ca779240a49d5eea14dc8256e84384fee0f711c9",
+      "tngSourceRevision": "cc494fd65fe22817e20a39c04b173efa14bc316a"
+    },
+    {
+      "id": "nebula-snp-agent-preparation-bootstrap-2026-11-04",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:243dcabb6b855e2eb5de2b65dccda6307781ed64e657964f3144303b6854d216",
+      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+      "identity": {
+        "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+        "initDataSha256": "4f6b27747b2cbd6f88da7ce5ad2d9d842f15abcadb47c71b083c32c0914f3589",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 88
+        }
+      },
+      "sourceRevision": "5a3b5c447edd9c2a4ca25166deb6150244b04c7a",
+      "tngSourceRevision": "cc494fd65fe22817e20a39c04b173efa14bc316a"
+    },
+    {
+      "id": "nebula-snp-agent-preparation-2026-11-04",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:d0557405145e81b2ad64639dd2ce3a4b638863bc428d0355e0d81d079415dbc7",
+      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+      "identity": {
+        "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+        "initDataSha256": "aec3f37a456a20fd740a747de10367a75e6de9a8a7dec9a3aecdc343427b75ed",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 88
+        }
+      },
+      "sourceRevision": "93c33b611762e49c9ebf52866887fdd89aec61d7",
+      "tngSourceRevision": "cc494fd65fe22817e20a39c04b173efa14bc316a"
+    },
+    {
+      "id": "nebula-snp-browser-local-oci-encryption-2026-11-03",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:e33db198020dc0599a8ad85faaac6cadbe3362ecfb79aa532ceb3cc56be3cab4",
+      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+      "identity": {
+        "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+        "initDataSha256": "190997be2f8a4f887eeaf8cfb0b0fd62376be923e3d15c57f7d9cb1c7bfe4e4c",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 88
+        }
+      },
+      "sourceRevision": "38ec791042e34cabda11b5dce88570977e8e37fb",
+      "tngSourceRevision": "cc494fd65fe22817e20a39c04b173efa14bc316a"
+    },
+    {
+      "id": "nebula-snp-browser-preparation-4g-timeout-2026-11-03",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:8bdbeec70a2e4e4103534b7356f9bc3843ac4dbcf50fc7858c21db12929f39b4",
+      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+      "identity": {
+        "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+        "initDataSha256": "bd2467446030daeb26e204ec3f1958d1b82f66202f5cd308645f608f99207d77",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 88
+        }
+      },
+      "sourceRevision": "43cbf9227882dd880d48b228e04c2e6cd063e5ea",
+      "tngSourceRevision": "cc494fd65fe22817e20a39c04b173efa14bc316a"
+    },
+    {
+      "id": "nebula-snp-browser-preparation-4g-retry-2026-11-02",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:6da660fe7596e9f491bfcbbd578738ea4bce2780a30a749ed12aed6aba1d3c00",
+      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+      "identity": {
+        "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+        "initDataSha256": "af85eacffda22780fe1c54b63d1a4322f6107adba8c27429635a156e72e716f0",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 88
+        }
+      },
+      "sourceRevision": "23399e5f90a9bba83b75ac0a3f676018dc279aa4",
+      "tngSourceRevision": "cc494fd65fe22817e20a39c04b173efa14bc316a"
+    },
+    {
+      "id": "nebula-snp-browser-preparation-4g-2026-11-02",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:55c640491aa456af38f4c5af5daeed8f375e0456bf2aefa3dbe55bee7d905be4",
+      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+      "identity": {
+        "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+        "initDataSha256": "82cee502a8ebd794d35ee6fdd9f26e2120625485082ac43723b20b42243efc78",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 88
+        }
+      },
+      "sourceRevision": "791db5241347bbd590d5a55079b5d6650e917977",
+      "tngSourceRevision": "cc494fd65fe22817e20a39c04b173efa14bc316a"
+    },
+    {
+      "id": "nebula-snp-browser-preparation-manual-2026-10-30",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:edcdb6342b1fb9c7aeb6d63c1af095594bb3b8339c835e02aa9254adfa3a22a2",
+      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+      "identity": {
+        "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+        "initDataSha256": "4d2997d88093bf5f54766777c0af80497d483d4de096c06403db680abf120da2",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 88
+        }
+      },
+      "sourceRevision": "3f12499e001d646a77a5b1736f8d40fe5733aab3",
+      "tngSourceRevision": "cc494fd65fe22817e20a39c04b173efa14bc316a"
+    },
+    {
+      "id": "nebula-snp-browser-preparation-v7-2026-10-28",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:36f2d2a3f119fcbfd1b03ecb3efcd9a0f6228b511cabd2ca9d7f635cc4334e1c",
+      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:104fce8e85559258eb54787d3e837a2b0e858ee9009a886ff58cb43fb91f72dc",
+      "sourceRevision": "671bd81e867fc5247e726c2186eab6821dfbfaae",
+      "identity": {
+        "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+        "initDataSha256": "c10daf64ec9a197464e8d0eacc8f3b6f98d1de6bbec37f7a2d5c324cf607c665",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 88
+        }
+      }
+    },
+    {
+      "id": "nebula-snp-browser-preparation-tested-2026-10-28",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:d9ce910dec2fdab2df6f643e715c87a6f97b78c15787568c335721bd5fa59615",
+      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:104fce8e85559258eb54787d3e837a2b0e858ee9009a886ff58cb43fb91f72dc",
+      "sourceRevision": "759ce6580bb0a4f1b1d83dadeafa0f3ca26a82b3",
+      "identity": {
+        "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+        "initDataSha256": "f791c7bdcc369c929f1edb2b9406b419a35a70bd3d5154e000d69de7eb61913b",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 88
+        }
+      }
+    },
+    {
+      "id": "nebula-snp-browser-preparation-returning-2026-10",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:29c80adc1a2369c7d0fca983cd03e9138026ff4be057ee4c412d6a1fb39f06e6",
+      "sourceRevision": "a94117c4698a9c5ad7b29dd337f7d475f0798ea3",
+      "identity": {
+        "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+        "initDataSha256": "d7eb303a952b6f4b98c9aa122478e60765b6e1c582ee2c9c185273d0da15ddbe",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 88
+        }
+      }
+    },
+    {
+      "id": "nebula-snp-browser-preparation-worker-2026-10",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:4ec0d6098a422258264b5d22e26889ea0cc85b788becef7239e323dcaefd1491",
+      "sourceRevision": "8f712eabb7bb3911d8983a382e9c5313cb7686a9",
+      "identity": {
+        "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+        "initDataSha256": "fa45d788d6d129378cbc065abeec8e1ce76faf019895b5c708e1db43ccbb47d6",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 88
+        }
+      }
+    },
+    {
+      "id": "nebula-snp-browser-preparation-policy-2026-10",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:d63a5865a9fd0f29ab99e70687d28160ca9fedba72151b2fa5a6c7351aff80dc",
+      "sourceRevision": "0271bb64fc0ce805fd93bd79d1a26388f2bd45cb",
+      "identity": {
+        "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+        "initDataSha256": "aa387b373d4eaf5a026f57c0db4f709de0b8eade664b3c3cd2bc86b1fb075bd5",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 88
+        }
+      }
+    },
+    {
+      "id": "nebula-snp-browser-preparation-coco-2026-10",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:882424a9f0444a645458a7dfef0e3a3e7961a42cb5a67b60be4b6e1fe7a3b968",
+      "sourceRevision": "9c954447c006ab220ccc9626dcb7c304bcc34173",
+      "identity": {
+        "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+        "initDataSha256": "633d1b2fe7ce6cd964e65b1799aef88b69646729ee7bd8a03eb50d153ace3a97",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 88
+        }
+      }
+    },
+    {
+      "id": "nebula-snp-browser-preparation-2026-10",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:1fc64c90d704a8c702f85116282fddde5c1e12b777f9d579cb9245bc75231de3",
+      "sourceRevision": "26c890de1eb9ee47c9c1ce4a39d249efd50f9c20",
+      "identity": {
+        "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+        "initDataSha256": "3a6179fdd5137b989929ba0d011fad8fb70565f493275827e8813e522602044f",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 88
+        }
+      }
+    }
+  ]
+}

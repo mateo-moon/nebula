@@ -1,7 +1,7 @@
 import { createPublicKey } from "node:crypto";
 import { stringify } from "smol-toml";
 import { isDigestImage } from "../confidential-guests/types";
-import { measuredFragments } from "../envoy";
+import { measuredFragments } from "../envoy/measured-fragments";
 import { TRUSTEE_STATE as STATE } from "./tng-bootstrap";
 import { confidentialTrusteeHelmSettings } from "./helm";
 import { tngBootstrapScript, tngTrusteeBootstrapScript } from "./tng-bootstrap";
@@ -9,6 +9,7 @@ import type { TrusteeConfig, TrusteeTngConfig } from "./types";
 import { publicConfig } from "./validation";
 import { snpIdentity } from "./policies";
 import { validateNetwork } from "./genpolicy";
+import { withNeutralKubernetesServiceEnv } from "./runtime-env";
 
 const fail = (message: string): never => { throw new TypeError(`Trustee: ${message}`); };
 function label(value: string): void {
@@ -36,7 +37,7 @@ function publicKey(pem: string): string {
   return createPublicKey({ key: key.export({ format: "jwk" }), format: "jwk" })
     .export({ format: "pem", type: "spki" }).toString();
 }
-export function trusteeSettings(config: TrusteeConfig) {
+export function trusteeSettings(config: TrusteeConfig, options: { privateDiagnostics?: boolean; publicCollateral?: boolean } = {}) {
   publicConfig("Trustee", config);
   // Validate the owner-supplied guest fields before invoking external tools.
   // The real Init-Data hash is produced by native genpolicy below.
@@ -48,7 +49,12 @@ export function trusteeSettings(config: TrusteeConfig) {
   selector(config.nodeSelector);
   if (!Array.isArray(config.clients) || !config.clients.length) fail("declare network client selectors");
   for (const client of config.clients) { label(client.namespace); selector(client.podLabels); }
-  const owner = publicKey(config.ownerPublicKeyPem);
+  const claim = config.ownerClaimSha256;
+  if ((claim === undefined) === (config.ownerPublicKeyPem === undefined)) {
+    fail("supply either an owner public key or a one-time owner claim hash");
+  }
+  if (claim !== undefined && !/^[a-f0-9]{64}$/.test(claim)) fail("invalid owner claim hash");
+  const owner = claim === undefined ? publicKey(config.ownerPublicKeyPem!) : undefined;
   const root = `${STATE}/current`;
   const kbsConfig = stringify({
     session_storage_type: "Memory",
@@ -58,6 +64,9 @@ export function trusteeSettings(config: TrusteeConfig) {
     attestation_token: { insecure_header_jwk: false, trusted_certs_paths: [`${root}/issuer/cert.pem`],
       trusted_jwk_sets: [], extra_teekey_paths: [] },
     attestation_service: { type: "coco_as_builtin", policy_id_map: {}, rvps_config: { type: "BuiltIn" },
+      ...(options.publicCollateral ? { verifier_config: { snp_verifier: {
+        vcek_sources: [{ type: "OfflineStore", path: "/run/trustee/public-kds" }],
+      } } } : {}),
       attestation_token_broker: { duration_min: 5,
         signer: { key_path: `${root}/issuer/key.pem`, cert_path: `${root}/issuer/cert.pem` } } },
     admin: { authorization_mode: "AuthenticatedAuthorization",
@@ -72,7 +81,7 @@ export function trusteeSettings(config: TrusteeConfig) {
     in: { host: "0.0.0.0", port: 8443 }, out: { host: "127.0.0.1", port: 8080 } },
     attest: { aa_provider: "coco_asr", asr_addr: "http://127.0.0.1:8006", refresh_interval: 0 },
     rats_tls: { multiplex: false } }] };
-  const kbsScript = tngTrusteeBootstrapScript(owner, kbsConfig);
+  const kbsScript = tngTrusteeBootstrapScript(owner, kbsConfig, options.privateDiagnostics);
   const tngScript = tngBootstrapScript(tngConfig);
   const { values, extensions } = confidentialTrusteeHelmSettings(config, { image: config.kbsImage, script: kbsScript,
     restApi: "attestation", port: 8443, memory: 2048, vcpus: 2 });
@@ -82,7 +91,7 @@ export function trusteeSettings(config: TrusteeConfig) {
   extensions.extraContainers = [{ name: "tng", image: config.tngImage, imagePullPolicy: "Always",
     command: ["/bin/sh", "-ec", 'exec /bin/sh -ec "$(printf \'%s\' "$@" | base64 -d)"', "tng"],
     args: measuredFragments(Buffer.from(tngScript).toString("base64")),
-    env: [{ name: "RUST_LOG", value: "error" }, { name: "RUST_BACKTRACE", value: "0" }, { name: "HOME", value: "/tmp" }],
+    env: withNeutralKubernetesServiceEnv([{ name: "RUST_LOG", value: "error" }, { name: "RUST_BACKTRACE", value: "0" }, { name: "HOME", value: "/tmp" }]),
     securityContext: extensions.containerSecurityContext, resources: values.kbs.resources,
     volumeMounts: [{ name: "tng-tmp", mountPath: "/tmp" }],
     ports: [{ name: "rats-tls", containerPort: 8443 }],

@@ -34,8 +34,20 @@ import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 
 export const DEFAULT_SCOPE = [
-  "packages/trustee-client",
+  "packages/confidential-client",
+  "packages/confidential-browser",
+  "packages/confidential-operator",
+  "packages/confidential-agent",
+  "packages/confidential-storage",
+  "packages/confidential-storage-devices",
+  "packages/nebula/src/modules/k8s/confidential-workloads",
+  "docker/confidential-operator",
+  "docker/confidential-agent",
+  "docker/confidential-browser",
+  "docker/confidential-storage",
+  "docker/confidential-storage-devices",
   "tools/tng-client",
+  "tools/tng-browser",
   ":(glob)tools/oidc-login/*.go",
   "tools/oidc-login/README.md",
   "packages/nebula/src/modules/k8s/trustee",
@@ -85,6 +97,10 @@ const UPSTREAM_OWNERS = new Set([
   "tokio-rs", "serde-rs", "coreos", "podman", "containers", "cloudnative-pg", "external-secrets", "keycloak", "dexidp",
   "kedacore", "kyverno", "kubevirt", "operator-framework", "hashicorp", "bitnami", "library", "anthropics", "helmfile",
   "datasone", "pbatard", // Public setup_var.efi and EDK2 UEFI-Shell release sources.
+  // Public containerd NRI dependencies.
+  "brianvoe", "golang", "knqyf263", "sirupsen", "tetratelabs",
+  // Public controller-runtime dependency graph (Go module checksums).
+  "masterminds", "beorn7", "cespare", "davecgh", "emicklei", "evanphx", "fsnotify", "fxamacker", "go-logr", "go-openapi", "go-task", "google", "json-iterator", "klauspost", "kr", "kylelemons", "modern-go", "munnerz", "onsi", "pkg", "pmezard", "prometheus", "rogpeppe", "stretchr", "x448",
   "int128", // Public kubelogin OIDC exec plugin and its documentation.
   "spf13", // Public pflag argument parser used by kubelogin.
 ]);
@@ -99,6 +115,7 @@ const UPSTREAM_DOMAINS = [
   "googleapis.com", // Standard Envoy protobuf types and Google's public JWKS endpoint.
   "accounts.google.com", "developers.google.com", "docs.cloud.google.com", // Public Google issuer and OAuth documentation; OAuth client IDs remain deployment bindings.
   "support.google.com", // Public OAuth client-management guidance.
+  "support.apple.com", "support.mozilla.org", // Public browser and certificate trust guidance.
   "gcr.io", "pkg.dev", "k8s.io", "kubernetes.io", "x-k8s.io", "json-schema.org", "w3.org", "ietf.org",
   "rfc-editor.org", "iana.org", "spdx.org", "apache.org", "opencontainers.org", "confidentialcontainers.org",
   "katacontainers.io", "amd.com", "intel.com", "asus.com", "trustedcomputinggroup.org", "crossplane.io", "upbound.io",
@@ -107,6 +124,9 @@ const UPSTREAM_DOMAINS = [
   "typescriptlang.org", "rust-lang.org", "crates.io", "docs.rs", "golang.org", "go.dev", "python.org", "debian.org",
   "ubuntu.com", "kernel.org", "anthropic.com", "claude.com", "letsencrypt.org", "nebula.io", "matrix.org",
   "helm.sh", "kyverno.io", "nvidia.com", "microsoft.com",
+  "kubebuilder.io", "gopkg.in", "go.yaml.in", "gomodules.xyz", "uber.org",
+  "nri.io", // Public containerd NRI annotation namespace.
+  "nebula.dev", // Public CRD API group used in Kubebuilder project metadata.
 ];
 // Bare names are only matched under these TLDs (others collide with code:
 // this.app, tls.ca, provision.sh), and not as a logger call (log.info(...)); hosts

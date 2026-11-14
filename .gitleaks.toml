@@ -18,3 +18,12 @@ condition = "AND"
 paths = ['''^packages/nebula/src/modules/k8s/trustee/chart\.ts$''']
 regexTarget = "secret"
 regexes = ['''^72da4e974317fc5f98de3f9085fba56ab5d200d1a2c585423ca0612ad9c2378e$''']
+
+# This canonical CoCo resource path is a public negative-test identifier. It
+# carries no image/disk key; retain the precise exception for the PR history.
+[[allowlists]]
+description = "Public negative-test KBS resource identifier, not a credential"
+condition = "AND"
+paths = ['''^packages/confidential-browser/test/storage-status\.test\.ts$''']
+regexTarget = "secret"
+regexes = ['''^default/volume/other$''']

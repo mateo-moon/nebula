@@ -64,6 +64,7 @@ jobs:
       - name: Tests (including the packed-tarball import test)
         env:
           ECR_READER_CONTAINER_TEST: "1"
+          WELCOME_CADDY_INTEGRATION: "1"
           BAREMETAL_CROSSPLANE_CLI: ${{ runner.temp }}/crossplane
           KYVERNO_CHART_ARCHIVE: ${{ runner.temp }}/kyverno-3.9.1.tgz
           KYVERNO_CLI: ${{ runner.temp }}/kyverno
@@ -150,8 +151,8 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -buildvcs=false -o "$RUNNER_TEMP/nebula-oidc-login-linux" .
           CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -buildvcs=false -o "$RUNNER_TEMP/nebula-oidc-login-macos" .
 
-  trustee-client:
-    name: Trustee Node client (Node ${{ matrix.node }})
+  confidential-client:
+    name: Confidential client (Node ${{ matrix.node }})
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
@@ -163,7 +164,7 @@ jobs:
             pnpm: 11.9.0
     defaults:
       run:
-        working-directory: packages/trustee-client
+        working-directory: packages/confidential-client
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

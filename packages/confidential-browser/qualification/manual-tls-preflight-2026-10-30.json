@@ -1,0 +1,61 @@
+{
+  "date": "2026-10-30",
+  "status": "preflight-complete-live-qualification-pending",
+  "replacementDeployed": false,
+  "architecture": {
+    "initialPage": "TNG HTTP/1.1 HTTPS terminated inside the measured guest",
+    "firstPageAuthentication": "User independently appraises the certificate exported by the browser before entering credentials",
+    "servedChecker": "Convenience only; cannot authenticate its own initial JavaScript",
+    "accessToken": "Entered separately after independent verification; never accepted from the URL fragment",
+    "returningOwner": "Password-encrypted browser vault; no usable owner keys persisted",
+    "externalBootstrapTrustee": false,
+    "dnsCustodianOrCustomCa": false
+  },
+  "candidateImages": {
+    "frontend": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:ed81831c57516efc3304d5e14f17b95e8fc1e3d18bca631607db25f310a07947",
+    "preparation": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:7541bc8343b08886e3e7dfb62b8d63cf5c11ab63f57a0874b70782cd834c4b9d",
+    "operator": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:f393848cfd82f986edc1c2751f41f2fc0a79e8a5b4f7d54d7747b8f0e3e114e4",
+    "tng": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:732921f10b67a7e28477521cdd7476ecce4e6aea9c6e21861ac1c2fd8fa117ed"
+  },
+  "provenance": {
+    "kind": "Uncommitted source snapshots; not signed release commits",
+    "nebulaBuildSourceSha256": "947f1f6bd4a6b8e4c1d6309f3cc9fb838329bc3bb9be06450bad9688a46aff0e",
+    "tngBuildSourceSha256": "2f643130fdc7ec8c6ed69957ac78cd0d519b4cf86875b5c91eb86a246d6dd74b",
+    "frontendAssetsSha256": "dc4dc736fa0ea968b963b486f7c23c113ab3f8510e9c1c37112bc3950fe9c9eb",
+    "trusteeVerifierRevision": "2de41693c4b40fbf8e86e20cba7a78817836b4bd"
+  },
+  "checks": {
+    "browserSecurityTests": {
+      "passed": 11
+    },
+    "nativeImageEncryption": "Passed without network access",
+    "http1": "Public GET succeeded; browser ALPN negotiated http/1.1",
+    "nativeCertificateVerifier": {
+      "source": "Fresh certificate from a previously approved dev SNP guest, not the replacement frontend",
+      "approvedPolicy": "Passed",
+      "changedWorkloadPolicy": "Rejected",
+      "genuineEvidenceCopiedToDifferentTlsKey": "Rejected: Report Data Mismatch"
+    },
+    "isolatedEnabledArgoConfiguration": "Preservation assertions and type checking passed",
+    "deterministicSynthesis": "Two independent native syntheses were byte-identical",
+    "independentExpectedPolicies": "Both preparation and frontend hashes matched complete-stack synthesis",
+    "publicationGuard": "325 source files scanned; zero findings"
+  },
+  "cleanup": {
+    "abandonedDnsAcmePoc": "Removed from live Argo deployment",
+    "otherTestcasePodsPreserved": 34,
+    "clusterPvsPreserved": 18,
+    "testcasePvcsPreserved": 10
+  },
+  "notYetQualified": [
+    "Replacement frontend attestation on the dev SNP host",
+    "Browser navigation through the replacement guest TLS listener",
+    "Full owner encryption, publication and enrollment through the replacement page",
+    "Returning-owner behavior through that live origin"
+  ],
+  "limits": [
+    "Independent first-page verification, browser and approved guest software remain trusted",
+    "Administrators can deny service or claim first",
+    "No global singleton enforcement, disk rollback prevention or automatic Trustee replacement custody"
+  ]
+}

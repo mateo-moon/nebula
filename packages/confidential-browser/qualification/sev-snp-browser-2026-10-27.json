@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "date": "2026-10-27",
+  "platform": "AMD SEV-SNP",
+  "input": {
+    "type": "owner-controlled registry, immutable linux/amd64 source",
+    "digest": "sha256:69f618e9eba03738098a3698c4014797b2c6d0b4c382ddd5d9c8e37d64419704"
+  },
+  "loader": {
+    "release": "https://mateo-moon.github.io/nebula/releases/ccb5b48d812d6776891781fca883d7733285189f/",
+    "source": "ccb5b48d812d6776891781fca883d7733285189f",
+    "sdkSource": "ca71333c24d7d909003ef7eb78caa9ec1455f03c",
+    "verifierSource": "6bad75697f0ca47399f73a79fde945284966a34c",
+    "uiAssetsFetchedThroughAttestedOhttp": 3,
+    "independentReleasePolicy": true,
+    "localClientInstallationRequired": false
+  },
+  "preparation": {
+    "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:29c80adc1a2369c7d0fca983cd03e9138026ff4be057ee4c412d6a1fb39f06e6",
+    "source": "a94117c4698a9c5ad7b29dd337f7d475f0798ea3",
+    "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+    "initDataSha256": "d7eb303a952b6f4b98c9aa122478e60765b6e1c582ee2c9c185273d0da15ddbe",
+    "sourceAndArgoNativePolicyMatch": true,
+    "nativeSynthesisUsesSeparateWorker": true,
+    "freshAttestationDuringNativeSynthesisQualified": true
+  },
+  "final": {
+    "measurement": "e6bfc24840176237937ab32b8a9425fae4856b03a7864efea46e92b9c5b4a76eef48e889f498fceb73c90e03dcb8bcd9",
+    "initDataSha256": "f0b7895174bab4c33d0c76baf3eafe78e3387e442124f7f7b3d4c254cd4f12ce",
+    "ownerAndOperatorNativePolicyMatch": true,
+    "encryptedImage": {
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:962654dca7a8b34d29420f5950bdd1b67f559c7cd594c8ae01517d16f68e5880",
+      "digestVerified": true,
+      "encryptedLayers": 7
+    },
+    "ownerEnrolledBeforeKeyProvisioning": true,
+    "encryptedBlockReady": true,
+    "guestMemoryReady": true,
+    "applicationHealth": "ready",
+    "returningOwnerFreshAttestation": true,
+    "returningInstancePinUnchanged": true,
+    "currentEncryptedRecoveryExportAvailable": true
+  },
+  "isolation": {
+    "ownerImageKeyReadStatus": 403,
+    "ownerDiskKeyReadStatus": 403,
+    "unsignedPolicyWriteStatus": 403,
+    "discoveryProofPolicyWriteStatus": 403,
+    "applicationKeyServicesReachable": false,
+    "applicationKeyFilesReadable": false,
+    "administratorExecDeniedInPreparationAndApplication": true,
+    "kubernetesTemporaryTokenAndUrlConsumed": true,
+    "externalBootstrapTrusteeUsed": false
+  },
+  "preservation": {
+    "baselineGuestsUnchanged": 7,
+    "baselineVolumeSpecificationsUnchanged": 22,
+    "earlierEnrolledPreparationsRetained": true
+  },
+  "checks": {
+    "sharedSnpVerifierTests": 22,
+    "realBrowserWasmVectorTests": 2,
+    "browserSecurityTests": 7,
+    "publicationGuardTests": 37,
+    "nativeCocoEncryptionAndCiphertextCopy": true,
+    "devStackPreservationRegression": true
+  },
+  "limits": [
+    "Independent loader origin, browser and reviewed preparation software are trusted.",
+    "An administrator can deny service or claim an unowned instance first; the client then sends no image keys.",
+    "Enrollment pins the chosen instance; there is no global singleton or disk rollback guarantee.",
+    "Automatic Trustee replacement custody remains outside scope."
+  ]
+}

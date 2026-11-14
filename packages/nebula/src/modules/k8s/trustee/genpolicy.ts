@@ -13,13 +13,71 @@ import type { TrusteeConfig, TrusteeNetworkConfig } from "./types";
 const asset = (name: string) => readFileSync(new URL(`./assets/genpolicy/${name}`, import.meta.url), "utf8");
 export const GENPOLICY_REVISION = "5b57d5c41ffb9d9515e76ef51cfa851068cfc439";
 
+/** A deliberately small address-pattern grammar, not a second regex engine.
+ * Native RE2 makes the authorization decision. This lexer rejects constructs
+ * JS accepts with different syntax/meaning before publication or synthesis. */
+function addressPattern(pattern: string): void {
+  const invalid = (): never => { throw new TypeError("Trustee: CNI address patterns must use the anchored ASCII RE2 subset"); };
+  const escape = (offset: number): { end: number; set: boolean } => {
+    const value = pattern[offset + 1];
+    if (!value || offset + 1 >= pattern.length - 1 || /[A-Za-z0-9]/.test(value) && !/[dDsSwW]/.test(value)) invalid();
+    return { end: offset + 2, set: /[dDsSwW]/.test(value) };
+  };
+  let depth = 0;
+  for (let index = 1; index < pattern.length - 1;) {
+    const value = pattern[index];
+    if (value === "\\") { index = escape(index).end; continue; }
+    if (value === "[") {
+      let cursor = index + 1;
+      if (pattern[cursor] === "^") cursor++;
+      const tokens: ("literal" | "set" | "range")[] = [];
+      while (cursor < pattern.length - 1 && pattern[cursor] !== "]") {
+        if (pattern[cursor] === "[") invalid(); // nested/POSIX class ambiguity
+        if (pattern[cursor] === "\\") {
+          const escaped = escape(cursor); tokens.push(escaped.set ? "set" : "literal"); cursor = escaped.end;
+        } else { tokens.push(pattern[cursor] === "-" ? "range" : "literal"); cursor++; }
+      }
+      if (pattern[cursor] !== "]" || !tokens.length) invalid();
+      const rangeEndpoints = new Set<number>();
+      for (let token = 0; token < tokens.length; token++) {
+        if (tokens[token] !== "range") continue;
+        if (token === 0 || token === tokens.length - 1) continue; // literal edge hyphen
+        if (tokens[token - 1] !== "literal" || tokens[token + 1] !== "literal" || rangeEndpoints.has(token - 1)) invalid();
+        rangeEndpoints.add(token - 1); rangeEndpoints.add(token + 1);
+      }
+      index = cursor + 1; continue;
+    }
+    if (value === "(") {
+      depth++;
+      if (pattern[index + 1] === "?") {
+        if (pattern[index + 2] !== ":") invalid();
+        index += 3;
+      } else index++;
+      continue;
+    }
+    if (value === ")") { if (--depth < 0) invalid(); index++; continue; }
+    if (value === "|" && depth === 0) invalid(); // every branch must have both anchors
+    if (value === "{") {
+      const match = /^\{(0|[1-9][0-9]*)(?:,(0|[1-9][0-9]*)?)?\}/.exec(pattern.slice(index)) ?? invalid();
+      const low = Number(match[1]), high = match[2] === undefined ? undefined : Number(match[2]);
+      if (low > 1000 || high !== undefined && (high > 1000 || high < low)) invalid();
+      index += match[0].length; continue;
+    }
+    if (["]", "}", "^", "$"].includes(value)) invalid();
+    index++;
+  }
+  if (depth !== 0) invalid();
+  try { new RegExp(pattern); } catch { invalid(); }
+}
+
 export function validateNetwork(network: TrusteeNetworkConfig): void {
   for (const key of ["ipv4AddressPattern", "ipv6AddressPattern"] as const) {
     const pattern = network?.[key];
     if (typeof pattern !== "string" || pattern.length > 256 || !pattern.startsWith("^") || !pattern.endsWith("$")) {
       throw new TypeError("Trustee: provide anchored CNI address patterns");
     }
-    new RegExp(pattern);
+    if (/[^\x20-\x7e]/.test(pattern)) throw new TypeError("Trustee: CNI address patterns must use the anchored ASCII RE2 subset");
+    addressPattern(pattern);
   }
 }
 
@@ -72,13 +130,28 @@ type NativePolicyConfig = Pick<TrusteeConfig, "network" | "genpolicy" | "k8sDist
  * a pre-generated policy or an observed identity. */
 export function generateAttestedWorkloadPolicy(workload: GuestPodManifest,
   guestConfig: { "aa.toml": string; "cdh.toml": string }, config: NativePolicyConfig) {
+  return generateWorkloadPolicy(workload, guestConfig, config, false);
+}
+
+/** Combined-workload builder entry point. Raw block devices remain ciphertext;
+ * only the measured storage helper and mount launcher receive added capabilities. */
+export function generateConfidentialWorkloadPolicy(workload: GuestPodManifest,
+  guestConfig: { "aa.toml": string; "cdh.toml": string }, config: NativePolicyConfig) {
+  return generateWorkloadPolicy(workload, guestConfig, config, true);
+}
+
+function generateWorkloadPolicy(workload: GuestPodManifest,
+  guestConfig: { "aa.toml": string; "cdh.toml": string }, config: NativePolicyConfig, block: boolean) {
   if (workload.kind !== "Pod" || !workload.spec) throw new TypeError("Attested workload requires a Pod");
   const copy = structuredClone(workload) as any;
   const spec = copy.spec;
   if (!["kata-qemu-snp", "kata-qemu-tdx"].includes(spec.runtimeClassName) ||
       spec.automountServiceAccountToken !== false || spec.enableServiceLinks !== false ||
       spec.hostNetwork || spec.hostPID || spec.hostIPC || spec.shareProcessNamespace || spec.ephemeralContainers?.length ||
-      spec.volumes?.some((volume: any) => Object.keys(volume).sort().join() !== "emptyDir,name" || volume.emptyDir.medium !== "Memory")) {
+      spec.volumes?.some((volume: any) =>
+        !(Object.keys(volume).sort().join() === "emptyDir,name" && volume.emptyDir.medium === "Memory") &&
+        !(block && Object.keys(volume).sort().join() === "name,persistentVolumeClaim" &&
+          Object.keys(volume.persistentVolumeClaim).join() === "claimName"))) {
     throw new TypeError("Attested workload requires private namespaces, no API credentials and only guest tmpfs");
   }
   const containers = [...(spec.initContainers ?? []), ...spec.containers];
@@ -92,13 +165,18 @@ export function generateAttestedWorkloadPolicy(workload: GuestPodManifest,
         !Number.isSafeInteger(security.runAsUser) || security.runAsUser < 0 ||
         !Number.isSafeInteger(security.runAsGroup) || security.runAsGroup < 0 ||
         security.capabilities?.drop?.join() !== "ALL" ||
-        security.capabilities?.add?.some((cap: string) => !["SETUID", "SETGID", "SYS_CHROOT"].includes(cap))) {
+        security.capabilities?.add?.some((cap: string) => !(block
+          ? ["SETUID", "SETGID", "SYS_CHROOT", "SYS_ADMIN", "SETPCAP", "MKNOD", "CHOWN", "NET_ADMIN"]
+          : ["SETUID", "SETGID", "SYS_CHROOT"]).includes(cap))) {
       throw new TypeError(`Invalid attested workload container ${container.name}`);
     }
     delete security.runAsNonRoot;
     delete security.seccompProfile;
   }
-  if (spec.initContainers?.some((c: any) => c.restartPolicy !== "Always")) throw new TypeError("Only persistent bootstrap sidecars are supported");
+  if (spec.initContainers?.some((c: any) => c.restartPolicy !== "Always" &&
+      !(block && ["nebula-guard", "nebula-install-storage", "nebula-await-owner"].includes(c.name) && c.restartPolicy === undefined))) {
+    throw new TypeError("Only persistent bootstrap sidecars and the measured installer/owner gate are supported");
+  }
   delete spec.automountServiceAccountToken;
   delete spec.enableServiceLinks;
   // RuntimeClass overhead affects host scheduling only. VM sizing remains in
@@ -111,15 +189,35 @@ export function generateAttestedWorkloadPolicy(workload: GuestPodManifest,
   if (Object.keys(guestConfig).sort().join() !== "aa.toml,cdh.toml" || Object.values(guestConfig).some(v => typeof v !== "string")) {
     throw new TypeError("Expected measured AA and CDH configuration");
   }
-  return generatePolicy(copy, containers, guestConfig, config, asset("client.rego"), false);
+  return generatePolicy(copy, containers, guestConfig, config, asset("client.rego"), false, block);
 }
 
 function generatePolicy(workload: any, containers: readonly any[], guestConfig: Record<string, string>,
-  config: NativePolicyConfig, profile: string, trustee: boolean) {
+  config: NativePolicyConfig, profile: string, trustee: boolean, block = false) {
   validateNetwork(config.network);
   const directory = mkdtempSync(join(tmpdir(), "nebula-trustee-genpolicy-"));
   try {
-    const rules = `${asset("rules.rego")}\n${profile}\ntrustee_network := ${JSON.stringify(config.network)}\n`;
+    let nativeRules = asset("rules.rego");
+    if (block) {
+      // Select stricter device predicates in genpolicy's INPUT rules. Generated
+      // policy data and native output are never patched after synthesis.
+      for (const [original, hardened] of [
+        ["    allow_linux_devices(p_oci.Linux.Devices, i_oci.Linux.Devices)",
+          "    confidential_linux_devices(p_oci.Linux.Devices, i_oci.Linux.Devices)"],
+        ["    allow_volume_devices(p_volume_devices, i_volume_devices)",
+          "    confidential_volume_devices(p_volume_devices, i_volume_devices)"],
+      ]) {
+        if (nativeRules.split(original).length !== 2) {
+          throw new TypeError("Trustee: native genpolicy device predicate changed; review required");
+        }
+        nativeRules = nativeRules.replace(original, hardened);
+      }
+      // Retained guests keep the exact original policy bytes. Only the new
+      // agent layout uses the bounded multi-volume device profile.
+      profile += `\n${asset(containers.some(container => container.name === "nebula-agent")
+        ? "confidential-agent-block.rego" : "confidential-block.rego")}`;
+    }
+    const rules = `${nativeRules}\n${profile}\ntrustee_network := ${JSON.stringify(config.network)}\n`;
     const rulesPath = join(directory, "rules.rego");
     const settingsPath = join(directory, "genpolicy-settings.json");
     const initdataPath = join(directory, "initdata.toml");
