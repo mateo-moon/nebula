@@ -380,8 +380,8 @@ export interface PrometheusOperatorConfig {
 
 const mergeHelmValues = deepmergeCustom({ mergeArrays: false });
 
-function sinkHtpasswd(sink: { accounts?: readonly BasicAuthAccount[]; authHtpasswd?: string }): string {
-  const content = (sink.accounts?.length ? machineHtpasswd(sink.accounts) : "") + (sink.authHtpasswd ?? "");
+function sinkHtpasswd(sink: { host: string; accounts?: readonly BasicAuthAccount[]; authHtpasswd?: string }): string {
+  const content = (sink.accounts?.length ? machineHtpasswd(sink.accounts, { context: sink.host }) : "") + (sink.authHtpasswd ?? "");
   if (!content.trim()) throw new Error("An ingestion endpoint needs accounts or authHtpasswd");
   return content;
 }

@@ -17,4 +17,4 @@ export { validateOidcHttpsUrl, validateOidcIssuer, oidcTokenLifetimeSeconds } fr
 export type { OidcIssuer } from "./oidc";
 
 export { machineHtpasswd, MACHINE_PASSWORD_MIN_LENGTH } from "./htpasswd";
-export type { BasicAuthAccount } from "./htpasswd";
+export type { BasicAuthAccount, MachineHtpasswdOptions } from "./htpasswd";
