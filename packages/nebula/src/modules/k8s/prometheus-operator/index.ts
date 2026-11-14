@@ -30,7 +30,9 @@ import {
   BucketIamMemberV1Beta2 as BucketIamMember,
 } from "#imports/storage.gcp.upbound.io";
 import { HelmModule, type Toleration } from "../../../core";
+import { grafanaDatasource, type GrafanaDatasourceConfig, type GrafanaDatasourceSecret } from "../grafana-operator";
 import { normalizeAccountId } from "../../infra/_shared";
+import { machineHtpasswd, type BasicAuthAccount } from "../../../utils/htpasswd";
 import {
   bindWorkloadIdentityUser,
   wiKsaAnnotations,
@@ -172,10 +174,18 @@ export interface PrometheusRwIngressConfig {
   /** Public hostname, e.g. "prometheus-rw.example.com" (external-dns + TLS). */
   host: string;
   /**
-   * htpasswd file content for nginx basic auth. A plain string or a ref+
-   * secret reference (resolved automatically at synth time).
+   * Clients of this endpoint. A client with a `password` (a ref+ secret
+   * reference, shared with the client's own configuration) is hashed cheaply at
+   * synth time; a client known only by its existing hash keeps it.
    */
-  authHtpasswd: string;
+  accounts?: readonly BasicAuthAccount[];
+  /**
+   * Additional htpasswd file content for nginx basic auth. A plain string or a
+   * ref+ secret reference (resolved automatically at synth time).
+   */
+  authHtpasswd?: string;
+  /** Largest request body accepted, e.g. "8m" (nginx default: 1m). */
+  maxBodySize?: string;
   /**
    * Extra/override Ingress annotations, merged over the defaults
    * (cert-manager letsencrypt-prod + external-dns hostname + nginx basic auth).
@@ -196,10 +206,18 @@ export interface LokiPushIngressConfig {
   /** Public hostname, e.g. "loki.example.com" (external-dns + TLS). */
   host: string;
   /**
-   * htpasswd file content for nginx basic auth. A plain string or a ref+
-   * secret reference (resolved automatically at synth time).
+   * Clients of this endpoint. A client with a `password` (a ref+ secret
+   * reference, shared with the client's own configuration) is hashed cheaply at
+   * synth time; a client known only by its existing hash keeps it.
    */
-  authHtpasswd: string;
+  accounts?: readonly BasicAuthAccount[];
+  /**
+   * Additional htpasswd file content for nginx basic auth. A plain string or a
+   * ref+ secret reference (resolved automatically at synth time).
+   */
+  authHtpasswd?: string;
+  /** Largest request body accepted, e.g. "8m" (nginx default: 1m). */
+  maxBodySize?: string;
   /** Backend service (defaults to the module's Loki service `loki`:3100). */
   backendService?: { name?: string; port?: number };
   /**
@@ -207,6 +225,19 @@ export interface LokiPushIngressConfig {
    * (cert-manager letsencrypt-prod + external-dns hostname + nginx basic auth).
    */
   ingressAnnotations?: Record<string, string>;
+}
+
+export type MonitoringDatasource = "prometheus" | "alertmanager" | "loki" | "thanos";
+
+/** Deliver the stack's datasources as Grafana operator resources. */
+export interface OperatorDatasourcesConfig {
+  /** Labels of the operator's Grafana resource. */
+  instance: Record<string, string>;
+  /** Fields merged over a datasource's definition, or `false` to leave it to another owner. */
+  overrides?: Partial<Record<MonitoringDatasource, false | {
+    datasource?: Partial<GrafanaDatasourceConfig["datasource"]>;
+    secrets?: GrafanaDatasourceSecret[];
+  }>>;
 }
 
 /** Accept one Grafana operator's projected Kubernetes token for API writes. */
@@ -296,7 +327,16 @@ export interface PrometheusOperatorConfig {
     version?: string;
     /** Loki basic auth htpasswd content */
     authHtpasswd?: string;
+    /** Loki chart values merged over the module's; arrays replace. */
+    values?: Record<string, unknown>;
   };
+  /**
+   * How Grafana receives the Prometheus, Alertmanager, Loki and Thanos
+   * datasources. By default the chart's sidecar reads labelled ConfigMaps,
+   * which needs Grafana's admin account to reload them. With `operator`, the
+   * sidecar is off and a Grafana operator applies them through the API.
+   */
+  grafanaDatasources?: { operator: OperatorDatasourcesConfig };
   /** Promtail configuration */
   promtail?: {
     /** Enable Promtail (defaults to true) */
@@ -339,6 +379,12 @@ export interface PrometheusOperatorConfig {
 }
 
 const mergeHelmValues = deepmergeCustom({ mergeArrays: false });
+
+function sinkHtpasswd(sink: { host: string; accounts?: readonly BasicAuthAccount[]; authHtpasswd?: string }): string {
+  const content = (sink.accounts?.length ? machineHtpasswd(sink.accounts, { context: sink.host }) : "") + (sink.authHtpasswd ?? "");
+  if (!content.trim()) throw new Error("An ingestion endpoint needs accounts or authHtpasswd");
+  return content;
+}
 
 /**
  * The promtail chart values the module renders: one client (the local Loki,
@@ -649,6 +695,7 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
       throw new Error("Set Grafana JWT auth through grafanaOperatorKubeAuth, not values.grafana.grafana.ini");
     }
 
+    const operatorDatasources = this.config.grafanaDatasources?.operator;
     this.helm = this.createHelmRelease({
       namespace: namespaceName,
       chart: "kube-prometheus-stack",
@@ -658,12 +705,11 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
         "https://prometheus-community.github.io/helm-charts",
       version: this.config.version ?? "81.4.3",
       defaultValues,
-      values: this.config.grafanaOperatorKubeAuth
-        ? mergeHelmValues(
-            this.config.values ?? {},
-            grafanaOperatorKubeAuthValues(this.config.grafanaOperatorKubeAuth),
-          )
-        : this.config.values,
+      values: mergeHelmValues(
+        operatorDatasources ? { grafana: { sidecar: { datasources: { enabled: false } } } } : {},
+        this.config.values ?? {},
+        this.config.grafanaOperatorKubeAuth ? grafanaOperatorKubeAuthValues(this.config.grafanaOperatorKubeAuth) : {},
+      ) as Record<string, unknown>,
       // kube-prometheus-stack CRDs exceed the 262144-byte annotation limit
       // for kubectl client-side apply. They must be pre-installed via
       // `kubectl apply --server-side` or by ArgoCD with ServerSideApply=true.
@@ -671,6 +717,20 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
       // cannot apply them without hitting the annotation size limit.
       helmFlags: [],
     });
+
+    // The chart provisions these two itself while its sidecar is on.
+    if (operatorDatasources) {
+      this.datasource("prometheus-datasource", {
+        name: "Prometheus", type: "prometheus", uid: "prometheus", isDefault: true,
+        url: `http://prometheus-kube-prometheus-prometheus.${namespaceName}:9090/`,
+        jsonData: { httpMethod: "POST", timeInterval: "30s" },
+      });
+      this.datasource("alertmanager-datasource", {
+        name: "Alertmanager", type: "alertmanager", uid: "alertmanager",
+        url: `http://prometheus-kube-prometheus-alertmanager.${namespaceName}:9093/`,
+        jsonData: { handleGrafanaManagedAlerts: false, implementation: "prometheus" },
+      });
+    }
 
     // Deploy Loki
     if (this.config.loki?.enabled !== false) {
@@ -761,33 +821,12 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
         repo: "https://grafana.github.io/helm-charts",
         version: this.config.loki?.version ?? "6.51.0",
         namespace: namespaceName,
-        values: lokiValues,
+        values: mergeHelmValues(lokiValues, this.config.loki?.values ?? {}) as Record<string, unknown>,
       });
 
-      // Loki Grafana datasource
-      new kplus.ConfigMap(this, "loki-datasource", {
-        metadata: {
-          name: "loki-datasource",
-          namespace: namespaceName,
-          labels: { grafana_datasource: "1" },
-        },
-        data: {
-          "datasource.yaml": JSON.stringify({
-            apiVersion: 1,
-            datasources: [
-              {
-                name: "Loki",
-                type: "loki",
-                uid: "loki",
-                url: `http://loki.${namespaceName}.svc.cluster.local:3100`,
-                access: "proxy",
-                isDefault: false,
-                editable: true,
-                jsonData: { maxLines: 1000 },
-              },
-            ],
-          }),
-        },
+      this.datasource("loki-datasource", {
+        name: "Loki", type: "loki", uid: "loki", url: `http://loki.${namespaceName}.svc.cluster.local:3100`,
+        isDefault: false, jsonData: { maxLines: 1000 },
       });
     }
 
@@ -1015,32 +1054,11 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
       });
 
       // Expose Thanos Query as a Grafana datasource (long-term + cross-cluster view).
-      new kplus.ConfigMap(this, "thanos-grafana-datasource", {
-        metadata: {
-          name: "thanos-datasource",
-          namespace: namespaceName,
-          labels: { grafana_datasource: "1" },
-        },
-        data: {
-          // Grafana datasource provisioning files must be { apiVersion, datasources },
-          // not a bare array (a bare array crashes Grafana provisioning).
-          "datasource.yaml": JSON.stringify({
-            apiVersion: 1,
-            datasources: [
-              {
-                name: "Thanos",
-                type: "prometheus",
-                uid: "thanos",
-                url: `http://thanos-query-frontend.${namespaceName}.svc.cluster.local:9090`,
-                access: "proxy",
-                isDefault: false,
-                editable: true,
-                jsonData: { httpMethod: "POST", timeInterval: "30s" },
-              },
-            ],
-          }),
-        },
-      });
+      this.datasource("thanos-grafana-datasource", {
+        name: "Thanos", type: "prometheus", uid: "thanos",
+        url: `http://thanos-query-frontend.${namespaceName}.svc.cluster.local:9090`,
+        isDefault: false, jsonData: { httpMethod: "POST", timeInterval: "30s" },
+      }, "thanos-datasource");
     }
 
     // --- Central-sink ingresses ----------------------------------------------
@@ -1056,7 +1074,7 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
         kind: "Secret",
         metadata: { name: "prometheus-rw-auth", namespace: namespaceName },
         type: "Opaque",
-        stringData: { auth: rw.authHtpasswd },
+        stringData: { auth: sinkHtpasswd(rw) },
       });
 
       new ApiObject(this, "prometheus-rw-ingress", {
@@ -1072,6 +1090,7 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
             "nginx.ingress.kubernetes.io/auth-secret": "prometheus-rw-auth",
             "nginx.ingress.kubernetes.io/auth-realm":
               "Authentication Required - Prometheus Remote Write",
+            ...(rw.maxBodySize ? { "nginx.ingress.kubernetes.io/proxy-body-size": rw.maxBodySize } : {}),
             ...(rw.ingressAnnotations ?? {}),
           },
         },
@@ -1112,7 +1131,7 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
         kind: "Secret",
         metadata: { name: "loki-push-auth", namespace: namespaceName },
         type: "Opaque",
-        stringData: { auth: push.authHtpasswd },
+        stringData: { auth: sinkHtpasswd(push) },
       });
 
       new ApiObject(this, "loki-push-ingress", {
@@ -1128,6 +1147,7 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
             "nginx.ingress.kubernetes.io/auth-secret": "loki-push-auth",
             "nginx.ingress.kubernetes.io/auth-realm":
               "Authentication Required - Loki Push",
+            ...(push.maxBodySize ? { "nginx.ingress.kubernetes.io/proxy-body-size": push.maxBodySize } : {}),
             ...(push.ingressAnnotations ?? {}),
           },
         },
@@ -1159,6 +1179,29 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
         },
       });
     }
+  }
+  /** One stack datasource, as a sidecar ConfigMap or an operator resource. */
+  private datasource(id: string, datasource: GrafanaDatasourceConfig["datasource"], configMapName = id): void {
+    const namespace = this.config.namespace ?? "monitoring";
+    const operator = this.config.grafanaDatasources?.operator;
+    if (!operator) {
+      const { name, type, uid, url, isDefault, jsonData } = datasource;
+      new kplus.ConfigMap(this, id, {
+        metadata: { name: configMapName, namespace, labels: { grafana_datasource: "1" } },
+        // A provisioning file is { apiVersion, datasources }; a bare array crashes Grafana.
+        data: { "datasource.yaml": JSON.stringify({
+          apiVersion: 1, datasources: [{ name, type, uid, url, access: "proxy", isDefault, editable: true, jsonData }],
+        }) },
+      });
+      return;
+    }
+    const override = operator.overrides?.[datasource.uid as MonitoringDatasource];
+    if (override === false) return;
+    grafanaDatasource(this, {
+      namespace, instance: operator.instance,
+      datasource: mergeHelmValues(datasource, override?.datasource ?? {}) as GrafanaDatasourceConfig["datasource"],
+      secrets: override?.secrets, definitionsInstalledElsewhere: true,
+    });
   }
 }
 

@@ -176,7 +176,20 @@ export type {
   LokiPushIngressConfig,
   MemberMonitoringConfig,
   MemberRemoteWriteConfig,
+  MonitoringDatasource,
+  OperatorDatasourcesConfig,
 } from "./prometheus-operator";
+
+export { PrometheusOperatorCrds } from "./prometheus-operator/crds";
+export type { PrometheusOperatorCrdsConfig } from "./prometheus-operator/crds";
+
+export { GrafanaOperator, grafanaDatasource } from "./grafana-operator";
+export type {
+  GrafanaOperatorConfig,
+  GrafanaOperatorInstance,
+  GrafanaDatasourceConfig,
+  GrafanaDatasourceSecret,
+} from "./grafana-operator";
 
 export {
   ArgoCd,
@@ -193,6 +206,7 @@ export type {
   ArgoCdProjectDestination,
   ArgoCdClusterSyncConfig,
   ArgoCdAppTierConfig,
+  ArgoCdAppOverride,
   ArgoCdAppTierDiscovery,
   ArgoCdAppTierRegistryDiscovery,
   ArgoCdAppTierAutoDiscovery,
@@ -473,6 +487,7 @@ export type { ImagePullSecretConfig } from "./image-pull-secret";
 
 export { Calico } from "./calico";
 export { Cilium, CILIUM_WIREGUARD_PORT, IPV6_MIN_MTU } from "./cilium";
+export { ciliumAlertRules } from "./cilium/alerts";
 export type { CiliumConfig, CiliumIpamConfig, CiliumNodeIpv6Override, CiliumNodeIpv6OverridesConfig } from "./cilium";
 export { CorednsV6Face } from "./coredns-v6-face";
 export type { CorednsV6FaceOptions } from "./coredns-v6-face";
@@ -483,7 +498,9 @@ export {
   NODE_FROM_POD,
   MeshServiceMonitor,
   MeshKubeProxyServiceMonitor,
+  CiliumMeshMonitors,
 } from "./mesh-scrape";
+export type { CiliumMeshMonitorsOptions } from "./mesh-scrape";
 export type {
   MeshFamily,
   MeshCni,

@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./trustee/policies": "./src/modules/k8s/trustee/policies.ts",
     "./trustee/client-plan": "./src/modules/k8s/trustee/client-plan.ts",
+    "./tools/render": "./src/tools/render.ts",
     "./imports": "./imports/index.ts",
     "./imports/*": "./imports/*",
     "./trustee/workload": "./src/modules/k8s/trustee/workload.ts",

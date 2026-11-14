@@ -88,3 +88,42 @@ path; its app credential is not copied into the profile. The output uses mode
 0600. An identical protected output is reused; any other existing file is
 refused, so an administrator kubeconfig or another profile is never replaced.
 Generating a profile grants no access: RBAC comes from the cluster.
+
+# Rendering a repository and comparing renders
+
+`nebula render-tree` renders every `index.ts` entry of one or more repository
+trees, and every plugin Application those renders declare, using the init and
+generate scripts of the tree's own Argo CD ConfigManagementPlugin. It runs with
+tool locations and the extras you state, never the caller's credentials.
+
+`nebula render-diff` compares two such outputs object by object. Differences
+are informational. It fails when an entry does not render, or a golden digest
+does not hold at head.
+
+```sh
+nebula render-tree --plugin-entry infra/meta/argocd --entries infra \
+  --side ./base:./out/base:"$BASE_SHA" --side ./head:./out/head:"$HEAD_SHA"
+nebula render-diff --base ./out/base --head ./out/head
+```
+
+| `render-tree` option | Meaning |
+| --- | --- |
+| `--side ROOT:OUT:REVISION` | A tree, its output directory and the revision to report. Repeat per tree. |
+| `--entries DIR` | Directory under each root to search for entries; default the root. Repeatable. |
+| `--plugin FILE` / `--plugin-entry DIR` | The plugin file, or the entry that renders its ConfigMap. One is required. |
+| `--env NAME=VALUE` | Extra environment for every render, for example public fixtures. Repeatable. |
+| `--allow-plugin-env NAME` | Plugin environment variable Applications may set besides `ENTRY_FILE`. Repeatable. |
+| `--bin DIR`, `--image-env FILE`, `--registry-config DIR`, `--jobs N` | Tool directory, the renderer image's environment, a read-only registry config and concurrency. |
+
+A repository that depends on `nebula-cdk8s` can run the same code without the CLI:
+
+```sh
+node --import tsx node_modules/nebula-cdk8s/src/tools/render.ts tree --side ...
+node --import tsx node_modules/nebula-cdk8s/src/tools/render.ts diff --base ... --head ...
+```
+
+| `render-diff` option | Meaning |
+| --- | --- |
+| `--goldens FILE` | JSON of entry key to digests that must hold at head. |
+| `--volatile FILE` | Lines of `<entry> <apiVersion> <kind> <namespace>/<name> <json pointer>` for fields generated anew by every render; compared as present or absent only. |
+| `--unrendered FILE` | Entry keys that may stay uncompared while they already fail at base. |
