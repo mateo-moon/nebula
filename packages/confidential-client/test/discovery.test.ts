@@ -97,7 +97,7 @@ test("the collateral-qualified browser workload binds its exact runtime and four
   workload.spec.resources = [["default", "image", "agent"], ["default", "volume", "agent"],
     ["default", "volume", "agent-audit"], ["default", "config", "agent"]];
   workload.spec.storage = [{ name: "data", resource: "data" }, { name: "audit", resource: "audit" }];
-  workload.spec.containers = [{ name: "agent", image: "example.invalid/agent:reserved", imageKeyResource: ["default", "image", "agent"],
+  workload.spec.containers = [{ name: "application", image: "example.invalid/agent:reserved", imageKeyResource: ["default", "image", "agent"],
     commandFromImage: true, uid: 11000, gid: 11000, applicationResources: [["default", "config", "agent"]],
     mounts: [{ storage: "data", path: "/data" }, { storage: "audit", path: "/audit" }], ports: [{ name: "http", port: 9080 }] }];
   connection.storages = ["data", "audit"].map(name => ({ apiVersion: "confidential.nebula.dev/v1alpha1", kind: "ConfidentialStorage",

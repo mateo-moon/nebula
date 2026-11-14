@@ -146,9 +146,10 @@ func (in *ConfidentialWorkloadList) DeepCopyObject() runtime.Object {
 func (in *Status) DeepCopyInto(out *Status) {
 	*out = *in
 	if in.ResolvedImageDigests != nil {
-		out.ResolvedImageDigests = make(map[string]string, len(in.ResolvedImageDigests))
-		for k, v := range in.ResolvedImageDigests {
-			out.ResolvedImageDigests[k] = v
+		in, out := &in.ResolvedImageDigests, &out.ResolvedImageDigests
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
 		}
 	}
 }

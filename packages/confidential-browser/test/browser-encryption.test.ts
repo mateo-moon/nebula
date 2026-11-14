@@ -145,7 +145,7 @@ test("all original plaintext layers are checked before any recovery cipher is re
 
 test("publication refuses unapproved application settings and a different registry before using credentials", async () => {
   const directory = mkdtempSync(join(tmpdir(), "nebula-registry-binding-"));
-  const connection: any = { workload: { spec: { containers: [{ name: "app", image: "ghcr.io/owner/app:release", imageKeyResource: ["default", "image", "app"], uid: 11000, gid: 11000 }],
+  const connection: any = { workload: { spec: { containers: [{ name: "app", image: "ghcr.io/example/app:release", imageKeyResource: ["default", "image", "app"], uid: 11000, gid: 11000 }],
     network: { ipv4AddressPattern: "^10[.].+$", ipv6AddressPattern: "^fd42:.+$" }, resources: [["default", "image", "app"]] } }, storages: [] };
   const credentials = { registryUsername: "test-owner", registryPassword: "test-only-credential" };
   try {

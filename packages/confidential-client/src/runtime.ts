@@ -49,6 +49,7 @@ approved if {
 export async function startRuntime(options: RuntimeOptions) {
   if (!isAbsolute(options.tngBinary)) throw new TypeError("tngBinary must be an absolute path to the qualified client");
   const { directory, profile } = readPreparedClient(options.stateDirectory);
+  const { host, port } = profile.target;
   options.signal?.throwIfAborted();
   const lock = join(directory, "runtime.lock");
   writeFileSync(lock, JSON.stringify({ pid: process.pid, transport: "private-unix" }), { mode: 0o600, flag: "wx" });
@@ -84,8 +85,8 @@ export async function startRuntime(options: RuntimeOptions) {
       };
       try {
         assertAlive();
-        upstream = connect({ host: profile.target.host, port: profile.target.port,
-          ...(isIP(profile.target.host) ? {} : { servername: profile.target.host }),
+        upstream = connect({ host, port,
+          ...(isIP(host) ? {} : { servername: host }),
           minVersion: "TLSv1.3", maxVersion: "TLSv1.3", ALPNProtocols: ["rats-tls"],
           // Authentication is the qualified TNG verifier below; no public CA or
           // host-reported certificate metadata substitutes for attestation.

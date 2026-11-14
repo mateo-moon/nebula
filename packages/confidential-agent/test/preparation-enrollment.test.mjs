@@ -17,7 +17,7 @@ test("the preparation journal durably selects one digest-bound final instance", 
   assert.deepEqual(readFinalEnrollment(directory), checkpoint);
 }));
 test("an interrupted atomic journal commitment recovers its completed authority without reopening enrollment", () => temporary(directory => {
-  const temporary = join(directory, ".final-enrollment-11111111-1111-1111-1111-111111111111");
+  const temporary = join(directory, ".final-enrollment-aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa");
   writeFileSync(temporary, JSON.stringify(checkpoint), { mode: 0o600 }); linkSync(temporary, join(directory, "final-enrollment.json"));
   assert.deepEqual(readFinalEnrollment(directory), checkpoint);
   assert.throws(() => commitFinalEnrollment(directory, { ...checkpoint, transportPublicKey: "c".repeat(64) }, digest), /already enrolled/);

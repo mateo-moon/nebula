@@ -7,8 +7,8 @@ import { test } from "node:test";
 import { validateNetwork } from "../src/modules/k8s/trustee/genpolicy";
 
 const accepted = [
-  "^10[.]44[.][0-9]{1,3}[.][0-9]{1,3}$", "^(?:fd00|2001:db8):[0-9a-f:]+$",
-  "^[a-fA-F0-9:]{2,64}$", "^192\\.0\\.2\\.\\d{1,3}$", "^(10|192)[.][0-9.]+$", "^[^f:][0-9a-f:]*$",
+  "^198[.]51[.][0-9]{1,3}[.][0-9]{1,3}$", "^(?:fe80|2001:db8):[0-9a-f:]+$",
+  "^[a-fA-F0-9:]{2,64}$", "^192\\.0\\.2\\.\\d{1,3}$", "^(198|192)[.][0-9.]+$", "^[^f:][0-9a-f:]*$",
 ];
 const rejected = [
   "^[]$", "^[^]$", "^[[:digit:]]+$", "^[a-\\d]+$", "^[\\d-a]+$", "^[a-b-c]+$",
@@ -30,7 +30,7 @@ test("accepted CNI syntax compiles in real Go RE2 and agrees on literal IP addre
 import("encoding/json";"os";"regexp")
 func main(){ var in struct{Patterns []string; Addresses []string}; if err:=json.NewDecoder(os.Stdin).Decode(&in);err!=nil{panic(err)}; out:=[][]bool{}; for _,pattern:=range in.Patterns{re,err:=regexp.Compile(pattern);if err!=nil{panic(err)}; row:=[]bool{};for _,address:=range in.Addresses{row=append(row,re.MatchString(address))};out=append(out,row)};json.NewEncoder(os.Stdout).Encode(out) }
 `);
-  const addresses = ["10.44.0.1", "10.44.255.254", "192.0.2.1", "192.0.2.255", "fd00::1", "2001:db8::f", "FE80::1", "203.0.113.4"];
+  const addresses = ["198.51.100.1", "198.51.100.254", "192.0.2.1", "192.0.2.255", "fe80::1", "2001:db8::f", "FE80::1", "203.0.113.4"];
   const actual = JSON.parse(execFileSync("go", ["run", "main.go"], { cwd: directory, timeout: 45000,
     env: { ...process.env, GOTOOLCHAIN: "local", GOWORK: "off", GO111MODULE: "off" },
     input: JSON.stringify({ Patterns: accepted, Addresses: addresses }), encoding: "utf8" }));
