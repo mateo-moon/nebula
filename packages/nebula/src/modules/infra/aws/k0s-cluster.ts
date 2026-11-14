@@ -163,6 +163,8 @@ export interface AwsK0sClusterConfig {
    * ("internet-facing") to publish the API publicly.
    */
   controlPlaneLoadBalancerScheme?: AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme;
+  /** Allowed client CIDRs for the API listener. Include worker/controller egress; omitted preserves existing access. */
+  apiSourceRanges?: readonly string[];
   /**
    * CNI for the embedded k0s ClusterConfig (`spec.network.provider`). Defaults to
    * `"calico"` (k0s's bundled Calico), so the cluster self-bootstraps with a CNI
@@ -299,6 +301,7 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
       loadBalancerScheme:
         this.config.controlPlaneLoadBalancerScheme ??
         AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme.INTERNAL,
+      apiSourceRanges: this.config.apiSourceRanges,
       vpcCidr,
       networkProvider,
       calico,

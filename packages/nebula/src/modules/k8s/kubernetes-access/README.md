@@ -152,6 +152,22 @@ Deployment repositories own endpoint exposure, network policy, resource
 lifecycle and operational sequencing. Authentication configuration describes
 OIDC acceptance; Kubernetes system authentication remains a control-plane concern.
 
+## Native API network access
+
+`AwsK0sCluster.apiSourceRanges` restricts client CIDRs on the native API's load
+balancer listener. Its existing controller-join and konnectivity rules are
+preserved. Hosted clusters use `controlPlane.apiSourceRanges`, which writes the
+standard `Service.spec.loadBalancerSourceRanges` through k0smotron's Service
+patches and composes with `serviceAnnotations`.
+
+Supply IPv4 and/or IPv6 CIDRs covering every required worker, controller and
+automation egress address. A hosted Service's ranges apply to both its API and
+konnectivity listeners. Verify enforcement with the hosting load balancer
+implementation and actual client traffic before retiring recovery access.
+Omitting the setting retains existing access; empty or malformed lists fail
+synthesis. These settings preserve endpoint identities, machine templates and
+datastore configuration. Client-CA trust remains a separate control-plane policy.
+
 ## kubectl login
 
 `userKubeconfig()` produces a cluster-specific exec profile using
