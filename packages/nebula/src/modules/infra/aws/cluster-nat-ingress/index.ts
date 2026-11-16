@@ -10,6 +10,9 @@ export interface AwsClusterNatIngressConfig {
   awsClusterName: string;
   awsClusterNamespace?: string;
   awsClusterRegion?: string;
+  /** Additional Elastic IP managed-resource names in the destination region
+   * and AWS provider. Their current public addresses join the NAT sources. */
+  eipNames?: string[];
   /** Region and managed-resource name of the destination security group. */
   region: string;
   securityGroupName: string;
@@ -36,11 +39,13 @@ export class AwsClusterNatIngress extends Construct {
   constructor(scope: Construct, id: string, config: AwsClusterNatIngressConfig) {
     super(scope, id);
     const names = [config.name, config.awsClusterName, config.awsClusterNamespace ?? "default", config.securityGroupName,
-      ...(config.existingRuleNames ?? [])];
+      ...(config.existingRuleNames ?? []), ...(config.eipNames ?? [])];
     if (names.some(name => !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(name) || name.length > 63) || config.name.length > 40)
       throw new Error("NAT ingress requires DNS resource names; the XR prefix must be at most 40 characters");
     if (new Set(config.existingRuleNames).size !== (config.existingRuleNames ?? []).length)
       throw new Error("NAT ingress adoption names must be unique");
+    if ((config.eipNames?.length ?? 0) > 32 || new Set(config.eipNames).size !== (config.eipNames ?? []).length)
+      throw new Error("NAT ingress accepts at most 32 unique EIP names");
     if (Boolean(config.existingRuleNames?.length) !== Boolean(config.handoff))
       throw new Error("Existing NAT ingress rules require an explicit retain/activate handoff");
     if (config.handoff && !["retain", "activate"].includes(config.handoff))
@@ -76,7 +81,10 @@ export class AwsClusterNatIngressSetup extends Construct {
             spec: { type: "object", required: ["name", "awsClusterName", "awsClusterNamespace", "awsClusterRegion", "region",
               "securityGroupName", "ipProtocol", "fromPort", "toPort", "description", "existingRuleNames", "awsProviderConfigName", "kubeProviderConfigName"],
               properties: { name: { ...string, maxLength: 40 }, awsClusterName: string, awsClusterNamespace: string, awsClusterRegion: string,
-                region: string, securityGroupName: string, ipProtocol: { type: "string", enum: ["tcp", "udp"] },
+                region: string, securityGroupName: string,
+                eipNames: { type: "array", maxItems: 32, "x-kubernetes-list-type": "set",
+                  items: { ...string, maxLength: 63, pattern: "^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$" } },
+                ipProtocol: { type: "string", enum: ["tcp", "udp"] },
                 fromPort: { type: "integer", minimum: 1, maximum: 65535 }, toPort: { type: "integer", minimum: 1, maximum: 65535 },
                 description: { type: "string" }, existingRuleNames: { type: "array", items: string, "x-kubernetes-list-type": "set" },
                 handoff: { type: "string", enum: ["retain", "activate"] },

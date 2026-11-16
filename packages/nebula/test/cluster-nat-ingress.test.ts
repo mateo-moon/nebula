@@ -208,6 +208,83 @@ test("new fleets create deterministic NAT rules without adoption", () => {
   assert.deepEqual(first, rules(render({ cluster }, fresh)));
 });
 
+function elasticIp(name: string, ip: string) {
+  return observer({ apiVersion: "ec2.aws.upbound.io/v1beta1", kind: "EIP",
+    metadata: { name, generation: 1, annotations: { "crossplane.io/external-name": "eipalloc-0123" } },
+    spec: { forProvider: { region: "eu-central-1" }, providerConfigRef: { name: "default" } },
+    status: { conditions: structuredClone(conditions), atProvider: { id: "eipalloc-0123", region: "eu-central-1", publicIp: ip } } });
+}
+
+test("optional EIP sources reuse the native rules and remove replaced or deselected addresses", () => {
+  const fresh = structuredClone(xr);
+  fresh.spec.existingRuleNames = [];
+  delete fresh.spec.handoff;
+  fresh.spec.eipNames = ["worker-a", "worker-b"];
+  const sources = { cluster, "eip-worker-a": elasticIp("worker-a", "192.0.2.99"),
+    "eip-worker-b": elasticIp("worker-b", "192.0.2.20") };
+  const first = render(sources, fresh);
+  assert.equal(rules(first).length, 4, "a NAT/EIP overlap grants only one /32");
+  assert.ok(rules(first).every(rule => rule.spec.forProvider.securityGroupIdRef.name === "worker-sg"));
+  assert.deepEqual(rules(first), rules(render(sources, { ...fresh, spec: { ...fresh.spec, eipNames: [...fresh.spec.eipNames].reverse() } })));
+  assert.deepEqual(first.filter(r => r.kind === "Object").map(r => r.metadata.annotations[annotation]).sort(),
+    ["cluster", "eip-worker-a", "eip-worker-b"]);
+  const replacement = { ...sources, "eip-worker-a": elasticIp("worker-a", "192.0.2.100") };
+  const changed = render({ ...replacement, ...current(first) }, fresh);
+  assert.ok(rules(changed).some(rule => rule.spec.forProvider.cidrIpv4 === "192.0.2.100/32"));
+  assert.ok(!rules(changed).some(rule => rule.spec.forProvider.cidrIpv4 === "192.0.2.99/32"));
+  const removed = render({ cluster, ...current(changed) }, { ...fresh, spec: { ...fresh.spec, eipNames: [] } });
+  assert.deepEqual(rules(removed).map(rule => rule.spec.forProvider.cidrIpv4).sort(),
+    ["192.0.2.10/32", "192.0.2.20/32", "192.0.2.30/32"]);
+});
+
+test("invalid EIP observations hold the last native rules and never widen access", () => {
+  const fresh = structuredClone(xr);
+  fresh.spec.existingRuleNames = [];
+  delete fresh.spec.handoff;
+  fresh.spec.eipNames = ["worker-a"];
+  const sources = { cluster, "eip-worker-a": elasticIp("worker-a", "192.0.2.99") };
+  const previous = current(render(sources, fresh));
+  for (const mutate of [
+    (source: any) => { delete source["eip-worker-a"]; },
+    (source: any) => { source["eip-worker-a"].resource.status.conditions[1].status = "False"; },
+    ...[
+      (eip: any) => { eip.metadata.name = "foreign"; },
+      (eip: any) => { eip.metadata.deletionTimestamp = "2026-01-01T00:00:00Z"; },
+      (eip: any) => { eip.metadata.generation = 2; },
+      (eip: any) => { eip.metadata.annotations["crossplane.io/external-name"] = "eipalloc-ffff"; },
+      (eip: any) => { eip.spec.providerConfigRef.name = "foreign-account"; },
+      (eip: any) => { eip.status.atProvider.region = "us-east-1"; },
+      (eip: any) => { eip.status.conditions[0].status = "False"; },
+      ...["", "0.0.0.0/0", "127.0.0.1", "192.0.2.01", "999.1.2.3"].map(ip => (eip: any) => { eip.status.atProvider.publicIp = ip; }),
+    ].map(change => (source: any) => change(source["eip-worker-a"].resource.status.atProvider.manifest)),
+  ]) {
+    const missing = structuredClone(sources);
+    mutate(missing);
+    assert.equal(rules(render(missing, fresh)).length, 0);
+    const retained = render({ ...missing, ...previous }, fresh);
+    assert.equal(statusOf(retained).sourcesReady, false);
+    assert.deepEqual(rules(retained).map(r => r.spec), Object.values(previous).map((r: any) => r.resource.spec));
+    assert.ok(retained.filter(r => r.kind !== fresh.kind).every(r => r.metadata.annotations["gotemplating.fn.crossplane.io/ready"] === "False"));
+  }
+});
+
+test("EIP inputs are optional, bounded named references on the existing ingress API", () => {
+  const base = { name: "worker-api", awsClusterName: "management", region: "eu-central-1",
+    securityGroupName: "worker-sg", fromPort: 6443, description: "Worker API" };
+  const chart = Testing.chart();
+  new AwsClusterNatIngress(chart, "without-eips", base);
+  assert.equal(Testing.synth(chart)[0].spec.eipNames, undefined);
+  for (const eipNames of [["worker-a", "worker-a"], ["not a name"], Array.from({ length: 33 }, (_, i) => `worker-${i}`)])
+    assert.throws(() => new AwsClusterNatIngress(Testing.chart(), "bad", { ...base, eipNames }));
+  const schemaChart = Testing.chart();
+  new AwsClusterNatIngressSetup(schemaChart, "setup");
+  const objects = Testing.synth(schemaChart);
+  assert.deepEqual(objects.map(o => o.kind), ["CompositeResourceDefinition", "Composition"]);
+  const spec = objects[0].spec.versions[0].schema.openAPIV3Schema.properties.spec;
+  assert.ok(!spec.required.includes("eipNames"));
+  assert.equal(spec.properties.eipNames.maxItems, 32);
+});
+
 test("missing, unhealthy, foreign or mismatched sources fail closed while preserving owned rules", () => {
   for (const mutate of [
     (observed: any) => { delete observed.cluster; },

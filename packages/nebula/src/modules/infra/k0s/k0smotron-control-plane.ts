@@ -65,6 +65,9 @@ export type K0smotronControlPlanePersistence =
     };
 
 export interface K0smotronControlPlaneConfig extends K0sApiOptions {
+  /** Explicit listener ports; omitted preserves k0smotron's own defaults. */
+  apiPort?: number;
+  konnectivityPort?: number;
   /** Datastore configuration passed through to k0smotron. */
   storage?: K0SmotronControlPlaneV1Beta2SpecStorage;
   /** CR name (the CAPI `Cluster.spec.controlPlaneRef.name`). */
@@ -158,6 +161,10 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
   public readonly resource: K0smotronControlPlaneV1Beta2;
   constructor(scope: Construct, id: string, config: K0smotronControlPlaneConfig) {
     super(scope, id, config);
+    for (const port of [this.config.apiPort, this.config.konnectivityPort]) {
+      if (port !== undefined && (!Number.isInteger(port) || port < 1 || port > 65535))
+        throw new Error("Hosted API listener ports must be integers from 1 to 65535");
+    }
 
     const namespace = this.config.namespace ?? "default";
     const k8sVersion = this.config.k8sVersion ?? "v1.31.8";
@@ -266,6 +273,8 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
         },
         persistence,
         service: {
+          ...(this.config.apiPort !== undefined ? { apiPort: this.config.apiPort } : {}),
+          ...(this.config.konnectivityPort !== undefined ? { konnectivityPort: this.config.konnectivityPort } : {}),
           type:
             this.config.serviceType ??
             K0SmotronControlPlaneV1Beta2SpecServiceType.LOAD_BALANCER,
