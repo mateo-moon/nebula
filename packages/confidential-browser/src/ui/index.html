@@ -73,10 +73,14 @@
       <p id="security-description">The loader verified the AMD certificate chain, fresh hardware report and approved native workload policy before running this interface.</p><dl id="security-values"></dl>
       <details><summary>What verification checks</summary><ul class="security-checks"><li>AMD-signed SNP report and fresh challenge</li><li>Exact VM and native genpolicy measurements</li><li>Debug and migration disabled; minimum TCB checked</li><li>Enrolled transport keys checked before sending secrets</li><li>Owner-signed administration after the one-time claim</li><li>Browser-side image encryption</li><li>No usable image key in the preparation VM</li><li>No image or disk keys in Kubernetes</li></ul></details>
       <details id="frontend-proof" hidden><summary>Frontend TLS and your independent check</summary><pre id="frontend-certificate"></pre></details>
+      <!-- CERTIFICATE_GUIDE -->
       <details><summary>Preparation attestation details</summary><pre id="preparation-attestation"></pre></details>
       <details><summary>Final workload attestation details</summary><pre id="final-attestation">Available after encrypted image publication and final-VM verification.</pre></details>
       <details><summary>Protection and limits</summary><p id="trust-limits" class="hint">The independent loader release origin, your browser and this reviewed preparation software are trusted. Administrators can deny service or claim first; that is detected before your image is uploaded. An enrolled VM replacement requires explicit recovery. There is no global singleton or disk rollback guarantee.</p></details>
       <button id="download-verification" type="button" class="secondary">Download verification record</button>
+      <p class="hint">Exports the available certificate and attestation evidence at this moment. This does not run a new verification and is separate from your encrypted owner recovery backup.</p>
+      <p id="verification-download-status" role="status" aria-live="polite" aria-atomic="true"></p>
+      <a id="verification-download-retry" class="verification-download-retry" hidden>Download this record again</a>
       <details><summary>Local browser storage</summary><p class="hint">The ciphertext cache helps resume an upload. Keep your original archive and latest encrypted recovery backup before clearing it.</p><button id="clear-local-cache" type="button" class="secondary">Clear local ciphertext cache</button></details>
     </section>
   </aside></div>

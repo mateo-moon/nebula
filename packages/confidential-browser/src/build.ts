@@ -5,13 +5,19 @@ import { resolve, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const output = resolve("dist");
+const certificateGuide = readFileSync("src/certificate-guide.html", "utf8");
+function page(source: string): string {
+  const template = readFileSync(source, "utf8"), marker = "<!-- CERTIFICATE_GUIDE -->";
+  if (template.split(marker).length !== 2) throw new Error(`Certificate guide must appear exactly once in ${source}`);
+  return template.replace(marker, certificateGuide);
+}
 mkdirSync(join(output, "ui"), { recursive: true });
 const encryptionWorker = await build({ entryPoints: ["src/ui/encryption-worker.ts"], bundle: true, platform: "browser", format: "iife", target: "es2022", write: false });
 // Include the worker in the already attested asset. No CDN or separately
 // fetched executable is introduced.
 await build({ entryPoints: ["src/ui/main.ts"], bundle: true, platform: "browser", format: "iife", target: "es2022", outfile: join(output, "ui/app.js"),
   define: { NEBULA_IMAGE_WORKER: JSON.stringify(encryptionWorker.outputFiles[0].text) } });
-cpSync("src/ui/index.html", join(output, "ui/index.html"));
+writeFileSync(join(output, "ui/index.html"), page("src/ui/index.html"));
 cpSync("../confidential-client/src/ui/style.css", join(output, "ui/style.css"));
 writeFileSync(join(output, "ui/manifest.json"), JSON.stringify({ version: 1, assets: ["index.html", "app.js", "style.css"].map(name => ({
   path: "/ui/" + name, sha256: createHash("sha256").update(readFileSync(join(output, "ui", name))).digest("hex"),
@@ -20,7 +26,7 @@ writeFileSync(join(output, "ui/manifest.json"), JSON.stringify({ version: 1, ass
 if (process.env.TNG_WASM_PATH) {
   mkdirSync(join(output, "loader"), { recursive: true });
   await build({ entryPoints: ["src/loader/main.ts"], bundle: true, platform: "browser", format: "esm", target: "es2022", outfile: join(output, "loader/loader.js") });
-  cpSync("src/loader/index.html", join(output, "loader/index.html"));
+  writeFileSync(join(output, "loader/index.html"), page("src/loader/index.html"));
   cpSync("src/loader/coi.js", join(output, "loader/coi.js"));
   cpSync("../confidential-client/src/ui/style.css", join(output, "loader/bootstrap.css"));
   const sdk = resolve(process.env.TNG_WASM_PATH);

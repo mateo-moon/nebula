@@ -5,7 +5,7 @@ The browser interface can be served from a measured SEV-SNP guest through TNG. N
 ## User
 
 1. Open the endpoint supplied by DevOps. Its self-signed certificate may produce a browser warning; accepting that warning alone does not verify attestation.
-2. Export the certificate through the browser's own certificate viewer. Independently verify its AMD evidence, approved VM/native workload-policy measurements and binding to the certificate's public key. Obtain those expected measurements from an independently trusted release or review. Checking another connection to the same address alone is insufficient.
+2. Export the certificate through the browser's own certificate viewer and follow [Check the browser's certificate](#check-the-browsers-certificate). Independently verify its AMD evidence, approved VM/native workload-policy measurements and binding to the certificate's public key. Obtain those expected measurements from an independently trusted release or review. Checking another connection to the same address alone is insufficient.
 3. Confirm that independent check in the page. Enter the separately supplied one-time access token and an owner/recovery password of at least 12 characters. The page's certificate checker is available for convenience; it cannot authenticate its own initial JavaScript.
 4. Choose a local `linux/amd64` Docker save archive within the limit shown by the verified stack. Review the complete application command, arguments and environment. Image defaults are used unless you separately approve the displayed overrides. Type the registry host you independently trust for your credentials, then enter push credentials, supply any requested existing disk key, and select **Encrypt & deploy**. Keep the latest encrypted recovery backup and its password.
 5. Check **Data readiness**. It shows whether the required secrets are available, each encrypted disk is unlocked, and the application process is running. Application health remains separate: use the application's own health endpoint to check that it works.
@@ -17,6 +17,44 @@ The browser encrypts image layers locally in a worker using the native OCIcrypt 
 Returning users repeat the certificate check, then unlock their password-encrypted browser vault or restore the latest encrypted recovery file. This mode stores no usable signing or wrapping keys in browser storage. Once the image is published, the page hides the upload and registry fields. Use **Verify again & refresh status** to continue or check the same release; it does not require republishing. Saved progress is distinct from current readiness, and failed checks leave previous observations labelled as such. The downloadable verification record contains the attestation and enrollment results. A saved owner that has not generated any release keys can resume setup with its original preparation instance. Current recovery files can resume before the final pin is saved by consulting the owner-authenticated journal in the same pinned preparation VM. The journal commits the first final instance before any claim or key release and refuses replacements. Older recovery files without this protocol or a final pin still fail closed; loss of the preparation VM cannot reset that trust.
 
 New setup accepts only the preparation release reviewed with the current frontend. Earlier approved releases remain available solely to recover an existing saved preparation pin, with the same instance-key and owner checks. A server response or routing URL cannot enable legacy fallback for a new owner. The current preparation service and client also require the current reviewed final-workload runtime for a new binding; historical runtime profiles cannot authorize a new deployment.
+
+## Check the browser's certificate
+
+Use the certificate viewer for the **same tab that will receive your secrets**. Export its leaf/site certificate as DER or PEM, rather than its issuer or a chain. Chrome and Edge expose it in DevTools → Security → View certificate; Firefox exposes it through the site's connection details → More information → View Certificate. See the official [Chrome](https://developer.chrome.com/docs/devtools/security), [Edge](https://learn.microsoft.com/en-us/microsoft-edge/devtools/security/) and [Firefox](https://support.mozilla.org/en-US/kb/secure-website-certificate) guides. If an embedded view cannot show its certificate, open the portal in a browser that can and verify that connection.
+
+Read a DER export's SHA-256 fingerprint and validity:
+
+```sh
+openssl x509 -inform DER -in browser-leaf.der \
+  -noout -fingerprint -sha256 -dates
+```
+
+For PEM, omit `-inform DER` and use your PEM filename. Add `-text` to inspect the X.509 fields and extensions. This reads certificate data; it does **not** verify the embedded AMD evidence. The certificate fingerprint hashes the entire DER certificate. The TLS public-key fingerprint hashes its DER SubjectPublicKeyInfo (SPKI), so those two values differ. Certificate renewal can change the certificate fingerprint while retaining its public key. The OHTTP instance pin is a separate transport-key field.
+
+Use your own trusted verifier, or obtain a reviewed TNG build through the [native verifier build guide](../../tools/tng-client/README.md). Verify its source, workflow and artifact checksums independently. Do not obtain the verifier or its expected policy solely from the page being checked. An approved `approved-verify.json` uses this built-in CoCo configuration, with the base64-encoded Rego policy approved for the deployment:
+
+```json
+{
+  "model": "background_check",
+  "as_provider": "coco",
+  "as_type": "builtin",
+  "attestation_policy": { "type": "inline", "content": "BASE64_OF_THE_INDEPENDENTLY_APPROVED_POLICY" },
+  "reference_values": []
+}
+```
+
+The policy must enforce the approved SNP launch measurement, native workload-policy digest (`HOST_DATA` / `init_data`), minimum reported TCB, and disabled debug and migration; pin chip identity where required. TNG also verifies the AMD evidence and its binding to the certificate's public key. Run the reviewed native tool against the exported certificate:
+
+```sh
+tng tools rats-tls verify --cert browser-leaf.der \
+  --verify "$(cat approved-verify.json)"
+```
+
+The same command accepts PEM. `--verify` takes JSON text, not a filename. The built-in verifier needs no external Trustee; it may fetch public AMD endorsements. Success exits with code 0 and prints `verified OK` followed by an attestation-result JWT. Stop on any error or nonzero exit. Decoding a JWT makes its claims readable; decoding alone does not verify its signature, key binding or policy.
+
+The page's checker and `/certificate.der` download are conveniences. Verify the browser-exported bytes. If you use a reported download instead, first compare its complete certificate fingerprint with this tab's actual leaf. Matching the public-key fingerprint alone is not a full attestation check. A fresh nonce does not establish trust in JavaScript displaying its own result. Enter tokens, passwords and registry credentials only after the independent check succeeds. Keep the verification record for review; it does not replace your encrypted recovery backup.
+
+Select **Download verification record**, then check your browser's Downloads for `nebula-verification.json`. The page confirms that the download was requested and keeps **Download this record again** visible for retries. This link downloads the same snapshot; use the button to prepare a new one. Its `checkedAt` is the export time, and its preparation/final evidence is the most recent available result. Exporting does not run a fresh attestation. Use **Verify again & refresh status** first when you need a new final-workload check.
 
 ## Administrator
 

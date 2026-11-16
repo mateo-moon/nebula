@@ -6,6 +6,7 @@ import { checkedSupervisors, storageClientsRunning, checkedStorageRecovery } fro
 import { prepareLocalImage, uploadEncryptedImage, removeCipherCache } from "./upload";
 import { summarizeStorage, renderStorageOverview, type StorageSummary } from "@nebula/confidential-client/storage-overview";
 import { readinessSummary, type StatusLabel } from "./readiness";
+import { verificationDownload } from "./verification-download";
 import type { SupervisorReport } from "./storage-status";
 const api = window.nebula, owner = api.owner;
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id)! as T;
@@ -145,7 +146,11 @@ const jwtPayload = (jwt: string) => JSON.parse(new TextDecoder().decode(bytes(jw
 function evidence() {
   const value = { version: 1, checkedAt: new Date().toISOString(), frontend: api.manualTls ? {
     authentication: "User acknowledged an independent check of the browser certificate; this page cannot prove its own initial authenticity",
-    reportedCertificate: api.manualTls,
+    reportedCertificate: {
+      version: api.manualTls.version, certificateDer: api.manualTls.certificateDer,
+      certificateSha256: api.manualTls.certificateSha256, publicKeySha256: api.manualTls.publicKeySha256,
+      notBefore: api.manualTls.notBefore, notAfter: api.manualTls.notAfter, provenance: api.manualTls.provenance,
+    },
   } : undefined, preparation: {
     expected: api.channel.identity, transportPublicKey: api.channel.pin,
     imageUpload: imageLimits,
@@ -161,17 +166,15 @@ function evidence() {
   if (value.final) text("final-attestation", JSON.stringify(value.final, null, 2));
   return value;
 }
-function download(name: string, value: unknown) {
+function downloadRecovery(name: string, value: unknown) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: "application/json" }));
   const a = document.createElement("a"); a.href = url; a.download = name;
-  if (name.startsWith("nebula-owner-recovery")) {
-    if (recoveryUrl) URL.revokeObjectURL(recoveryUrl);
-    recoveryUrl = url;
-    document.getElementById("recovery-download")?.remove();
-    a.id = "recovery-download"; a.className = "secondary";
-    a.textContent = name.includes("updated") ? "Download updated encrypted recovery backup" : "Download encrypted recovery backup";
-    el("deploy-form").after(a);
-  } else setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  if (recoveryUrl) URL.revokeObjectURL(recoveryUrl);
+  recoveryUrl = url;
+  document.getElementById("recovery-download")?.remove();
+  a.id = "recovery-download"; a.className = "secondary";
+  a.textContent = name.includes("updated") ? "Download updated encrypted recovery backup" : "Download encrypted recovery backup";
+  el("deploy-form").after(a);
   a.click();
 }
 function failure(error: unknown) {
@@ -468,7 +471,7 @@ el("deploy-form").addEventListener("submit", event => {
     await api.save();
     selectionChecklist();
     let recoveryPassword = input("recovery-password").value;
-    download("nebula-owner-recovery.json", await api.backup(recoveryPassword)); input("recovery-password").value = "";
+    downloadRecovery("nebula-owner-recovery.json", await api.backup(recoveryPassword)); input("recovery-password").value = "";
     try {
     completed.clear();
     progress("encrypting", "Encrypting image locally in your browser…");
@@ -479,7 +482,7 @@ el("deploy-form").addEventListener("submit", event => {
     const local = await prepareLocalImage(archive, owner.imageKey, `kbs:///${connection.workload.spec.containers[0].imageKeyResource.join("/")}`,
       imageLimits, owner.encryptedImage, (done, total) => progress("encrypting", `Encrypting locally: ${imageSizeLabel(done)} / ${imageSizeLabel(total)} (${Math.floor(done * 100 / total)}%)`), owner.cipherCacheAttempt);
     owner.encryptedImage = local.cache; delete owner.cipherCacheAttempt; await api.save();
-    download("nebula-owner-recovery-updated.json", await api.backup(recoveryPassword));
+    downloadRecovery("nebula-owner-recovery-updated.json", await api.backup(recoveryPassword));
     await uploadEncryptedImage(local.image, imageLimits,
       (path, method, body, headers) => request(api.channel, path, method, body, "nebula-browser", headers),
       (sent, total) => progress("encrypting", `Uploading encrypted layers: ${imageSizeLabel(sent)} / ${imageSizeLabel(total)} (${Math.floor(sent * 100 / total)}%)`));
@@ -507,7 +510,7 @@ el("deploy-form").addEventListener("submit", event => {
     }
     await provision(); busy = false;
     } finally {
-      if (owner.prepared || owner.finalPin) download("nebula-owner-recovery-updated.json", await api.backup(recoveryPassword));
+      if (owner.prepared || owner.finalPin) downloadRecovery("nebula-owner-recovery-updated.json", await api.backup(recoveryPassword));
       recoveryPassword = "";
     }
   })().catch(failure);
@@ -552,7 +555,7 @@ el("clear-local-cache").addEventListener("click", () => {
     el("notice").hidden = false;
   })().catch(failure);
 });
-el("download-verification").addEventListener("click", () => download("nebula-verification.json", evidence()));
+el("download-verification").addEventListener("click", verificationDownload(el("verification-download-status"), el<HTMLAnchorElement>("verification-download-retry"), evidence));
 el("deploy-form").addEventListener("input", selectionChecklist);
 el("deploy-form").addEventListener("change", selectionChecklist);
 unconfirmedReadiness();

@@ -6,6 +6,7 @@
 <p>This page is served from the confidential guest through TNG. Your browser does not automatically check remote attestation. Accepting its certificate warning alone does not establish trust.</p>
 <ol><li>Open the browser's own certificate viewer and export the certificate for this page.</li><li>Use an independent verifier to check the AMD evidence, approved VM/workload measurements and the binding to that certificate's public key.</li><li>Continue only after that check. Recheck a changed certificate or guest key.</li></ol>
 <p class="hint">The checker below is provided by this page for convenience. Its result cannot independently authenticate the page's own JavaScript. Obtain expected measurements from a release or policy you independently trust.</p>
+<!-- CERTIFICATE_GUIDE -->
 <details><summary>Certificate reported by the guest</summary><pre id="tls-details"></pre><a href="/certificate.der" download="guest-certificate.der">Download reported certificate</a><p class="hint">Compare with the browser-exported certificate. A server-provided download alone does not prove which certificate your browser received.</p></details>
 <details><summary>Convenience certificate checker</summary><form id="certificate-check">
 <label>Certificate exported by your browser<input id="browser-certificate" type="file" accept=".der,.cer,.crt,.pem"></label>

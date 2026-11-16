@@ -253,3 +253,65 @@ h4 {
     grid-template-columns:85px minmax(0,1fr)
   }
 }
+/* Shared, static certificate instructions in the loader and connected UI. */
+.certificate-guide {
+  line-height:1.7
+}
+.certificate-guide ol {
+  list-style:decimal;
+  margin:14px 0;
+  padding-left:21px
+}
+.certificate-guide li {
+  display:list-item;
+  min-height:0;
+  margin:12px 0;
+  color:#546174;
+  font-size:12px
+}
+.certificate-guide li:after {
+  display:none
+}
+.certificate-guide p {
+  font-size:12px;
+  line-height:1.7;
+  margin:9px 0
+}
+.certificate-guide code {
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:11px
+}
+.certificate-guide pre {
+  max-height:none;
+  white-space:pre;
+  word-break:normal;
+  overflow-wrap:normal
+}
+.certificate-guide a {
+  color:#8d1056;
+  text-underline-offset:3px
+}
+.certificate-guide-links {
+  font-size:11px!important
+}
+.verification-download-retry {
+  display:inline-block;
+  margin-top:9px;
+  color:#8d1056;
+  font-size:12px;
+  font-weight:600;
+  text-decoration:underline;
+  text-underline-offset:3px
+}
+.verification-download-retry:focus-visible {
+  outline:3px solid #f2a6ce;
+  outline-offset:3px;
+  text-decoration-thickness:2px
+}
+.verification-download-retry[hidden] {
+  display:none
+}
+.certificate-guide a:focus-visible {
+  outline:3px solid #f2a6ce;
+  outline-offset:3px
+}

@@ -116,6 +116,7 @@ const UPSTREAM_DOMAINS = [
   "accounts.google.com", "developers.google.com", "docs.cloud.google.com", // Public Google issuer and OAuth documentation; OAuth client IDs remain deployment bindings.
   "support.google.com", // Public OAuth client-management guidance.
   "support.apple.com", "support.mozilla.org", // Public browser and certificate trust guidance.
+  "developer.chrome.com", // Public Chrome certificate-viewer documentation.
   "gcr.io", "pkg.dev", "k8s.io", "kubernetes.io", "x-k8s.io", "json-schema.org", "w3.org", "ietf.org",
   "rfc-editor.org", "iana.org", "spdx.org", "apache.org", "opencontainers.org", "confidentialcontainers.org",
   "katacontainers.io", "amd.com", "intel.com", "asus.com", "trustedcomputinggroup.org", "crossplane.io", "upbound.io",

@@ -16,9 +16,15 @@ async function deployment(restored = false, rejectedConnection = false, options:
   pendingCheckpoint?: "running" | "failed";
   missingResource?: boolean; missingDisk?: "audit" | "all" | "resource-names";
   supervisorPhase?: "starting" | "running" | "backoff" | "stopped";
+  manualTls?: Record<string, unknown>; attestationFixtures?: boolean;
 } = {}) {
+  const blobs = new Map<string, Blob>(), activeUrls = new Set<string>();
+  const anchorClicks: { href: string; download: string; connected: boolean }[] = [];
+  const revocations: { url: string; retryHref: string; retryConnected: boolean }[] = [];
+  let failObjectUrl = false, failRetryClick = false, urlSequence = 0;
   class Element {
     id = ""; value = ""; private ownText = ""; hidden = false; disabled = false;
+    href = ""; download = ""; isConnected = false;
     children: Element[] = [];
     get ownerDocument() { return document; }
     get textContent(): string { return this.ownText + this.children.map(child => child.textContent).join(""); }
@@ -31,17 +37,26 @@ async function deployment(restored = false, rejectedConnection = false, options:
     setAttribute(name: string, value: string) { this.attributes.set(name, value); }
     removeAttribute(name: string) { this.attributes.delete(name); }
     addEventListener(name: string, listener: (event: { preventDefault(): void }) => void) { this.listeners.set(name, listener); }
-    click() { this.listeners.get("click")?.({ preventDefault() {} }); }
+    click() {
+      if (this.id === "verification-download-retry" && failRetryClick) {
+        failRetryClick = false; throw new Error("private retry click error sentinel");
+      }
+      if (this.href) anchorClicks.push({ href: this.href, download: this.download, connected: this.isConnected });
+      this.listeners.get("click")?.({ preventDefault() {} });
+    }
     append(...children: Element[]) { this.children.push(...children); }
     replaceChildren(...children: Element[]) { this.ownText = ""; this.children = children; }
-    after() {} remove() {} querySelectorAll() { return []; }
+    after(...nodes: Element[]) { for (const node of nodes) { node.isConnected = this.isConnected; if (node.id) elements.set(node.id, node); } }
+    remove() { this.isConnected = false; if (elements.get(this.id) === this) elements.delete(this.id); }
+    querySelectorAll() { return []; }
   }
   const elements = new Map<string, Element>();
   const el = (id: string) => {
-    if (!elements.has(id)) elements.set(id, Object.assign(new Element(), { id }));
+    if (!elements.has(id)) elements.set(id, Object.assign(new Element(), { id, isConnected: true }));
     return elements.get(id)!;
   };
   el("inspect").hidden = true; el("reviewed").checked = true;
+  el("verification-download-retry").hidden = true;
   el("final-status").textContent = "Final workload pending";
   el("archive").files = [new Blob(["test-only local image"])];
   el("approved-registry").value = "ghcr.io";
@@ -73,7 +88,9 @@ async function deployment(restored = false, rejectedConnection = false, options:
   const phases = ["encrypting", "measuring", "waiting", "attesting", "provisioning", "ready"];
   const steps = phases.map(phase => { const step = el("step-" + phase); step.dataset.phase = phase; return step; });
   const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
-  const channel = { identity: {}, pin: "a".repeat(64), request: async (path: string, init?: RequestInit) => {
+  const attestation = (role: string) => ({ attestation_result: "fixture." + Buffer.from(JSON.stringify({ role, verdict: "affirming" })).toString("base64url") + ".signature" });
+  const channel = { identity: {}, pin: "a".repeat(64), lastAttestation: options.attestationFixtures ? attestation("preparation") : undefined,
+    request: async (path: string, init?: RequestInit) => {
     if (path === "/nebula/v1/browser") return response({ finalEnrollmentJournal: 1, imageUpload: imageUploadLimits(), imageEncryption: { protocol: "oci-encrypted-v2", location: "owner-browser", preparationReceivesImageKey: false } });
     if (path === "/nebula/v1/connection") return response(connection, rejectedConnection ? 400 : 200);
     if (path === "/nebula/v1/enrollment") {
@@ -90,7 +107,8 @@ async function deployment(restored = false, rejectedConnection = false, options:
       { state: "failed", phase: options.preparationFailure, error: "test-only preparation failure" } : { state: "ready", result: prepared } : { state: "idle" });
     throw new Error("Unexpected preparation request: " + path);
   } };
-  const final = { identity: {}, pin: "b".repeat(64), request: async (path: string, init: RequestInit = {}) => {
+  const final = { identity: {}, pin: "b".repeat(64), lastAttestation: options.attestationFixtures ? attestation("final") : undefined,
+    request: async (path: string, init: RequestInit = {}) => {
     finalAttempts++;
     if (!available) { now += 900_001; throw new Error("Test control plane is offline"); }
     if (path.startsWith("/kbs/v0/resource/") && init.method === "POST") {
@@ -111,14 +129,29 @@ async function deployment(restored = false, rejectedConnection = false, options:
       manifestDigest: prepared.digest, layers: [{ digest: "sha256:" + "e".repeat(64), name: "layer-0.enc", size: 1, file: new Blob(["x"]) }] } } })); }
     terminate() {}
   }
-  class Clock extends Date { static now() { return now; } }
+  class Clock extends Date {
+    constructor(value?: string | number | Date) { super(value instanceof Date ? value.getTime() : value ?? now); }
+    static now() { return now; }
+  }
+  const timers: { at: number; callback: () => void }[] = [];
   const document = { getElementById: el, querySelectorAll: (selector: string) => selector === "[data-phase]" ? steps : [], createElement: () => new Element() };
   runInNewContext(bundle.outputFiles[0].text, { window: { nebula: { owner, channel, target: "https://prep.example",
-    finalChannel: (_origin: string, _identity: unknown, pin?: string) => { if (pin && pin !== final.pin) throw new Error("The enrolled final transport key changed"); return final; }, save: async () => {}, backup: async () => ({}), jwt: async () => "test-owner-proof" } },
+    finalChannel: (_origin: string, _identity: unknown, pin?: string) => { if (pin && pin !== final.pin) throw new Error("The enrolled final transport key changed"); return final; }, save: async () => {}, backup: async () => ({}), jwt: async () => "test-owner-proof",
+    ...(options.manualTls ? { manualTls: options.manualTls } : {}) } },
     document, crypto: webcrypto, TextEncoder, TextDecoder, Blob, Response, atob, btoa, Date: Clock, Worker: LocalWorker,
     navigator: { storage: { getDirectory: async () => ({ removeEntry: async () => {} }) } },
-    URL: { createObjectURL: () => "blob:test-backup", revokeObjectURL() {} },
-    setTimeout: (resolve: () => void, ms: number) => { now += ms; queueMicrotask(resolve); } });
+    URL: {
+      createObjectURL: (blob: Blob) => {
+        if (failObjectUrl) { failObjectUrl = false; throw new Error("private object URL error sentinel"); }
+        const url = "blob:test-" + ++urlSequence; blobs.set(url, blob); activeUrls.add(url); return url;
+      },
+      revokeObjectURL: (url: string) => { revocations.push({ url, retryHref: el("verification-download-retry").href,
+        retryConnected: el("verification-download-retry").isConnected }); activeUrls.delete(url); },
+    },
+    setTimeout: (resolve: () => void, ms: number) => {
+      if (ms >= 10_000) timers.push({ at: now + ms, callback: resolve });
+      else { now += ms; queueMicrotask(resolve); }
+    } });
   const wait = async (predicate: () => boolean) => {
     const deadline = Date.now() + 10_000;
     do {
@@ -135,6 +168,13 @@ async function deployment(restored = false, rejectedConnection = false, options:
     await wait(() => !el("notice").hidden && el("notice").textContent.length > 0);
   }
   return { owner, el, wait, steps,
+    downloads: { blobs, activeUrls, anchorClicks, revocations, failNextObjectUrl() { failObjectUrl = true; },
+      failNextRetryClick() { failRetryClick = true; } },
+    advanceClock(ms: number) {
+      now += ms;
+      for (let index = timers.length - 1; index >= 0; index--) if (timers[index].at <= now) timers.splice(index, 1)[0].callback();
+    },
+    changeAttestations() { channel.lastAttestation = attestation("preparation-refreshed"); final.lastAttestation = attestation("final-refreshed"); },
     completed: () => phases.filter((_, index) => steps[index].classes.has("done")),
     active: () => phases.filter((_, index) => steps[index].classes.has("active")),
     counts: () => ({ publishes, keyWrites, uploadRequests, finalAttempts }),
@@ -308,4 +348,96 @@ test("the pinned preparation journal refuses a different final instance from an 
   assert.ok(ui.el("notice").textContent.length > 0);
   assert.equal(ui.owner.finalPin, undefined);
   assert.equal(ui.counts().keyWrites, 0);
+});
+
+test("verification downloads keep a connected public snapshot retry beyond ten seconds and replace it safely", async () => {
+  const certificate = { version: 1, certificateDer: "cHVibGljLWNlcnRpZmljYXRl", certificateSha256: "e".repeat(64),
+    publicKeySha256: "f".repeat(64), notBefore: "2026-11-16T00:00:00Z", notAfter: "2026-11-17T00:00:00Z", provenance: "Public fixture" };
+  const ui = await deployment(false, false, { attestationFixtures: true,
+    manualTls: { ...certificate, unknownSecret: "certificate-extra-secret", owner: { password: "certificate-nested-secret" } } });
+  ui.restoreConnectivity(); ui.el("inspect").click();
+  await ui.wait(() => ui.el("job-title").textContent === "Keys delivered; encrypted storage unlocked");
+  ui.owner.privateKey = "owner-private-key-secret"; ui.owner.recoveryPassword = "owner-recovery-password-secret";
+  const ownerBefore = JSON.stringify(ui.owner), countsBefore = ui.counts();
+  const readiness = () => [ui.el("readiness-title").textContent, ui.el("readiness-checks").textContent,
+    ui.el("readiness-time").textContent, ui.el("job-title").textContent, ui.el("final-status").textContent, ui.completed().join()];
+  const readinessBefore = readiness(), backupUrl = ui.el("recovery-download").href;
+  assert.ok(backupUrl && ui.downloads.activeUrls.has(backupUrl), "The release already has an active encrypted backup link");
+  const priorRevocations = ui.downloads.revocations.length;
+  ui.el("download-verification").click();
+  const retry = ui.el("verification-download-retry"), firstUrl = retry.href;
+  assert.ok(firstUrl && firstUrl !== backupUrl); assert.equal(retry.hidden, false); assert.equal(retry.isConnected, true);
+  assert.equal(retry.download, "nebula-verification.json");
+  assert.deepEqual(ui.downloads.anchorClicks.at(-1), { href: firstUrl, download: "nebula-verification.json", connected: true });
+  assert.match(ui.el("verification-download-status").textContent, /Download requested.*Downloads.*Download this record again/);
+  assert.equal(ui.el("verification-download-status").hidden, false);
+  const firstBytes = await ui.downloads.blobs.get(firstUrl)!.text(), record = JSON.parse(firstBytes);
+  assert.equal(ui.downloads.blobs.get(firstUrl)!.type, "application/json");
+  assert.deepEqual(Object.keys(record).sort(), ["checkedAt", "final", "frontend", "preparation", "version"]);
+  assert.deepEqual(record.frontend.reportedCertificate, certificate);
+  assert.deepEqual(Object.keys(record.preparation).sort(), ["expected", "imageUpload", "jwt", "result", "transportPublicKey"]);
+  assert.deepEqual(Object.keys(record.final).sort(), ["expected", "jwt", "result", "transportPublicKey"]);
+  assert.equal(record.preparation.transportPublicKey, "a".repeat(64)); assert.equal(record.final.transportPublicKey, "b".repeat(64));
+  assert.equal(record.preparation.result.role, "preparation"); assert.equal(record.final.result.role, "final");
+  assert.match(record.preparation.jwt, /^fixture\./); assert.match(record.final.jwt, /^fixture\./);
+  for (const secret of ["9".repeat(64), "8".repeat(64), "test-owner-proof", "test-only-recovery-password",
+    "owner-private-key-secret", "owner-recovery-password-secret", "certificate-extra-secret", "certificate-nested-secret",
+    ...Object.values(ui.owner.volumeKeys ?? {}).filter((value): value is string => typeof value === "string")]) {
+    assert.ok(!firstBytes.includes(secret), "Verification JSON must not include owner, image, storage, password or unknown certificate data");
+  }
+  ui.advanceClock(15_001); retry.click();
+  assert.equal(retry.href, firstUrl); assert.equal(ui.downloads.activeUrls.has(firstUrl), true);
+  assert.equal(await ui.downloads.blobs.get(retry.href)!.text(), firstBytes, "A late retry uses the identical snapshot");
+  assert.equal(ui.downloads.anchorClicks.at(-1)!.href, firstUrl);
+  ui.changeAttestations(); ui.el("download-verification").click();
+  const secondUrl = retry.href, fresh = JSON.parse(await ui.downloads.blobs.get(secondUrl)!.text());
+  assert.notEqual(secondUrl, firstUrl); assert.notEqual(fresh.checkedAt, record.checkedAt);
+  assert.equal(fresh.preparation.result.role, "preparation-refreshed"); assert.equal(fresh.final.result.role, "final-refreshed");
+  assert.deepEqual(ui.downloads.revocations.slice(priorRevocations), [{ url: firstUrl, retryHref: secondUrl, retryConnected: true }],
+    "Only the superseded verification URL is revoked, after installing the connected replacement");
+  assert.equal(ui.downloads.activeUrls.has(backupUrl), true); assert.equal(ui.downloads.activeUrls.has(secondUrl), true);
+  assert.equal(JSON.stringify(ui.owner), ownerBefore); assert.deepEqual(readiness(), readinessBefore); assert.deepEqual(ui.counts(), countsBefore);
+});
+
+test("verification download failure is generic and preserves the previous retry, backup and readiness", async () => {
+  const ui = await deployment(); ui.restoreConnectivity(); ui.el("inspect").click();
+  await ui.wait(() => ui.el("job-title").textContent === "Keys delivered; encrypted storage unlocked");
+  const ownerBefore = JSON.stringify(ui.owner), countsBefore = ui.counts(), completedBefore = ui.completed();
+  const readinessBefore = ui.el("readiness-checks").textContent, backupUrl = ui.el("recovery-download").href;
+  const revokedBefore = ui.downloads.revocations.length;
+  ui.downloads.failNextObjectUrl(); ui.el("download-verification").click();
+  assert.equal(ui.el("verification-download-status").textContent,
+    "Could not prepare the verification record. Try “Download verification record” again. Your deployment has not been changed.");
+  assert.equal(ui.el("verification-download-status").hidden, false);
+  assert.equal(ui.el("verification-download-retry").href, "");
+  assert.equal(ui.el("verification-download-retry").hidden, true);
+  ui.el("download-verification").click();
+  const retry = ui.el("verification-download-retry"), previousUrl = retry.href;
+  const previousBytes = await ui.downloads.blobs.get(previousUrl)!.text();
+  ui.downloads.failNextObjectUrl(); ui.el("download-verification").click();
+  assert.equal(ui.el("verification-download-status").textContent,
+    "Could not complete the new download request. Use the retry link for the last successfully prepared record, or try the button again for a new snapshot.");
+  assert.equal(retry.href, previousUrl); assert.equal(retry.isConnected, true); assert.equal(retry.hidden, false);
+  ui.advanceClock(15_001); retry.click();
+  assert.equal(ui.downloads.anchorClicks.at(-1)!.href, previousUrl);
+  assert.equal(await ui.downloads.blobs.get(previousUrl)!.text(), previousBytes);
+  assert.equal(ui.downloads.activeUrls.has(previousUrl), true); assert.equal(ui.downloads.activeUrls.has(backupUrl), true);
+  assert.equal(ui.downloads.revocations.length, revokedBefore);
+  ui.downloads.failNextRetryClick(); ui.el("download-verification").click();
+  const preparedUrl = retry.href;
+  assert.notEqual(preparedUrl, previousUrl, "A click failure happens after the fresh record and retry link are installed");
+  assert.equal(ui.downloads.activeUrls.has(preparedUrl), true); assert.equal(ui.downloads.activeUrls.has(previousUrl), false);
+  assert.equal(ui.el("verification-download-status").textContent,
+    "Could not complete the new download request. Use the retry link for the last successfully prepared record, or try the button again for a new snapshot.");
+  assert.deepEqual(ui.downloads.revocations.slice(revokedBefore), [{ url: previousUrl, retryHref: preparedUrl, retryConnected: true }]);
+  ui.advanceClock(15_001); retry.click();
+  assert.equal(ui.downloads.anchorClicks.at(-1)!.href, preparedUrl); assert.equal(ui.downloads.activeUrls.has(preparedUrl), true);
+  assert.equal(JSON.parse(await ui.downloads.blobs.get(preparedUrl)!.text()).version, 1);
+  assert.match(ui.el("verification-download-status").textContent, /Download requested/);
+  assert.equal(ui.downloads.activeUrls.has(backupUrl), true);
+  assert.equal(ui.el("notice").hidden, true); assert.equal(ui.el("readiness-title").textContent, "Your data access is ready");
+  assert.equal(ui.el("readiness-checks").textContent, readinessBefore); assert.deepEqual(ui.completed(), completedBefore);
+  assert.equal(JSON.stringify(ui.owner), ownerBefore); assert.deepEqual(ui.counts(), countsBefore);
+  assert.ok(!ui.el("verification-download-status").textContent.includes("private object URL error sentinel"));
+  assert.ok(!ui.el("verification-download-status").textContent.includes("private retry click error sentinel"));
 });
