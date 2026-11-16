@@ -1,4 +1,4 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["test/kubernetes-access.test.ts", "test/kubernetes-access.integration.test.ts", "test/kubernetes-oidc-client-configuration.test.ts"]
+  "include": ["test/kubernetes-access.test.ts", "test/kubernetes-access.integration.test.ts", "test/kubernetes-oidc-client-configuration.test.ts", "test/api-source-ranges.test.ts"]
 }

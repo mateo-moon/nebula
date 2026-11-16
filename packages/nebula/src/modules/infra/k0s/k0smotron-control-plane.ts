@@ -1,5 +1,6 @@
 import { Construct } from "constructs";
 import { K0sOidcAuthentication, type K0sApiOptions } from "./oidc-authentication";
+import { apiSourceRanges } from "./api-source-ranges";
 import { BaseConstruct } from "../../../core";
 import {
   K0sCalicoConfig,
@@ -64,6 +65,9 @@ export type K0smotronControlPlanePersistence =
     };
 
 export interface K0smotronControlPlaneConfig extends K0sApiOptions {
+  /** Explicit listener ports; omitted preserves k0smotron's own defaults. */
+  apiPort?: number;
+  konnectivityPort?: number;
   /** Datastore configuration passed through to k0smotron. */
   storage?: K0SmotronControlPlaneV1Beta2SpecStorage;
   /** CR name (the CAPI `Cluster.spec.controlPlaneRef.name`). */
@@ -123,6 +127,8 @@ export interface K0smotronControlPlaneConfig extends K0sApiOptions {
    * NLB to "internal" and workers in another VPC cannot reach the CP.
    */
   serviceAnnotations?: Record<string, string>;
+  /** Client CIDRs allowed by the API Service, including its konnectivity listener. Include all worker and automation egress. */
+  apiSourceRanges?: readonly string[];
   /**
    * Requests/limits for the CP (kmc-*) pods. Without requests the scheduler
    * bin-packs multiple hosted CPs onto one hosting node and saturates it.
@@ -155,6 +161,10 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
   public readonly resource: K0smotronControlPlaneV1Beta2;
   constructor(scope: Construct, id: string, config: K0smotronControlPlaneConfig) {
     super(scope, id, config);
+    for (const port of [this.config.apiPort, this.config.konnectivityPort]) {
+      if (port !== undefined && (!Number.isInteger(port) || port < 1 || port > 65535))
+        throw new Error("Hosted API listener ports must be integers from 1 to 65535");
+    }
 
     const namespace = this.config.namespace ?? "default";
     const k8sVersion = this.config.k8sVersion ?? "v1.31.8";
@@ -194,15 +204,18 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
           }
         : { type: "emptyDir" };
 
-    const servicePatches: K0SmotronControlPlaneV1Beta2SpecPatches[] = this.config
-      .serviceAnnotations
+    const sourceRanges = apiSourceRanges(this.config.apiSourceRanges);
+    if (sourceRanges && this.config.serviceType && this.config.serviceType !== K0SmotronControlPlaneV1Beta2SpecServiceType.LOAD_BALANCER)
+      throw new Error("apiSourceRanges requires a LoadBalancer Service");
+    const servicePatches: K0SmotronControlPlaneV1Beta2SpecPatches[] = this.config.serviceAnnotations || sourceRanges
       ? [
           {
             target: { kind: "Service", component: "control-plane" },
             patch: {
               type: K0SmotronControlPlaneV1Beta2SpecPatchesPatchType.MERGE,
               content: JSON.stringify({
-                metadata: { annotations: this.config.serviceAnnotations },
+                ...(this.config.serviceAnnotations ? { metadata: { annotations: this.config.serviceAnnotations } } : {}),
+                ...(sourceRanges ? { spec: { loadBalancerSourceRanges: sourceRanges.all } } : {}),
               }),
             },
           },
@@ -260,6 +273,8 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
         },
         persistence,
         service: {
+          ...(this.config.apiPort !== undefined ? { apiPort: this.config.apiPort } : {}),
+          ...(this.config.konnectivityPort !== undefined ? { konnectivityPort: this.config.konnectivityPort } : {}),
           type:
             this.config.serviceType ??
             K0SmotronControlPlaneV1Beta2SpecServiceType.LOAD_BALANCER,
