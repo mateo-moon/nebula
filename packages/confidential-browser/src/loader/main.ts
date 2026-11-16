@@ -8,14 +8,24 @@ import { preparationCandidates } from "./profile-selection";
 declare global { interface Window { nebula: any } }
 // Until this origin's mode is known, errors must not reveal a credential form.
 let manualMode = true;
-let sdkPromise: Promise<any> | undefined;
-function loadSdk(): Promise<any> {
-  return sdkPromise ??= (async () => {
-    const sdk: any = await import(/* @vite-ignore */ new URL("./sdk/tng_wasm.js", location.href).href);
-    await sdk.default(new URL("./sdk/tng_wasm_bg.wasm", location.href).href);
-    return sdk;
-  })();
+export function retryableSdkLoader(initialize: () => Promise<any>): () => Promise<any> {
+  let pending: Promise<any> | undefined;
+  return () => {
+    if (pending) return pending;
+    const attempt = Promise.resolve().then(initialize);
+    pending = attempt;
+    void attempt.catch(() => { if (pending === attempt) pending = undefined; });
+    return attempt;
+  };
 }
+const loadSdk = retryableSdkLoader(async () => {
+  const sdk: any = await import(/* @vite-ignore */ new URL("./sdk/tng_wasm.js", location.href).href);
+  if (typeof sdk.default !== "function" || typeof sdk.fetch !== "function" || typeof sdk.verify_certificate !== "function") {
+    throw new Error("Verification tools are incomplete. Reload this page before entering owner access.");
+  }
+  await sdk.default(new URL("./sdk/tng_wasm_bg.wasm", location.href).href);
+  return sdk;
+});
 const status = (text: string) => {
   const output = document.getElementById("loader-status"); if (output) output.textContent = text;
 };

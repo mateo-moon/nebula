@@ -95,11 +95,23 @@ export async function manualSession(target: string, sdk: () => Promise<any>, har
     })().catch(error => { result.textContent = error instanceof Error ? error.message : "Certificate appraisal failed"; })
       .finally(() => { button.disabled = false; });
   });
-  await new Promise<void>(resolve => document.getElementById("manual-verification")!.addEventListener("submit", event => {
+  const verification = document.getElementById("manual-verification") as HTMLFormElement;
+  let checking = false, verified = false;
+  await new Promise<void>(resolve => verification.addEventListener("submit", event => {
     event.preventDefault();
-    if ((document.getElementById("independently-verified") as HTMLInputElement).checked) resolve();
-  }, { once: true }));
-  (document.getElementById("manual-verification") as HTMLFormElement).hidden = true;
+    if (checking || verified || !(document.getElementById("independently-verified") as HTMLInputElement).checked) return;
+    checking = true;
+    const button = verification.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    const status = document.getElementById("loader-status")!;
+    button.disabled = true; status.textContent = "Loading verification tools before owner access…";
+    void sdk().then(() => { verified = true; resolve(); }).catch(() => {
+      // A browser may retain a failed ES-module fetch until a page reload.
+      // Keep this public gate usable without creating or opening any owner.
+      status.textContent = "Verification tools could not be loaded. No owner access was attempted. Try Continue again; if the problem persists, reload this page.";
+    }).finally(() => { checking = false; button.disabled = verified; });
+  }));
+  verification.hidden = true;
+  document.getElementById("loader-status")!.textContent = "Verification tools loaded. Unlock owner access to verify the preparation VM.";
   const form = document.getElementById("manual-owner") as HTMLFormElement; form.hidden = false;
   const stored = encryptedOwnerVault(target);
   const token = document.getElementById("claim-token") as HTMLInputElement;
@@ -108,8 +120,11 @@ export async function manualSession(target: string, sdk: () => Promise<any>, har
     token.required = !stored && !(event.target as HTMLInputElement).files?.length;
   });
   const login = document.getElementById("owner-login-status")!;
+  let submitting = false, resolved = false;
   return await new Promise<ManualSession>(resolve => form.addEventListener("submit", event => {
     event.preventDefault();
+    if (submitting || resolved) return;
+    submitting = true;
     const submit = document.getElementById("unlock-owner") as HTMLButtonElement; submit.disabled = true;
     void (async () => {
       let password = (document.getElementById("vault-password") as HTMLInputElement).value;
@@ -124,11 +139,11 @@ export async function manualSession(target: string, sdk: () => Promise<any>, har
         replaceUnusedInvitation(owner, token.value);
       }
       token.value = ""; (document.getElementById("vault-password") as HTMLInputElement).value = "";
-      form.hidden = true;
+      form.hidden = true; resolved = true;
       resolve({ owner, certificate: record, password: () => password,
         save: value => saveEncryptedOwner(target, value, password),
         backup: async (value, nextPassword) => { const result = await saveEncryptedOwner(target, value, nextPassword); password = nextPassword; return result; } });
     })().catch(error => { login.textContent = error instanceof Error ? error.message : "Owner access failed"; })
-      .finally(() => { submit.disabled = false; });
+      .finally(() => { submitting = false; submit.disabled = resolved; });
   }));
 }
