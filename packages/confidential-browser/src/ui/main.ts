@@ -4,6 +4,9 @@ import { discoveryAudience } from "../loader/owner";
 import { checkedImageUploadLimits, imageUploadLimits, imageSizeLabel } from "@nebula/confidential-client/image-protocol";
 import { checkedSupervisors, storageClientsRunning, checkedStorageRecovery } from "./storage-status";
 import { prepareLocalImage, uploadEncryptedImage, removeCipherCache } from "./upload";
+import { summarizeStorage, renderStorageOverview, type StorageSummary } from "@nebula/confidential-client/storage-overview";
+import { readinessSummary, type StatusLabel } from "./readiness";
+import type { SupervisorReport } from "./storage-status";
 const api = window.nebula, owner = api.owner;
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id)! as T;
 const input = (id: string) => el<HTMLInputElement>(id);
@@ -14,15 +17,118 @@ let busy = false;
 let connected = false;
 let recoveryUrl: string | undefined;
 let imageLimits = imageUploadLimits();
+let storageCards: StorageSummary[] = [];
+let currentReadiness = false;
+let readinessChecking = false;
+let lastReadiness: ReturnType<typeof readinessSummary> | undefined;
+let lastReadinessTime: string | undefined;
 const phases = ["encrypting", "measuring", "waiting", "attesting", "provisioning", "ready"] as const;
 type Phase = typeof phases[number];
 const phaseLabels: Record<Phase, string> = {
-  encrypting: "Encrypt locally and publish ciphertext", measuring: "Compile native genpolicy independently",
-  waiting: "Wait for the final confidential workload", attesting: "Verify and enroll its unique instance",
-  provisioning: "Provision keys directly to its Trustee", ready: "Unlock storage and authorize app startup",
+  encrypting: "Encrypt locally and publish ciphertext", measuring: "Prepare the approved workload policy",
+  waiting: "Wait for the final confidential VM", attesting: "Verify and enroll that VM",
+  provisioning: "Deliver keys to its Trustee", ready: "Unlock disks and authorize app startup",
 };
 const completed = new Set<Phase>();
 let activePhase: Phase | undefined;
+function statusRows(rows: { name: string; status: StatusLabel }[]) {
+  const parent = el("readiness-checks"); parent.replaceChildren();
+  for (const { name, status } of rows) {
+    const group = document.createElement("div"), label = document.createElement("dt"), value = document.createElement("dd"), detail = document.createElement("p");
+    label.textContent = name; value.textContent = status.label; value.dataset.tone = status.tone;
+    detail.className = "hint"; detail.textContent = status.detail;
+    group.append(label, value, detail); parent.append(group);
+  }
+}
+function unconfirmedReadiness(checking = false) {
+  readinessChecking = checking;
+  currentReadiness = false;
+  lastReadiness = undefined; lastReadinessTime = undefined;
+  text("readiness-title", checking ? "Checking live data readiness…" : "Not checked yet");
+  text("readiness-description", "Configured volumes and saved deployment steps are not a current readiness check. Each encrypted disk must be confirmed by the verified final guest.");
+  text("readiness-time", checking ? "A fresh owner-authenticated check is in progress." : "No live final-workload check yet.");
+  const pending: StatusLabel = { label: checking ? "Checking…" : "Not checked yet", detail: "Checked after the final VM is verified and your keys are delivered.", tone: "pending" };
+  statusRows([{ name: "Required secrets", status: pending }, { name: "Encrypted disks", status: pending },
+    { name: "Application process", status: pending }, { name: "Application health", status: { label: "Not checked", detail: "Use your application's own health endpoint. A running process does not establish application health.", tone: "neutral" } }]);
+  renderStorageOverview(el("storage-summary"), storageCards);
+}
+function showReadiness(snapshot: unknown, report: SupervisorReport | undefined, source: "reported" | "unsupported" | "unavailable") {
+  const required = { resources: connection.workload.spec.resources.map((path: string[]) => path.join("/")),
+    encryptedStorage: storageCards.filter(storage => storage.type === "EncryptedBlock").map(storage => storage.name) };
+  const summary = readinessSummary(required, snapshot, report, source);
+  currentReadiness = true; lastReadiness = summary;
+  text("readiness-title", summary.title); text("readiness-description", summary.description);
+  statusRows([{ name: "Required secrets", status: summary.keys }, { name: "Encrypted disks", status: summary.storage },
+    { name: "Application process", status: summary.process }, { name: "Application health", status: summary.health }]);
+  lastReadinessTime = new Date(Date.now()).toLocaleString();
+  text("readiness-time", `Last checked ${lastReadinessTime}. Refresh to verify the current state again.`);
+  renderStorageOverview(el("storage-summary"), storageCards, summary.disks);
+  return summary;
+}
+function staleReadiness() {
+  if (!lastReadiness) return;
+  const stale = (status: StatusLabel): StatusLabel => ({ ...status, label: "Last check: " + status.label, tone: "neutral" });
+  text("readiness-title", "Readiness check stopped");
+  text("readiness-description", "The last observations are shown below. Resolve the reported issue and refresh status; these are not a new successful check.");
+  statusRows([{ name: "Required secrets", status: stale(lastReadiness.keys) }, { name: "Encrypted disks", status: stale(lastReadiness.storage) },
+    { name: "Application process", status: stale(lastReadiness.process) }, { name: "Application health", status: lastReadiness.health }]);
+  renderStorageOverview(el("storage-summary"), storageCards, Object.fromEntries(Object.entries(lastReadiness.disks).map(([name, status]) => [name, stale(status)])));
+  text("readiness-time", `Last response ${lastReadinessTime}. The check did not complete.`);
+  currentReadiness = false;
+}
+function selectionChecklist() {
+  if (!connection) return;
+  const archive = input("archive").files?.[0];
+  const existing = storageCards.filter(storage => storage.type === "EncryptedBlock" && connection.storages.find((s: any) => s.metadata.name === storage.resourceName)?.spec.initialization === "Never");
+  const keyFiles = existing.filter(storage => owner.volumeKeys?.[storage.resourceName] || (document.getElementById("key-" + storage.resourceName) as HTMLInputElement | null)?.files?.length).length;
+  const files = Array.from(el("resource-files").querySelectorAll<HTMLInputElement>("input"));
+  const selected = files.filter(field => field.files?.length || owner.resources?.[field.id.slice("resource-".length)]).length;
+  const registry = input("approved-registry").value.trim();
+  const hasOverrides = applicationContract(connection).containers.some(container => container.execution.source === "override" || Object.keys(container.env).length > 0);
+  const items = [
+    { label: archive ? `${archive.name} · ${imageSizeLabel(archive.size)} selected` : `Local image archive · up to ${imageSizeLabel(imageLimits.maxBytes)}`, supplied: !!archive || !!owner.prepared },
+    { label: owner.prepared ? "Encrypted image already published" : "Registry host, username and access token", supplied: !!owner.prepared || registry === connection.workload.spec.containers[0].image.split("/")[0] && !!input("registry-username").value.trim() && !!input("registry-password").value },
+    { label: existing.length ? `Existing disk keys · ${keyFiles} of ${existing.length} selected or saved` : "New disk keys · generated automatically in your browser", supplied: keyFiles === existing.length },
+    { label: files.length ? `Private application files · ${selected} of ${files.length} selected or saved` : "No private application files requested", supplied: selected === files.length },
+    { label: "Recovery backup password · at least 12 characters", supplied: input("recovery-password").value.length >= 12 },
+    { label: "Application and storage settings reviewed", supplied: !!owner.applicationApproval || input("reviewed").checked && (!hasOverrides || input("approve-overrides").checked) },
+  ];
+  const list = el("input-checklist"); list.replaceChildren();
+  for (const item of items) {
+    const row = document.createElement("li"), marker = document.createElement("span"), label = document.createElement("span");
+    marker.textContent = item.supplied ? "✓" : "○"; marker.setAttribute("aria-hidden", "true");
+    label.textContent = item.label; row.dataset.supplied = String(item.supplied); row.append(marker, label); list.append(row);
+  }
+}
+function releaseControls() {
+  const saved = !!owner.prepared;
+  el("new-release-inputs").hidden = saved;
+  el("input-preflight").hidden = saved;
+  el("release-saved").hidden = !saved;
+  input("deploy").hidden = saved;
+  el("application-approval").hidden = saved && !!owner.applicationApproval;
+  if (saved && owner.applicationApproval) el("override-review").hidden = true;
+  text("application-review-title", saved ? "Your saved application settings" : "Review how your application will run");
+}
+function applicationOverview() {
+  const parent = el("application-summary"); parent.replaceChildren();
+  for (const container of applicationContract(connection).containers) {
+    const section = document.createElement("div"), title = document.createElement("h4"), values = document.createElement("dl");
+    title.textContent = container.name;
+    const rows = [
+      ["Execution", container.execution.source === "image" ? "Use the entrypoint and command from your image" : "Override: " + JSON.stringify([...container.execution.command, ...container.execution.args])],
+      ["Environment overrides", Object.keys(container.env).length ? JSON.stringify(container.env) : "None — use your image defaults"],
+      ["Storage paths", container.mounts.map(mount => `${mount.path} → ${mount.storage}`).join("; ") || "No storage mounts"],
+      ["Application ports", container.ports.map(port => `${port.name}: ${port.port}`).join("; ") || "None declared"],
+      ["Runs as", `User ${container.uid}, group ${container.gid}`],
+    ];
+    for (const [name, value] of rows) {
+      const row = document.createElement("div"), term = document.createElement("dt"), detail = document.createElement("dd");
+      term.textContent = name; detail.textContent = value; row.append(term, detail); values.append(row);
+    }
+    section.append(title, values); parent.append(section);
+  }
+}
 function renderSteps() {
   for (const item of document.querySelectorAll<HTMLElement>("[data-phase]")) {
     const phase = item.dataset.phase as Phase, active = phase === activePhase, done = completed.has(phase) && !active;
@@ -73,6 +179,15 @@ function failure(error: unknown) {
   notice.textContent = error instanceof Error ? error.message : "Verification or deployment stopped. No unverified fallback was used.";
   busy = false; input("deploy").disabled = !connected || !!owner.prepared;
   activePhase = undefined; renderSteps();
+  if (currentReadiness) staleReadiness();
+  else if (readinessChecking) {
+    text("readiness-title", "Readiness check stopped");
+    text("readiness-description", "No current readiness result was confirmed. Review the reported issue, then verify again to retry without changing your enrolled instance.");
+    text("readiness-time", "The check stopped before a current guest response was available.");
+  }
+  readinessChecking = false;
+  input("inspect").disabled = false;
+  input("storage-recovery").disabled = !owner.finalPin || !owner.prepared;
   if (owner.prepared) el("inspect").hidden = false;
 }
 async function request(channel: AttestedChannel, path: string, method = "GET", body?: BodyInit, audience = "nebula-browser", headers: Record<string, string> = {}) {
@@ -122,30 +237,46 @@ async function connect() {
   const actual = await (await request(api.channel, "/nebula/v1/connection")).json();
   if (JSON.stringify(actual) !== JSON.stringify(connection)) throw new Error("Stored and attested release settings disagree");
   text("connection-status", "You own this attested preparation instance. Future operations require your browser’s owner signature.");
-  text("stack-name", connection.workload.spec.profile);
+  text("stack-name", connection.workload.metadata.name);
   text("destination", "Encrypted image destination: " + connection.workload.spec.containers[0].image);
   text("configuration", JSON.stringify(connection, null, 2));
   const contract = applicationContract(connection);
   text("application-contract", JSON.stringify(contract, null, 2));
+  applicationOverview();
   const hasOverrides = contract.containers.some(container => container.execution.source === "override" || Object.keys(container.env).length > 0);
   el("override-review").hidden = !hasOverrides;
   if (owner.approvedRegistry) input("approved-registry").value = owner.approvedRegistry;
-  text("security-values", "Preparation instance: " + api.channel.pin);
-  text("storage-summary", connection.storages.map((s: any) => `${s.metadata.name}: ${s.spec.type}`).join(" · "));
+  const security = el("security-values"); security.replaceChildren();
+  for (const [label, value] of [["Verified preparation instance", api.channel.pin], ["Expected final VM measurement", connection.workload.spec.guest?.measurement ?? "Calculated from the approved stack"]]) {
+    const row = document.createElement("div"), term = document.createElement("dt"), detail = document.createElement("dd");
+    term.textContent = label; detail.textContent = value; row.append(term, detail); security.append(row);
+  }
+  storageCards = summarizeStorage(connection);
+  unconfirmedReadiness();
+  el("volume-keys").replaceChildren(); el("resource-files").replaceChildren();
   for (const storage of connection.storages) {
     if (storage.spec.type !== "EncryptedBlock" || storage.spec.initialization !== "Never") continue;
-    const label = document.createElement("label"); label.textContent = `Existing disk key: ${storage.metadata.name}`;
+    const alias = storageCards.find(card => card.resourceName === storage.metadata.name)!.name;
+    const label = document.createElement("label"); label.textContent = `Existing encryption key for ${alias}`;
     const field = document.createElement("input"); field.type = "file"; field.id = "key-" + storage.metadata.name;
-    el("volume-keys").append(label, field);
+    field.required = !owner.volumeKeys?.[storage.metadata.name]; label.htmlFor = field.id;
+    const hint = document.createElement("p"); hint.className = "hint";
+    hint.textContent = "Choose the original 32-byte disk key. This disk will not be initialized or reformatted. A new key cannot unlock existing data.";
+    el("volume-keys").append(label, field, hint);
   }
   const keyPaths = new Set([connection.workload.spec.containers[0].imageKeyResource.join("/"),
     ...connection.storages.filter((s: any) => s.spec.type === "EncryptedBlock").map((s: any) => s.spec.keyResource.join("/"))]);
   for (const resource of connection.workload.spec.resources) {
     const path = resource.join("/"); if (keyPaths.has(path)) continue;
-    const label = document.createElement("label"); label.textContent = `Private application resource: ${path}`;
+    const label = document.createElement("label"); label.textContent = `Private application file: ${path}`;
     const field = document.createElement("input"); field.type = "file"; field.id = "resource-" + path;
-    el("resource-files").append(label, field);
+    field.required = !owner.resources?.[path]; label.htmlFor = field.id;
+    const consumers = connection.workload.spec.containers.filter((container: any) => (container.applicationResources ?? []).some((route: string[]) => route.join("/") === path)).map((container: any) => container.name);
+    const hint = document.createElement("p"); hint.className = "hint";
+    hint.textContent = `Select the file this application expects (up to 2 MiB). ${consumers.length ? `Declared application access: ${consumers.join(", ")}.` : "Consumed inside the verified guest according to the approved settings."} Its contents are not displayed here.`;
+    el("resource-files").append(label, field, hint);
   }
+  text("private-files-hint", "New disk keys are generated automatically in your browser. Any existing disk keys or application files requested below must be supplied by you; they are separate from your registry token.");
   const currentJob = await (await request(api.channel, "/nebula/v1/job")).json();
   if (currentJob.state === "ready" && !owner.prepared) {
     if (!owner.imageKey) throw new Error("Restore the encrypted backup containing this release image key before resuming");
@@ -158,6 +289,10 @@ async function connect() {
     owner.prepared = currentJob.result; await api.save();
   }
   connected = true;
+  releaseControls();
+  selectionChecklist();
+  input("storage-recovery").disabled = !owner.finalPin || !owner.prepared;
+  el("storage-recovery-section").hidden = !owner.finalPin;
   input("deploy").disabled = !!owner.prepared; text("job-title", owner.prepared ? "Release prepared" : "Ready when you are");
   text("job-description", "Choose an image and approve the stack. No administrator action is needed.");
   if (owner.prepared) { el("inspect").hidden = false; }
@@ -242,7 +377,9 @@ async function finalConnection() {
     owner.finalClaimed = true; delete owner.token; await api.save();
   }
   complete("attesting");
-  evidence(); text("final-status", "Final workload verified"); return final!;
+  evidence(); text("final-status", "Final workload verified"); el("final-status").className = "badge verified";
+  el("storage-recovery-section").hidden = false;
+  return final!;
 }
 async function provision() {
   await approveApplication();
@@ -268,39 +405,38 @@ async function provision() {
   await inspect();
 }
 async function inspect() {
+  input("inspect").disabled = true; input("storage-recovery").disabled = true;
+  unconfirmedReadiness(true);
   const channel = final ?? await finalConnection();
   const deadline = Date.now() + 300_000;
-  const resources = connection.workload.spec.resources.map((path: string[]) => path.join("/"));
-  const encryptedStorage = (connection.workload.spec.storage ?? []).filter((binding: { resource: string }) => {
-    const storage = connection.storages.find((value: any) => value.metadata.name === binding.resource &&
-      value.metadata.namespace === connection.workload.metadata.namespace);
-    if (!storage) throw new Error("Declared storage is missing from the verified stack");
-    return storage.spec.type === "EncryptedBlock";
-  }).map((binding: { name: string }) => binding.name);
+  const encryptedStorage = storageCards.filter(storage => storage.type === "EncryptedBlock").map(storage => storage.name);
   progress("ready", "Checking workload and encrypted storage…");
   while (true) {
     const status = await (await request(channel, "/nebula/v1/bootstrap", "GET", undefined, owner.prepared.audience)).json();
     text("result", JSON.stringify(status, null, 2)); evidence();
     const helperResponse = await channel.request("/nebula/v1/supervisors", { headers: { Authorization: `Bearer ${await api.jwt(owner.prepared.audience)}` } });
     let clientsRunning = false;
+    let report: SupervisorReport | undefined, source: "reported" | "unsupported" | "unavailable" = "unavailable";
     if (helperResponse.status === 200) {
-      const report = checkedSupervisors(await helperResponse.json());
+      report = checkedSupervisors(await helperResponse.json()); source = "reported";
       text("supervisor-status", "Process supervision only; application readiness is unknown.\n" + JSON.stringify(report, null, 2));
       clientsRunning = storageClientsRunning(report, encryptedStorage);
     } else if (helperResponse.status === 404) {
+      source = "unsupported";
       text("supervisor-status", "This release has no supervisor report. Bootstrap readiness does not prove application health.");
       clientsRunning = true;
     } else if (helperResponse.status === 503) text("supervisor-status", "Supervisor status is temporarily unavailable; startup cannot be reported complete.");
     else throw new Error("Owner-authenticated supervisor status is unavailable");
-    if (clientsRunning && status.phase !== "awaiting-configuration" && resources.length > 0 &&
-        resources.every((path: string) => status.resources?.[path]?.status === 200) &&
-        encryptedStorage.every((name: string) => status.storage?.[name]?.phase === "ready")) break;
+    const summary = showReadiness(status, report, source);
+    if (clientsRunning && summary.data.ready) break;
     if (Date.now() >= deadline) throw new Error("Keys reached the verified VM. Startup is still pending; use Verify again for status.");
     await sleep(4000);
   }
   complete("ready");
+  readinessChecking = false;
   text("job-title", "Keys delivered; encrypted storage unlocked"); text("job-description", "The final VM passed fresh attestation and accepted your owner keys. App startup is authorized; application health is checked separately.");
   el("inspect").hidden = false;
+  input("inspect").disabled = false; input("storage-recovery").disabled = false;
 }
 el("deploy-form").addEventListener("submit", event => {
   event.preventDefault(); if (busy || !connected) return; busy = true; input("deploy").disabled = true;
@@ -330,6 +466,7 @@ el("deploy-form").addEventListener("submit", event => {
       }
     }
     await api.save();
+    selectionChecklist();
     let recoveryPassword = input("recovery-password").value;
     download("nebula-owner-recovery.json", await api.backup(recoveryPassword)); input("recovery-password").value = "";
     try {
@@ -363,6 +500,7 @@ el("deploy-form").addEventListener("submit", event => {
       if (job.state === "ready") {
         if (job.result.digest !== local.image.manifestDigest) throw new Error("Published image differs from your browser-encrypted release");
         owner.prepared = job.result; await api.save();
+        releaseControls();
         complete("encrypting", "measuring");
         await removeCipherCache(owner.encryptedImage); delete owner.encryptedImage; await api.save(); break;
       }
@@ -415,4 +553,9 @@ el("clear-local-cache").addEventListener("click", () => {
   })().catch(failure);
 });
 el("download-verification").addEventListener("click", () => download("nebula-verification.json", evidence()));
+el("deploy-form").addEventListener("input", selectionChecklist);
+el("deploy-form").addEventListener("change", selectionChecklist);
+unconfirmedReadiness();
+input("storage-recovery").disabled = true;
+el("storage-recovery-section").hidden = true;
 void connect().catch(failure);

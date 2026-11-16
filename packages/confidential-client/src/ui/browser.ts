@@ -1,5 +1,7 @@
 import type { StackSummary, UiJob, Upload } from "./protocol";
 import { applicationContract } from "../application-approval";
+import { dataReadiness } from "../readiness";
+import { summarizeStorage, renderStorageOverview, type StorageOverviewStatus } from "./storage-overview";
 
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const token = new URLSearchParams(location.hash.slice(1)).get("session");
@@ -13,8 +15,8 @@ const descriptions: Record<string, string> = {
   waiting: "Waiting for the stack to pick up your published image automatically.",
   attesting: "Verifying the guest and establishing ownership before sending any key.",
   provisioning: "The instance is verified and owner-authorized. Provisioning its keys.",
-  starting: "Waiting for the encrypted image and storage to start.",
-  ready: "Keys are provisioned and storage is ready in the verified confidential instance.",
+  starting: "Waiting for the guest to retrieve its keys and prepare encrypted storage.",
+  ready: "Guest data access has been checked. Application health is checked separately.",
   checking: "Verifying the enrolled instance again and checking guest-local status.",
 };
 function notice(message?: string) {
@@ -46,6 +48,43 @@ function updateControls() {
   }
 }
 const short = (value: string) => value.length > 40 ? `${value.slice(0, 18)}…${value.slice(-18)}` : value;
+function deploymentState(job?: UiJob) {
+  const result: any = job?.result, bootstrap = result?.bootstrap;
+  const summaries = configuration ? summarizeStorage(configuration) : [];
+  // Inspection returns storage separately. Never fall back to an earlier
+  // bootstrap map when that newer field exists but is malformed.
+  const storage = result && Object.hasOwn(result, "storage") ?
+    result.storage?.version === 1 ? result.storage.storage : undefined : bootstrap?.storage;
+  const snapshot = { ...bootstrap, storage };
+  const required = { resources: (configuration?.workload?.spec?.resources ?? []).map((path: string[]) => path.join("/")),
+    encryptedStorage: summaries.filter(volume => volume.type === "EncryptedBlock").map(volume => volume.name) };
+  return { verified: job?.status === "succeeded" && result?.verified === true, summaries, snapshot,
+    readiness: dataReadiness(required, snapshot) };
+}
+function storageOverview(job?: UiJob) {
+  const state = deploymentState(job), statuses: Record<string, StorageOverviewStatus> = Object.create(null);
+  if (state.verified) for (const volume of state.summaries) {
+    if (volume.type === "Memory") continue; // Configuration cannot prove a live tmpfs mount or application use.
+    const value = state.readiness.configured ? state.snapshot.storage : undefined;
+    const phase = value && typeof value === "object" && !Array.isArray(value) && Object.hasOwn(value, volume.name) ? value[volume.name]?.phase : undefined;
+    statuses[volume.name] = phase === "ready" ? {
+      label: "Data ready", detail: "The encrypted disk reported ready during the last verified check. Application health was not checked.", tone: "success",
+    } : typeof phase === "string" && /^[a-z-]{1,64}$/.test(phase) ? {
+      label: ["error", "failed"].includes(phase) ? "Storage needs attention" : "Not ready yet",
+      detail: `Last guest report: ${phase}. Data access has not been confirmed.`,
+      tone: ["error", "failed"].includes(phase) ? "danger" : "pending",
+    } : { label: "Status not returned", detail: "The latest verified check did not return this disk binding. Data readiness is not confirmed.", tone: "pending" };
+  }
+  renderStorageOverview(element("storage-summary"), state.summaries, statuses);
+  element("storage-note").textContent = state.verified ?
+    "Guest status is from the last local verification. Capacity and mounts below describe the configuration; application health is checked separately." :
+    "These are configured mounts and capacities, not a live verification. Disk readiness is checked after attestation and owner authorization.";
+  const data = element("data-status"), ready = state.verified && state.readiness.ready;
+  data.textContent = ready ? state.readiness.disksTotal ? "Data ready · last verified check" : "Keys ready · no encrypted disks" : state.verified ? "Data readiness not confirmed" : "Data not checked";
+  data.className = `badge ${ready ? "verified" : "pending"}`;
+  element("application-status").textContent = "Application health not checked";
+}
+
 function security(job?: UiJob) {
   const current = job?.status === "succeeded" && job.result?.verified === true;
   const receipt: any = current ? job.result?.verification : undefined;
@@ -53,9 +92,9 @@ function security(job?: UiJob) {
   const badge = element("attestation-status");
   badge.textContent = receipt ? "Attestation verified locally" : running ? "Verification in progress" : "Not attested this session";
   badge.className = `badge ${receipt ? "verified" : "pending"}`;
-  element("profile-status").textContent = source ? `Reviewed runtime · ${source.profile}` : stack ? "Custom settings · owner review required" : "No stack connected";
+  element("profile-status").textContent = source ? "Runtime profile matched" : stack ? "Imported settings · owner review required" : "No stack connected";
   element("security-description").textContent = receipt ?
-    "Native verification passed and your owner key is authorized for the enrolled guest. The constraints below were enforced locally." :
+    "The last local native verification passed and your owner key was authorized for the enrolled guest. Application health is not established by attestation." :
     source ? "Helper software matches a reviewed runtime profile. Approve the application settings separately; live attestation is still required before keys are provisioned." :
     "The local verifier checks the stack before any image or disk key leaves your computer.";
   const values = element("security-values"); values.replaceChildren();
@@ -66,8 +105,10 @@ function security(job?: UiJob) {
   if (stack) {
     row("Expected VM measurement", stack.identity.measurement);
     row("Native workload policy measurement", receipt?.expectedConstraints?.initDataSha256 ?? "Calculated locally after image publication");
-    row("Storage", stack.volumes.map(v => `${v.name}: ${v.type === "Memory" ? "guest memory" : "LUKS encrypted disk"}`).join(" · ") || "None declared");
-    row("Access", hasRelease ? "Your local owner key · instance pinned" : bootstrapReady ? "One-time link loaded · owner claim pending" : "Awaiting owner enrollment");
+    const data = deploymentState(job);
+    row("Data access", data.verified ? `${data.readiness.resourcesReady}/${data.readiness.resourcesTotal} resources · ${data.readiness.disksTotal ? `${data.readiness.disksReady}/${data.readiness.disksTotal} encrypted disks ready` : "no encrypted disks configured"}` : "Not checked yet");
+    row("Application health", "Not checked by this local client");
+    row("Owner access", receipt ? "Enrolled guest and owner authorization checked" : hasRelease ? "Saved local release · verification required" : bootstrapReady ? "One-time link loaded · owner claim pending" : "Owner enrollment not checked");
   }
   if (receipt) {
     row("Enrolled guest public key", receipt.instance.publicKeySha256);
@@ -83,9 +124,11 @@ function security(job?: UiJob) {
   element("cluster-status").textContent = cluster ? `Cluster-reported status: ${cluster.unavailable ? "unavailable" : cluster.phase ?? "Unknown"}. Operational information; this does not prove attestation.` : "";
   element("verification-details").hidden = !verification;
   element("verification-record").textContent = verification ? JSON.stringify(verification, null, 2) : "";
+  storageOverview(job);
 }
 function connected(value: any) {
   source = value.source; bootstrapReady = Boolean(value.bootstrapReady); configuration = value.configuration;
+  verification = undefined; element("result-details").hidden = true; element("result").textContent = "";
   element("configuration").textContent = configuration ? JSON.stringify(configuration, null, 2) : "";
   element("application-contract").textContent = configuration ? JSON.stringify(applicationContract(configuration), null, 2) : "";
   element("connection-hint").textContent = source ? "Settings fetched automatically. Your one-time token is kept only in private local state until ownership is established." : "Public settings loaded locally.";
@@ -106,8 +149,6 @@ function showStack(value: StackSummary, saved: boolean) {
   element("endpoint").textContent = `${value.endpoint.host}:${value.endpoint.port}`;
   element("identity").textContent = JSON.stringify({ guest: value.identity, helpers: value.helperImages }, null, 2);
   element("image-contract").textContent = value.images.map(image => `${image.name}: ${image.command}; UID ${image.uid}; mounts ${image.mounts.map(m => m.path).join(", ") || "none"}; ports ${image.ports.map(p => p.port).join(", ") || "none"}`).join("\n");
-  const chips = element("storage-summary"); chips.replaceChildren();
-  for (const volume of value.volumes) { const chip = document.createElement("span"); chip.textContent = `${volume.name} · ${volume.type === "Memory" ? "memory" : "encrypted disk"}`; chips.append(chip); }
   fileInputs("volume-keys", value.volumes.filter(v => v.type === "EncryptedBlock").map(v => ({ name: v.name, required: v.keyRequired })), "Existing volume key");
   fileInputs("resource-files", value.resourceFiles.map(name => ({ name, required: true })), "Private application resource");
   element<HTMLInputElement>("reviewed").checked = false;
@@ -116,8 +157,8 @@ function showStack(value: StackSummary, saved: boolean) {
 function showJob(job?: UiJob) {
   running = job?.status === "running";
   if (!job) { security(); updateControls(); return; }
-  const verified = job.status === "succeeded" && job.result?.verified === true;
-  const ready = verified && (job.action === "deploy" || job.result?.ready === true);
+  const state = deploymentState(job), verified = state.verified;
+  const ready = verified && state.readiness.ready;
   let index = stages.indexOf(job.phase);
   if (job.phase === "published") index = 1;
   if (job.phase === "starting") index = 5;
@@ -129,9 +170,11 @@ function showJob(job?: UiJob) {
     item.classList.toggle("active", running && position === index);
   }
   element("verified").hidden = !verified;
-  element("job-title").textContent = job.status === "failed" ? "Deployment needs attention" : ready ? "Verified and ready" : verified ? "Instance verified" : "Working on your deployment";
+  element("job-title").textContent = job.status === "failed" ? "Operation needs attention" : ready ? state.readiness.disksTotal ? "Verified · data ready" : "Verified · keys ready" : verified ? "Instance verified · data not confirmed" : "Working on your deployment";
   element("job-description").textContent = job.status === "failed" ? job.error ?? "The operation stopped safely." : verified && !ready ?
-    "Attestation passed. The workload or storage is not ready yet; review its status below." : descriptions[job.phase];
+    "Attestation passed, but data readiness is not confirmed. Review the last guest storage status below; application health has not been checked." : ready ?
+    state.readiness.disksTotal ? "Keys and encrypted storage passed the last guest checks. This does not establish application health; check your workload’s own endpoint." :
+    "The declared keys reached the verified guest. No encrypted disks are configured; memory mounts and application health have not been checked." : descriptions[job.phase] ?? "Waiting for the next deployment checkpoint.";
   if (job.status === "failed") notice(job.error);
   if (verified) {
     hasRelease = true;

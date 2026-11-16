@@ -15,18 +15,26 @@ async function deployment(restored = false, rejectedConnection = false, options:
   provisionedCheckpoint?: boolean; preparationFailure?: "publishing" | "measuring"; keyWriteFailure?: boolean;
   pendingCheckpoint?: "running" | "failed";
   missingResource?: boolean; missingDisk?: "audit" | "all" | "resource-names";
+  supervisorPhase?: "starting" | "running" | "backoff" | "stopped";
 } = {}) {
   class Element {
-    id = ""; value = ""; textContent = ""; hidden = false; disabled = false;
+    id = ""; value = ""; private ownText = ""; hidden = false; disabled = false;
+    children: Element[] = [];
+    get ownerDocument() { return document; }
+    get textContent(): string { return this.ownText + this.children.map(child => child.textContent).join(""); }
+    set textContent(value: string) { this.ownText = value; this.children = []; }
     checked = false; files: unknown[] = []; dataset: Record<string, string> = {};
     attributes = new Map<string, string>(); classes = new Set<string>();
-    classList = { toggle: (name: string, enabled: boolean) => enabled ? this.classes.add(name) : this.classes.delete(name) };
+    classList = { toggle: (name: string, enabled: boolean) => enabled ? this.classes.add(name) : this.classes.delete(name),
+      add: (...names: string[]) => names.forEach(name => this.classes.add(name)) };
     listeners = new Map<string, (event: { preventDefault(): void }) => void>();
     setAttribute(name: string, value: string) { this.attributes.set(name, value); }
     removeAttribute(name: string) { this.attributes.delete(name); }
     addEventListener(name: string, listener: (event: { preventDefault(): void }) => void) { this.listeners.set(name, listener); }
     click() { this.listeners.get("click")?.({ preventDefault() {} }); }
-    append() {} after() {} remove() {} querySelectorAll() { return []; }
+    append(...children: Element[]) { this.children.push(...children); }
+    replaceChildren(...children: Element[]) { this.ownText = ""; this.children = children; }
+    after() {} remove() {} querySelectorAll() { return []; }
   }
   const elements = new Map<string, Element>();
   const el = (id: string) => {
@@ -43,13 +51,14 @@ async function deployment(restored = false, rejectedConnection = false, options:
   const connection = { version: 1, browserEndpoint: "https://final.example", endpoint: { host: "final.example", port: 8443 },
     workload: { metadata: { name: "test", namespace: "qualified" }, spec: { profile: "test",
       network: { ipv4AddressPattern: "^10[.].+$", ipv6AddressPattern: "^fd42:.+$" },
-      containers: [{ name: "app", uid: 11000, gid: 11000, image: "ghcr.io/example/final:release", imageKeyResource: ["default", "image", "app"] }],
+      containers: [{ name: "app", uid: 11000, gid: 11000, image: "ghcr.io/example/final:release", imageKeyResource: ["default", "image", "app"],
+        mounts: [{ storage: "data", path: "/data" }, { storage: "audit", path: "/audit" }, { storage: "scratch", path: "/scratch" }] }],
       resources: resourcePaths.map(path => path.split("/")),
       storage: [{ name: "data", resource: "data-store" }, { name: "audit", resource: "audit-store" }, { name: "scratch", resource: "memory-store" }] } },
     storages: [
       ...["data", "audit"].map(name => ({ metadata: { name: `${name}-store`, namespace: "qualified" },
-        spec: { type: "EncryptedBlock", initialization: "IfEmpty", keyResource: ["default", "volume", name] } })),
-      { metadata: { name: "memory-store", namespace: "qualified" }, spec: { type: "Memory" } },
+        spec: { type: "EncryptedBlock", sizeBytes: 67108864, retention: "Retain", initialization: "IfEmpty", keyResource: ["default", "volume", name] } })),
+      { metadata: { name: "memory-store", namespace: "qualified" }, spec: { type: "Memory", sizeLimit: "32Mi" } },
     ] };
   const prepared = { digest: "sha256:" + "d".repeat(64), identity: {}, audience: "final-test", imageKeyResource: ["default", "image", "app"],
     policies: { attestationPolicy: "test attestation policy", resourcePolicy: "test resource policy" } };
@@ -60,6 +69,7 @@ async function deployment(restored = false, rejectedConnection = false, options:
   if (options.pendingCheckpoint) owner.encryptedImage = { id: "test-only-cache", manifestDigest: prepared.digest };
   let now = 0, available = false, storageReady = true, publishes = options.provisionedCheckpoint ? 1 : 0, keyWrites = 0, uploadRequests = 0, finalAttempts = 0;
   let missingResource = options.missingResource, missingDisk = options.missingDisk;
+  let supervisorPhase = options.supervisorPhase ?? "running";
   const phases = ["encrypting", "measuring", "waiting", "attesting", "provisioning", "ready"];
   const steps = phases.map(phase => { const step = el("step-" + phase); step.dataset.phase = phase; return step; });
   const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
@@ -86,12 +96,12 @@ async function deployment(restored = false, rejectedConnection = false, options:
     if (path.startsWith("/kbs/v0/resource/") && init.method === "POST") {
       keyWrites++; if (options.keyWriteFailure) return response({}, 403);
     }
-    if (path === "/nebula/v1/supervisors") return response({ version: 1, storage: Object.fromEntries(["data", "audit"].map(name => [name, { available: true, clients: { app: { phase: "running", restartCount: 0, applicationReady: null } } }])) });
+    if (path === "/nebula/v1/supervisors") return response({ version: 1, storage: Object.fromEntries(["data", "audit"].map(name => [name, { available: true, clients: { app: { phase: supervisorPhase, restartCount: 0, applicationReady: null } } }])) });
     if (path === "/nebula/v1/bootstrap") {
       const resources = Object.fromEntries(resourcePaths.filter(path => !missingResource || path !== "default/volume/audit").map(path => [path, { status: 200 }]));
       const storage = missingDisk === "all" ? {} : Object.fromEntries(["data", "audit"].filter(name => missingDisk !== name).map(name =>
         [missingDisk === "resource-names" ? `${name}-store` : name, { phase: !storageReady && name === "data" ? "awaiting-owner" : "ready" }]));
-      return response({ phase: "ready", resources, storage });
+      return response({ version: 1, phase: "ready", resources, storage });
     }
     return response({});
   } };
@@ -129,7 +139,7 @@ async function deployment(restored = false, rejectedConnection = false, options:
     active: () => phases.filter((_, index) => steps[index].classes.has("active")),
     counts: () => ({ publishes, keyWrites, uploadRequests, finalAttempts }),
     restoreConnectivity(ready = true) { available = true; storageReady = ready; },
-    completeStatus() { missingResource = false; missingDisk = undefined; storageReady = true; } };
+    completeStatus() { missingResource = false; missingDisk = undefined; storageReady = true; supervisorPhase = "running"; } };
 }
 
 test("rejected stack settings keep image encryption and publication disabled", async () => {
@@ -217,10 +227,45 @@ test("restored delivery checkpoints do not claim current storage readiness", asy
   assert.deepEqual(ui.completed(), ["encrypting", "measuring", "waiting", "attesting", "provisioning"]);
   assert.deepEqual(ui.active(), []);
   assert.match(ui.el("job-description").textContent, /Saved release checkpoints restored/);
+  assert.equal(ui.el("new-release-inputs").hidden, true);
+  assert.equal(ui.el("release-saved").hidden, false);
+  assert.equal(ui.el("readiness-title").textContent, "Not checked yet");
+  assert.match(ui.el("storage-summary").textContent, /64 MiB/);
+  assert.match(ui.el("storage-summary").textContent, /\/data/);
+  assert.match(ui.el("storage-summary").textContent, /Temporary memory/);
+  assert.match(ui.el("storage-summary").textContent, /live memory mount.*not been checked/);
   ui.restoreConnectivity(); ui.el("inspect").click();
   await ui.wait(() => ui.el("job-title").textContent === "Keys delivered; encrypted storage unlocked");
   assert.deepEqual(ui.completed(), ["encrypting", "measuring", "waiting", "attesting", "provisioning", "ready"]);
   assert.equal(ui.counts().publishes, 1);
+  assert.equal(ui.counts().keyWrites, 0);
+  assert.equal(ui.el("readiness-title").textContent, "Your data access is ready");
+  assert.match(ui.el("readiness-checks").textContent, /Application healthNot checked/);
+  assert.match(ui.el("readiness-time").textContent, /Last checked/);
+});
+
+test("a failed first status request cannot leave the readiness panel checking forever", async () => {
+  const ui = await deployment(true, false, { provisionedCheckpoint: true });
+  ui.el("inspect").click();
+  await ui.wait(() => ui.el("readiness-title").textContent === "Readiness check stopped");
+  assert.match(ui.el("readiness-time").textContent, /stopped before a current guest response/);
+  assert.equal(ui.el("inspect").disabled, false);
+  assert.equal(ui.counts().keyWrites, 0);
+});
+
+test("data readiness does not turn a restarting process into application health", async () => {
+  const ui = await deployment(true, false, { provisionedCheckpoint: true, supervisorPhase: "backoff" });
+  ui.restoreConnectivity(); ui.el("inspect").click();
+  await ui.wait(() => ui.el("notice").textContent.includes("Startup is still pending"));
+  assert.equal(ui.el("readiness-title").textContent, "Readiness check stopped");
+  assert.match(ui.el("readiness-checks").textContent, /Last check: 2 of 2 unlocked/);
+  assert.match(ui.el("readiness-checks").textContent, /Last check: Restarting/);
+  assert.match(ui.el("readiness-checks").textContent, /Application healthNot checked/);
+  assert.equal(ui.completed().includes("ready"), false);
+  ui.completeStatus(); ui.el("inspect").click();
+  await ui.wait(() => ui.el("job-title").textContent === "Keys delivered; encrypted storage unlocked");
+  assert.match(ui.el("readiness-checks").textContent, /Application processRunning/);
+  assert.match(ui.el("readiness-checks").textContent, /Application healthNot checked/);
   assert.equal(ui.counts().keyWrites, 0);
 });
 

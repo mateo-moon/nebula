@@ -4,6 +4,8 @@ For an installation-free deployment, open the endpoint supplied by your administ
 
 The [browser guide](../confidential-browser/README.md) covers this flow, recovery and administrator setup. The page shows the expected VM/workload measurements, pinned software, transport enrollment, fresh attestation and startup/storage status. A cluster cannot approve itself by supplying its own trust profile. Subsequent access uses your browser's owner signature; the temporary invitation is consumed.
 
+Storage cards explain each mount, capacity, persistence and required key. Data readiness requires a current successful response for every declared secret and encrypted disk; a missing disk is not ready. Process liveness and application health remain separate. A recovery backup contains keys and settings, not the disk contents or original image archive.
+
 ## Native CLI
 
 The TypeScript `confidential-client` package remains available for headless administration and owners who prefer local image processing. Install the reviewed package, qualified native TNG and CoCo `genpolicy`. Local image encryption/publication also uses a trusted local Docker runtime. Verification itself starts no Docker AS and opens no shared TCP verifier/proxy ports. These native tools are unnecessary for the browser flow.

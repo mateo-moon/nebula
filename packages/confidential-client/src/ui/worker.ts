@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { deploy, type DeployOptions } from "../deploy";
+import { deploy, readinessRequirements, type DeployOptions } from "../deploy";
+import { dataReadiness } from "../readiness";
 import { TrusteeClient } from "../client";
 import { renewClient, releaseStateDirectory } from "../prepare";
 import { verificationReceipt } from "./security";
@@ -47,16 +48,14 @@ process.once("message", async (input: { action: "deploy" | "inspect"; options: D
         process.send?.({ type: "progress", phase });
       } });
     } else {
+      const required = readinessRequirements(options.manifest, options.name);
       const key = readFileSync(join(options.releaseDirectory, "owner.key"));
       let client: TrusteeClient | undefined;
       try {
         client = await TrusteeClient.connect({ stateDirectory: state, ownerPrivateKey: key,
           audience: JSON.parse(readFileSync(join(state, "instance.json"), "utf8")).audience, tngBinary: options.tngBinary, signal: stop.signal });
         const bootstrap: any = await client.bootstrapStatus(), storage = await client.storageStatus();
-        const ready = bootstrap.phase !== "awaiting-configuration" &&
-          Object.values(bootstrap.resources ?? {}).length > 0 &&
-          Object.values(bootstrap.resources ?? {}).every((value: any) => value.status === 200) &&
-          Object.values(storage.storage).every(value => value.phase === "ready");
+        const ready = dataReadiness(required, { ...bootstrap, storage: storage.storage }).ready;
         result = { verified: true, ready, instance: JSON.parse(readFileSync(join(state, "instance.json"), "utf8")).publicKeySha256,
           bootstrap, storage };
       } finally { key.fill(0); await client?.close(); }

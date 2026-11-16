@@ -8,6 +8,7 @@ import { validateWorkload, type ConfidentialStorageResource, type ConfidentialWo
 import { resourcePath, type TrusteeResourcePath } from "nebula-cdk8s/trustee/policies";
 import { accessTokenBytes, claimSha256 } from "./claim";
 import { applicationContract, assertApplicationApproval } from "./application-approval";
+import { dataReadiness, type DataRequirements } from "./readiness";
 import { TrusteeClient, TrusteeHttpError } from "./client";
 import { enrollInstance, readEnrollment } from "./enrollment";
 import { consumeAccessLink } from "./discovery";
@@ -55,6 +56,22 @@ function declaration(manifest: string, name: string) {
   const storages = values.filter(value => value?.kind === "ConfidentialStorage") as ConfidentialStorageResource[];
   validateWorkload(workload, storages);
   return { workload, storages, sha256: createHash("sha256").update(bytes).digest("hex") };
+}
+
+function requiredData(workload: ConfidentialWorkloadResource, storages: readonly ConfidentialStorageResource[]): DataRequirements {
+  return { resources: workload.spec.resources.map(resourcePath),
+    encryptedStorage: (workload.spec.storage ?? []).flatMap(binding => {
+      const matches = storages.filter(storage => storage.metadata.name === binding.resource &&
+        storage.metadata.namespace === workload.metadata.namespace);
+      if (matches.length !== 1) throw new Error("Declared storage must resolve exactly once in the workload namespace");
+      return matches[0].spec.type === "EncryptedBlock" ? [binding.name] : [];
+    }) };
+}
+
+/** Expected names come from the reviewed manifest, never a status response. */
+export function readinessRequirements(manifest: string, name: string): DataRequirements {
+  const { workload, storages } = declaration(manifest, name);
+  return requiredData(workload, storages);
 }
 
 /** Public review document, containing no invitation, owner key or image key. */
@@ -261,7 +278,7 @@ export async function deploy(options: DeployOptions) {
     }
     options.onProgress?.("starting");
     let bootstrap: any;
-    const expectedResources = workload.spec.resources.map(path => resourcePath(path));
+    const required = requiredData(workload, storages);
     do {
       try { bootstrap = await client.bootstrapStatus(); }
       catch (error) {
@@ -269,14 +286,10 @@ export async function deploy(options: DeployOptions) {
         await delay(3000, undefined, { signal: options.signal });
         continue;
       }
-      if (bootstrap.phase !== "awaiting-configuration" &&
-          expectedResources.every(path => bootstrap.resources?.[path]?.status === 200) &&
-          Object.values(bootstrap.storage ?? {}).every((value: any) => value.phase === "ready")) break;
+      if (dataReadiness(required, bootstrap).ready) break;
       await delay(3000, undefined, { signal: options.signal });
     } while (Date.now() < deadline);
-    if (!bootstrap || bootstrap.phase === "awaiting-configuration" ||
-        !expectedResources.every(path => bootstrap.resources?.[path]?.status === 200) ||
-        !Object.values(bootstrap.storage ?? {}).every((value: any) => value.phase === "ready")) {
+    if (!dataReadiness(required, bootstrap).ready) {
       throw new Error("Keys were provisioned to the verified guest, but bootstrap did not reach ready; inspect status and retry");
     }
     options.onProgress?.("ready");
