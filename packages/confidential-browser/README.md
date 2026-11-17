@@ -54,6 +54,16 @@ The same command accepts PEM. `--verify` takes JSON text, not a filename. The bu
 
 The page's checker and `/certificate.der` download are conveniences. Verify the browser-exported bytes. If you use a reported download instead, first compare its complete certificate fingerprint with this tab's actual leaf. Matching the public-key fingerprint alone is not a full attestation check. A fresh nonce does not establish trust in JavaScript displaying its own result. Enter tokens, passwords and registry credentials only after the independent check succeeds. Keep the verification record for review; it does not replace your encrypted recovery backup.
 
+### Where the expected measurements come from
+
+The certificate checker's VM field is prefilled from a release profile bundled with the UI. Maintainers calculate this reference offline from reviewed guest boot files, the exact kernel command line and virtual CPU settings, then manually commit it to that profile. The page does not calculate an expected value from the running VM or adopt the value in its report.
+
+See [Where the VM measurement comes from](measurement-reference.md) for the complete configuration → calculation → release profile → UI path, public boot-file checksums, the [current calculation record](qualification/snp-launch-2026-11-12.json), and links to the pinned calculator, Kata release and relevant source code. Obtain the reference from a commit or review you independently trust. The older `qualification/snp-launch.json` belongs to the previous guest-kernel configuration.
+
+The separate workload-policy field needs the frontend's native genpolicy **Init-Data SHA-256** from its reviewed deployment plan. The VM launch measurement alone does not approve the container workload. Preparation and final guests have their own workload-policy bindings.
+
+### Download the verification record
+
 Select **Download verification record**, then check your browser's Downloads for `nebula-verification.json`. The page confirms that the download was requested and keeps **Download this record again** visible for retries. This link downloads the same snapshot; use the button to prepare a new one. Its `checkedAt` is the export time, and its preparation/final evidence is the most recent available result. Exporting does not run a fresh attestation. Use **Verify again & refresh status** first when you need a new final-workload check.
 
 ## Administrator

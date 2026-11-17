@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "scope": "Kata 4.3.1 dev SEV-SNP frontend and preparation guests",
+  "calculatedAt": "2026-11-12T17:55:10.482425+00:00",
+  "referenceType": "offline-calculated; manually published after release qualification",
+  "calculator": {
+    "repository": "https://github.com/virtee/sev-snp-measure",
+    "revision": "8f2b337e38bc83f87cd30f3253cdfe8e3e12cc3a"
+  },
+  "runtime": {
+    "kataRelease": "4.3.1",
+    "kataRevision": "03cf2ec06a5d302f23af811744f6bcea49988bfb",
+    "releaseUrl": "https://github.com/kata-containers/kata-containers/releases/tag/4.3.1",
+    "archive": "kata-go-static-4.3.1-amd64.tar.zst",
+    "archiveSha256": "66b35b06f6b41b56f8606ddf3ed3e5660b0971d1e309d903457c4056a0b9eff0",
+    "installerImage": "quay.io/kata-containers/kata-deploy:4.3.1@sha256:7399058e3e6378a766770345abcf9b20b53611a419b1b56e71162c6ac1bf625a"
+  },
+  "bootFiles": {
+    "kernel": {
+      "archivePath": "opt/kata/share/kata-containers/vmlinuz-6.18.56-208",
+      "sha256": "3432f6a4fe359ce7984181ef95b74afbce5fd69d9c5db2ac526a81d5ed3dc387"
+    },
+    "ovmf": {
+      "archivePath": "opt/kata/share/ovmf/AMDSEV.fd",
+      "sha256": "d9bbf4c9279c89e4dfc7b90d8a1d42440bc9b8022a9cdb86ab4d5449b51892a7"
+    }
+  },
+  "launch": {
+    "vcpuType": "EPYC-v4",
+    "vcpus": 2,
+    "guestFeatures": 1,
+    "initrd": null,
+    "kernelCommandLine": "tsc=reliable no_timer_check rcupdate.rcu_expedited=1 i8042.direct=1 i8042.dumbkbd=1 i8042.nopnp=1 i8042.noaux=1 noreplace-smp reboot=k cryptomgr.notests net.ifnames=0 pci=lastbus=0 dm-mod.create=\"dm-verity,,,ro,0 772096 verity 1 /dev/vda1 /dev/vda2 4096 4096 96512 0 sha256 c5ed4692e77066e642dd05517f540e1aa9a9d66a695ff25c76378fb3f068aa3e 68fc7c5cd0d1a9a418ad1307be0f83ba6ef22053c2cbc8de34060b3439d2776a\" root=/dev/dm-0 rootflags=data=ordered,errors=remount-ro ro rootfstype=ext4 console=hvc0 console=hvc1 quiet systemd.show_status=false panic=1 selinux=0 systemd.unit=kata-containers.target systemd.mask=systemd-networkd.service systemd.mask=systemd-networkd.socket scsi_mod.scan=none agent.launch_process_timeout=6 cgroup_no_v1=all systemd.unified_cgroup_hierarchy=1 agent.guest_components_procs=api-server-rest agent.guest_components_rest_api=all agent.aa_kbc_params=cc_kbc::http://127.0.0.1:8080",
+    "kernelCommandLineSha256": "9b37303be702a28de4a9b7fe6d1f1897b40c0b867bb8f25254d4bee9936f3609"
+  },
+  "expectedMeasurement": "e17cb86d23c57635b2fa4540bc44c411c2ef7b1836ad9fb05906f57d3692292c32645a61e913e80b618abc1d40f54149",
+  "publication": {
+    "initialMeasurementCommit": "497063c9bc518a415792d6dbdee3443d057fbc37",
+    "reviewedProfileRevision": "1d2fcc271299f01a24172804fcc3dff82ab90401",
+    "profilePath": "packages/confidential-browser/src/loader/profiles.json",
+    "note": "The calculator result was copied into the release profile manually. The browser bundles that profile and prefills its measurement; it does not learn an expected value from a guest report."
+  },
+  "limits": [
+    "This records public launch inputs and an expected digest, not an attestation report or a new test run.",
+    "A native genpolicy Init-Data SHA-256 binding, platform policy and TLS key binding must also pass verification.",
+    "This two-vCPU reference applies to the documented frontend/preparation configuration. Recalculate for different measured boot inputs or vCPU state.",
+    "Review this record and its source independently. A reference supplied by the page being checked cannot authenticate that page by itself."
+  ]
+}
