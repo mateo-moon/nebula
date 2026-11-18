@@ -1,0 +1,13 @@
+# Exact Skopeo revision qualified by CoCo's upstream Dockerfile.keyprovider.
+# Build on the native builder CPU and cross-compile pure Go, avoiding an
+# emulated legacy Go compiler and any host crypto libraries in the final VM.
+FROM --platform=$BUILDPLATFORM golang:1.27.3@sha256:f20d83a83e18dbd2a4714b8ffd4b30b287b6243962dd75608e86abcc63ba4efc AS build
+ARG TARGETARCH
+WORKDIR /src
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} go build -mod=vendor \
+    -tags 'containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper' \
+    -ldflags '-s -w' -o /skopeo ./cmd/skopeo
+
+FROM scratch
+COPY --from=build /skopeo /skopeo

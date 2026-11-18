@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "qualification": "read-only-native-sev-snp-data-readiness",
+  "checkedUtc": "2026-11-16T15:53:29.986Z",
+  "result": "passed",
+  "sources": {
+    "baseRevision": "d31e50adcb8fbba307537f7f8b7c17f1a5982616",
+    "readinessHelperSha256": "1ad84dd061ee670d14202233c826641523a1c4db52cf50097b13828f4b66dc74",
+    "tngNativeBinarySha256": "db4456de076c6feacb76f3356c8cd61ee8097610e9241bb92091488b0bab3f9c"
+  },
+  "nativeInitDataSha256": "04439e7b632bb1172251382b63597ff4ce7a31aed4e61fb8d5a6316e7a2f64ad",
+  "verification": {
+    "sameLiveTlsNativeSnpVerification": true,
+    "strictPreparedIdentityUnchanged": true,
+    "savedInnerSpkiMatched": true,
+    "enrollmentFileUnchanged": true,
+    "ownerAuthenticatedStatusReads": true,
+    "nativeCertificateAppraisals": 5,
+    "allNativeVerifierExitsSucceeded": true
+  },
+  "dataReadiness": {
+    "bootstrapOnly": {
+      "ready": true,
+      "configured": true,
+      "resourcesReady": 4,
+      "resourcesTotal": 4,
+      "disksReady": 2,
+      "disksTotal": 2,
+      "missingResources": [],
+      "pendingDisks": []
+    },
+    "bootstrapWithFreshSeparateStorage": {
+      "ready": true,
+      "configured": true,
+      "resourcesReady": 4,
+      "resourcesTotal": 4,
+      "disksReady": 2,
+      "disksTotal": 2,
+      "missingResources": [],
+      "pendingDisks": []
+    }
+  },
+  "offlineIncompleteReportChecks": {
+    "omittedDeclaredDiskReady": false,
+    "omittedAllResourceResultsReady": false,
+    "omittedDeclaredDiskKeyReady": false
+  },
+  "operationalStatus": {
+    "sameAppOciContainer": true,
+    "appOciContainerRestartCount": 0,
+    "allRequiredEncryptedStorageClientsRunning": true
+  },
+  "limits": {
+    "dataAccessReadinessOnly": true,
+    "applicationHealthChecked": false,
+    "allApplicationRequestsGetOnly": true,
+    "remoteWrites": false,
+    "guestOrDiskReplacements": false,
+    "noKeyValuesReturnedToQualificationClient": true,
+    "noOwnerKeyOrTokenValuesIncluded": true,
+    "browserVisualChecksUseSyntheticData": true,
+    "newPortalImagesPublishedOrDeployed": false
+  }
+}

@@ -33,11 +33,12 @@ test("wrong endpoint, short expiry, duplicate response, and noncanonical credent
   ]) assert.throws(() => render(response));
 });
 
-// Required by the Linux CI job; the local native tier does not need Docker.
+// Linux CI pulls these exact source-pinned images with bounded retries first.
+// Keep execution offline; the local native tier does not need Docker.
 test("pinned credential tools run non-root and enforce the same response checks", {
   skip: process.env.ECR_READER_CONTAINER_TEST !== "1",
 }, () => {
-  const isolated = ["run", "--rm", "--network=none", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges:true",
+  const isolated = ["run", "--rm", "--pull=never", "--network=none", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges:true",
     "--user=1000:1000", "--cpus=1", "--memory=256m", "--pids-limit=64"];
   const version = execFileSync("docker", [...isolated, AWS_CLI_IMAGE, "--version"], { encoding: "utf8", timeout: 60000 });
   assert.match(version, /aws-cli\//);

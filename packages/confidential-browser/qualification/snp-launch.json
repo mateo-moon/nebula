@@ -1,0 +1,27 @@
+{
+  "calculator": {
+    "repository": "https://github.com/virtee/sev-snp-measure",
+    "revision": "8f2b337e38bc83f87cd30f3253cdfe8e3e12cc3a",
+    "vcpuType": "EPYC-v4",
+    "guestFeatures": 1
+  },
+  "kernelSha256": "f10415216b52b2f05d173f8ea20934c386b5911c1d22b99ff02c30b64977ea34",
+  "ovmfSha256": "d9bbf4c9279c89e4dfc7b90d8a1d42440bc9b8022a9cdb86ab4d5449b51892a7",
+  "approvedBaseline": {
+    "vcpus": 4,
+    "appendSha256": "db1b62f4899355a641c53765e534b9451c24d28500500d3d971749a8a0f49d4c",
+    "measurement": "07f04f938d6462ecfb0672bbb0ba317367f344025e593592234e57293d67c24baab376117af94d4dbfcb9e83b63c24f8",
+    "reproduced": true
+  },
+  "preparation": {
+    "vcpus": 2,
+    "append": "tsc=reliable no_timer_check rcupdate.rcu_expedited=1 i8042.direct=1 i8042.dumbkbd=1 i8042.nopnp=1 i8042.noaux=1 noreplace-smp reboot=k cryptomgr.notests net.ifnames=0 pci=lastbus=0 dm-mod.create=\"dm-verity,,,ro,0 772096 verity 1 /dev/vda1 /dev/vda2 4096 4096 96512 0 sha256 c7a3264aed8c2ad1c941e10abb67b13beb2ea4c0f409823c221ed2486d531fb8 9db451d042414547fec0d23dd848e7dacee249411308489232bd55b1634d80b2\" root=/dev/dm-0 rootflags=data=ordered,errors=remount-ro ro rootfstype=ext4 console=hvc0 console=hvc1 quiet systemd.show_status=false panic=1 selinux=0 systemd.unit=kata-containers.target systemd.mask=systemd-networkd.service systemd.mask=systemd-networkd.socket scsi_mod.scan=none agent.launch_process_timeout=6 cgroup_no_v1=all systemd.unified_cgroup_hierarchy=1 agent.guest_components_procs=api-server-rest agent.guest_components_rest_api=all agent.aa_kbc_params=cc_kbc::http://127.0.0.1:8080",
+    "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc"
+  },
+  "combinedWorkload": {
+    "vcpus": 4,
+    "appendSha256": "c1d2719411c5413b9efd942bcc3e6e9aa4535e0ae95c0808d7146b9393fa1601",
+    "measurement": "e6bfc24840176237937ab32b8a9425fae4856b03a7864efea46e92b9c5b4a76eef48e889f498fceb73c90e03dcb8bcd9"
+  },
+  "note": "Expected launch values calculated offline from the pinned binaries after reproducing the approved baseline. Preparation has two vCPUs; the combined workload has four with its native runtime resource allocation. No observed quote was adopted as reference."
+}

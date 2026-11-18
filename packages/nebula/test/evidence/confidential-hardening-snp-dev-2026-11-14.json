@@ -1,0 +1,263 @@
+{
+  "schemaVersion": 1,
+  "qualification": "real-sev-snp-native-owner-recovery-startup-and-isolation",
+  "date": "2026-11-14",
+  "publicationStatus": "native-passed-browser-owner-flow-pending",
+  "nativeResult": "passed",
+  "sources": {
+    "workloadAgentRevision": "d637fd7ff1d6a7a09a8f7531af08bb336446570e",
+    "nativeClientRevision": "9a48e1eb3cc18ba041d833a2c6b6565ae5b642a8",
+    "devOpsRevision": "86aa410d572496234ccafbd5525dbe27bc9932e5",
+    "currentSynthesisRevision": "5fa7bfb4eddf1a6f33f1d9ee31763aff7dae934b",
+    "frontendAgentRevision": "12aa0963f6d93417f9d98c6563179f452293f8fa",
+    "frontendDeploymentRevision": "0b6e94d847808ce81814fcf2cd26dbe8779c2fe5"
+  },
+  "images": {
+    "workloadAgent": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:239be4ae002450b577e03bc3abd8cd827c04ed1d3653eb3dfc64fbfba8e87de5",
+    "operator": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:08acc2dc51d9353f1d63e94902af6e2f90111a97974f0b2ee99347d2034030e5",
+    "trusteeKbs": "ghcr.io/confidential-containers/staged-images/kbs@sha256:ebbb0b34c748ce59a6afcaf05c1cc6f6c66ee6aa2c70222fd160700a296edd68",
+    "tng": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+    "encryptedApplication": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:d74297f162961665592a885e8c9e80616a7f2eb7170ab3a1de8c56752d3f2e87",
+    "trusteeChart": "oci://ghcr.io/mateo-moon/helm/trustee@sha256:371376d5c4b135890f6b9b0071ad5a8f7c9975af797994b4aaf5efbea2e21cb5",
+    "preparation": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:fc9ba88ad771a15ea1637d72ffe1773e3940e1a0a313177e20eb7829d3a80891",
+    "frontend": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:fd0ee7e2178e9cfa5f2ffc597cba29eb7944380e38ea34dfdde0785f7cc9b6a8"
+  },
+  "attestation": {
+    "tee": "AMD SEV-SNP",
+    "launchMeasurement": "8c33e7ed240da6571f04802dd97050d4a8ce029473931dce869ee458b1dfd7025745ed62e7391fea520db139332c0c8e",
+    "nativeInitDataSha256": "04439e7b632bb1172251382b63597ff4ce7a31aed4e61fb8d5a6316e7a2f64ad",
+    "minimumReportedTcb": {
+      "bootloader": 10,
+      "tee": 0,
+      "snp": 24,
+      "microcode": 84
+    },
+    "nativePolicyVerificationPassed": true,
+    "sameLiveOuterTlsAndEnrolledInnerTlsUsed": true,
+    "minimumTcbIsVerificationThresholdNotAnExportedRawHardwareReport": true
+  },
+  "fixture": {
+    "syntheticTestKeysOnly": true,
+    "applicationLayers": 7,
+    "sevenLayersPassedNativeGoOciCryptHmacAndByteExactPlaintextComparison": true,
+    "encryptedImageReusedWithoutRepublishing": true,
+    "encryptedDataAndAuditBytesEach": 67108864,
+    "memoryVolumeBytes": 33554432,
+    "applicationUid": 11000,
+    "applicationGid": 11000
+  },
+  "preProvisioningAccessChecks": {
+    "requests": 24,
+    "allDenied": true,
+    "operations": [
+      {
+        "operation": "image-key-read",
+        "missingCredentialStatus": 403,
+        "independentWrongSignerStatus": 403
+      },
+      {
+        "operation": "data-key-read",
+        "missingCredentialStatus": 403,
+        "independentWrongSignerStatus": 403
+      },
+      {
+        "operation": "audit-key-read",
+        "missingCredentialStatus": 403,
+        "independentWrongSignerStatus": 403
+      },
+      {
+        "operation": "external-attestation-start",
+        "missingCredentialStatus": 403,
+        "independentWrongSignerStatus": 403
+      },
+      {
+        "operation": "external-attestation-evidence",
+        "missingCredentialStatus": 403,
+        "independentWrongSignerStatus": 403
+      },
+      {
+        "operation": "policy-list",
+        "missingCredentialStatus": 403,
+        "independentWrongSignerStatus": 401
+      },
+      {
+        "operation": "deny-all-policy-write",
+        "missingCredentialStatus": 403,
+        "independentWrongSignerStatus": 401
+      },
+      {
+        "operation": "storage-status",
+        "missingCredentialStatus": 403,
+        "independentWrongSignerStatus": 403
+      },
+      {
+        "operation": "recovery-plan-read",
+        "missingCredentialStatus": 403,
+        "independentWrongSignerStatus": 403
+      },
+      {
+        "operation": "invalid-recovery-request",
+        "missingCredentialStatus": 403,
+        "independentWrongSignerStatus": 403
+      },
+      {
+        "operation": "diagnostics-read",
+        "missingCredentialStatus": 403,
+        "independentWrongSignerStatus": 403
+      },
+      {
+        "operation": "supervisor-status",
+        "missingCredentialStatus": 403,
+        "independentWrongSignerStatus": 403
+      }
+    ],
+    "externalAttestationEndpointsReturnedZeroBytes": true,
+    "noSuccessfulExternalKeyRead": true
+  },
+  "storageRecovery": {
+    "heldMilliseconds": 37313,
+    "authenticatedHoldSamples": 3,
+    "dataRequiredRecoveryWhileAuditWasReady": true,
+    "applicationGateRemainedClosedAndOwnerApiAvailableDuringHold": true,
+    "firstSeparatelyReviewedRequestStatus": 409,
+    "firstRequestFailureReason": "Unknown; the protected API returns a generic empty409. Read-only followup showed unchanged eligible state.",
+    "oneNewContextApprovedFreshRequestStatus": 202,
+    "freshChallengeLifetimeSeconds": 60,
+    "sameConnectedClientUsedForFreshPlanAndApply": true,
+    "oneStaleReplayStatus": 409,
+    "bothEncryptedVolumesReadyAfterRecovery": true,
+    "guestAndOciContainerPreservedForRecovery": true,
+    "noKeyRepostOrNativePolicyRearm": true
+  },
+  "restartAndApplicationProof": {
+    "appOciContainerRestartCount": 0,
+    "trustedSupervisorChildRestartCount": 1,
+    "previousDescendantsReapedBeforeRestart": true,
+    "sameMemoryVolumeRetainedAcrossChildRestart": true,
+    "freshNonceHmacVerified": true,
+    "rawAuthenticatedPayloadSha256": "f0f83a9e7a77d5838f370c9abce6f5d6402b7ebd21988de4bb639d3f9a37a209",
+    "initialDataAuditAndMemoryMountsReadyAtApplicationEntry": true,
+    "applicationResourceAvailable": true
+  },
+  "applicationIsolation": {
+    "initialAndCurrentChecksPassed": true,
+    "capabilityMasksAllZero": true,
+    "noNewPrivileges": true,
+    "supplementaryRootGroupAbsent": true,
+    "imageAndBothDiskResourcesReturnedZeroBytes": true,
+    "privateKeyLocationsUnreadable": true,
+    "trustedLauncherMemoryEnvironmentAndDescriptorsUnreadable": true,
+    "protectedIpv4AndIpv6LoopbackPortsUnreachable": true
+  },
+  "nativeExecControls": {
+    "requests": 4,
+    "allDeniedByNativePolicy": true,
+    "targetContainerRoles": [
+      "app",
+      "nebula-agent",
+      "kbs",
+      "nebula-tng"
+    ],
+    "stdoutBytes": 0,
+    "guestCommandsExecuted": false
+  },
+  "preservation": {
+    "scope": "Original 53 protected objects and an expanded 71-object baseline, excluding only the explicitly replaced unclaimed disposable frontend.",
+    "originalProtectedResources": 53,
+    "baselineQemuProcesses": 10,
+    "baselineLoopDevices": 14,
+    "latestIndependentComparison": "2026-11-14T19:17:35.692926+00:00",
+    "noBroadSyncPruneOrOldDiskOperationPerformedByNativeQualification": true,
+    "originalProtectedUidAndFullSpecUnchanged": true,
+    "originalHostComparisonUtc": "2026-11-14T19:17:34.760630+00:00",
+    "originalQemuProcessesAndLoopBackingsUnchanged": true,
+    "expandedProtectedResources": 71,
+    "expandedComparisonUtc": "2026-11-14T19:17:35.770299+00:00",
+    "expandedProtectedUidAndFullSpecUnchanged": true,
+    "qualifiedNativeAndPreparationContainerIdentitiesUnchanged": true,
+    "qualifiedNativeAndPreparationContainerRestartCounts": 0,
+    "onlyReplacedRole": "failed unclaimed disposable frontend; no earlier guest or disk replaced"
+  },
+  "limits": {
+    "browser9456Qualification": "pending-personal-browser-certificate-comparison-and-owner-flow",
+    "existing9455Portal": "retained-separately; no migration or replacement in this qualification",
+    "kubernetesUidSpecAndRestartCountsAreOperationalObservations": true,
+    "attestationAndHmacProvideIndependentEvidence": true,
+    "noClaimAboutOld9454CiphertextOrUnpackFailure": true,
+    "hostCanStillDenyService": true,
+    "managementSupportPinsAreReproducibilityMetadataNotTeeAttestation": true,
+    "noNewNearFourGiBQualification": true
+  },
+  "sanitization": {
+    "ownerKeysOrCredentialsIncluded": false,
+    "jwtIncluded": false,
+    "rawHmacOrAuthenticatedPayloadIncluded": false,
+    "privateFilesystemPathsIncluded": false,
+    "rawPodSpecsIncluded": false,
+    "recoveryChallengesIncluded": false
+  },
+  "preparedUtc": "2026-11-14T19:17:35.770299+00:00",
+  "managementSupportImages": {
+    "storageDevicePlugin": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:cc4a91e485be219ca9f860880d29cedc5cada5c776231d96c7ec8a6bcfc861d9",
+    "sealedDiskToolsDigest": "sha256:0ebea2077f6284beb74f1bd53fa3423139ef36f49f4d3325b5c2529863c20a0b"
+  },
+  "postProvisioningAccessChecks": {
+    "result": "passed",
+    "sameReadyAttestedGuestAndAppContainerRetained": true,
+    "existingNativeImageBootAndBothEncryptedVolumesEstablishKeysInUse": true,
+    "recordedAuthenticatedBootstrapKeyPresence": [
+      {
+        "resourceRole": "image",
+        "status": 200,
+        "bytes": 32
+      },
+      {
+        "resourceRole": "data",
+        "status": 200,
+        "bytes": 32
+      },
+      {
+        "resourceRole": "audit",
+        "status": 200,
+        "bytes": 32
+      }
+    ],
+    "newBootstrapFanoutDuringQualifiedRetry": false,
+    "forbiddenReadRequests": 6,
+    "missingAndWrongSignerImageDataAuditReadsAll403": true,
+    "allForbiddenReadResponseBytes": 0,
+    "wrongSignerPermissivePolicyWriteStatus": 401,
+    "policyWriteBodyUsesNativeClientJsonPolicyBase64UrlEncoding": true,
+    "policyWriteBodyRequestsAllowAll": true,
+    "validOwnerPolicyWrites": 0,
+    "ownerAuthenticatedPolicyIdListGetBeforeSha256": "2c4c2d627c34853a4a8840a8c28108b640fcf1b41b85e496a8077da73537f80c",
+    "ownerAuthenticatedPolicyIdListGetAfterSha256": "2c4c2d627c34853a4a8840a8c28108b640fcf1b41b85e496a8077da73537f80c",
+    "policyIdListResponseBytes": 19,
+    "policyIdListUnchanged": true,
+    "policyGetRepresentation": "policy-id-list",
+    "policyContentsReadBack": false,
+    "freshNonceHealthHmacVerified": true,
+    "freshAuthenticatedHealthPayloadSha256": "4faedec0b4e402e729074e51feea09defd489e192701ad68b2d26077ddeef5bd",
+    "allPreviousApplicationIsolationChecksStillPassed": true,
+    "preProvisioning24RequestEvidenceUnchanged": true,
+    "imageOrDiskKeyFilesRead": false,
+    "keysReposted": false,
+    "earlierIncompleteTransportAttemptExcludedFromPassCount": true
+  },
+  "frontendBootstrap": {
+    "checkedUtc": "2026-11-14T19:11:36.189Z",
+    "nativeSnpVerificationPassed": true,
+    "exactPreGeneratedWorkloadPolicy": true,
+    "launchMeasurement": "e17cb86d23c57635b2fa4540bc44c411c2ef7b1836ad9fb05906f57d3692292c32645a61e913e80b618abc1d40f54149",
+    "nativeInitDataSha256": "27267bb0b7e6d4dc70e7e4f6b37013cafb662e358aea4684698ec076846bf97f",
+    "attestationPrewarmEnabled": true,
+    "singleTngExecRetained": true,
+    "createOncePolicyUnchanged": true,
+    "nodeContainerRestartCount": 0,
+    "tngContainerRestartCount": 0,
+    "browserCertificateComparison": "pending",
+    "browserOwnerFlow": "pending",
+    "ownerCredentialsSent": false,
+    "bootstrapDoesNotEstablishCompletedBrowserOwnerFlow": true
+  }
+}

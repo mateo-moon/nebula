@@ -12,7 +12,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
-import { DEFAULT_SCOPE, scanBuffer, scanText } from "./publication-guard.mjs";
+import { DEFAULT_SCOPE, loadAllowlist, scanBuffer, scanText } from "./publication-guard.mjs";
 
 const GUARD = join(dirname(fileURLToPath(import.meta.url)), "publication-guard.mjs");
 const sha256 = (s) => createHash("sha256").update(s).digest("hex");
@@ -304,11 +304,52 @@ test("CLI: default scope, redacted output and exit codes", (t) => {
 });
 
 test("the checked-in allowlist is well formed", async () => {
-  const { loadAllowlist } = await import("./publication-guard.mjs");
   const entries = loadAllowlist(join(dirname(GUARD), "publication-guard.allow.json"));
   for (const e of entries) {
-    assert.match(e.sha256, /^[0-9a-f]{64}$/);
+    assert.match(e.type === "public-source-reference" ? e.lineSha256 : e.sha256, /^[0-9a-f]{64}$/);
     assert.ok(e.class && e.reason, "entries need a class and a reason");
+  }
+});
+
+test("public protocol references bind the address, rule, source path and complete unencoded line", () => {
+  const source = "packages/protocol/ranges.ts", value = [10, 0, 0, 0].join(".");
+  const text = `const network = "${value}"; // RFC 1918 range boundary`;
+  const entry = { type: "public-source-reference", class: "rfc1918-ip", source, value,
+    lineSha256: sha256(text), reference: "https://www.rfc-editor.org/rfc/rfc1918#section-3", reason: "Public protocol constant" };
+  const checked = (text, overrides = {}) => scanText(text, { source, allow: [entry], ...overrides });
+  assert.deepEqual(checked(text), []);
+  assert.deepEqual(scanBuffer(Buffer.from(text), { source, allow: [entry] }), []);
+  assert.deepEqual(classes(checked(text + " // changed")), ["rfc1918-ip"]);
+  assert.deepEqual(classes(checked(text, { source: "packages/protocol/another.ts" })), ["rfc1918-ip"]);
+  for (const delta of [{ class: "public-ip" }, { value: [10, 0, 0, 1].join(".") }, { reference: "https://www.rfc-editor.org/rfc/rfc1918" }]) {
+    assert.deepEqual(classes(checked(text, { allow: [{ ...entry, ...delta }] })), ["rfc1918-ip"]);
+  }
+  const other = text.replace(value, [10, 0, 0, 1].join("."));
+  assert.deepEqual(classes(checked(other, { allow: [{ ...entry, lineSha256: sha256(other) }] })), ["rfc1918-ip"]);
+  assert.deepEqual(classes(scanBuffer(gzipSync(text), { source, allow: [entry] })), ["rfc1918-ip"]);
+  assert.deepEqual(classes(checked(text, { via: "base64" })), ["rfc1918-ip"]);
+  assert.deepEqual(classes(checked(text, { line: 1 })), ["rfc1918-ip"]);
+});
+
+test("protocol references never exempt credentials, chip-like values or other addresses", () => {
+  const source = "packages/protocol/ranges.ts", value = [10, 0, 0, 0].join(".");
+  const text = `const range = "${value}"; // ${account} ${hex128()}`;
+  const entry = { type: "public-source-reference", class: "rfc1918-ip", source, value,
+    lineSha256: sha256(text), reference: "https://www.rfc-editor.org/rfc/rfc1918#section-3", reason: "Public protocol constant" };
+  const findings = scanText(text + "\n" + privatePem() + "\n" + [10, 23, 45, 67].join("."), { source, allow: [entry] });
+  assert.deepEqual(classes(findings), ["aws-account-id", "hex-64-bytes", "private-key", "rfc1918-ip"]);
+  assert.ok(findings.every(f => !Object.hasOwn(f, "value") && !Object.hasOwn(f, "lineSha256")), "Findings must not expose values or reversible address hashes");
+});
+
+test("protocol-reference allowlists reject arbitrary host addresses, paths and secret classes", t => {
+  const root = tempDir(t), file = join(root, "allow.json"), value = [10, 0, 0, 0].join(".");
+  const entry = { type: "public-source-reference", class: "rfc1918-ip", source: "packages/protocol/ranges.ts", value,
+    lineSha256: sha256(`const range = "${value}";`), reference: "https://www.rfc-editor.org/rfc/rfc1918#section-3", reason: "Public protocol constant" };
+  const read = delta => { writeFileSync(file, JSON.stringify({ version: 1, entries: [{ ...entry, ...delta }] })); return () => loadAllowlist(file); };
+  assert.deepEqual(read({})(), [entry]);
+  for (const delta of [{ value: [10, 0, 0, 1].join(".") }, { source: "/absolute/file.ts" }, { source: "../file.ts" },
+    { class: "private-key" }, { class: "public-ip" }, { reference: "https://example.com/" }, { lineSha256: "" }, { reason: "" }]) {
+    assert.throws(read(delta), /reviewed protocol address/);
   }
 });
 
@@ -316,6 +357,21 @@ const IMAGES = [
   { context: "docker/devops-bridge", workflow: "publish-devops-bridge.yml", retired: "build-devops-bridge.yml", file: "synthetic.py" },
   { context: "docker/nebula-cmp", workflow: "publish-nebula-cmp.yml", retired: "build-nebula-cmp.yml", file: "Dockerfile" },
   { context: "packages/nebula/src/modules/infra/k0s/baremetal", workflow: "publish-baremetal-provisioner.yml", retired: "build-baremetal-provisioner.yml", file: "Dockerfile" },
+];
+
+const CONFIDENTIAL_ROLES = ["operator", "agent", "storage", "storage-devices", "browser"];
+const CONFIDENTIAL_SOURCES = [
+  "packages/confidential-operator", "packages/confidential-agent",
+  "packages/confidential-storage", "packages/confidential-storage-devices",
+  "packages/confidential-client", "packages/confidential-browser",
+  "packages/nebula/package.json", "packages/nebula/src/core/base-construct.ts",
+  "packages/nebula/src/utils/secrets.ts",
+  "packages/nebula/src/modules/k8s/confidential-guests",
+  "packages/nebula/src/modules/k8s/confidential-workloads",
+  "packages/nebula/src/modules/k8s/trustee",
+  "packages/nebula/src/modules/k8s/envoy/measured-fragments.ts",
+  ...CONFIDENTIAL_ROLES.map((role) => `docker/confidential-${role}`),
+  ".dockerignore",
 ];
 
 for (const { context, file } of IMAGES) {
@@ -556,8 +612,76 @@ test("the publisher detector sees jobs at any indent and every publishing form",
   assert.deepEqual([...jobsOf(wf(`${quiet}  other:\n    steps:\n      - run: true\n`)).keys()], ["test", "other"]);
 });
 
+function confidentialPublisherViolations(workflow) {
+  const violations = [];
+  const check = (condition, message) => { if (!condition) violations.push(message); };
+  const triggers = triggersOf(workflow);
+  const events = [...triggers.matchAll(/^ {2}([^\s:#]+):/gm)].map((m) => m[1]);
+  check(events.length === 2 && events.includes("push") && events.includes("workflow_dispatch") &&
+    /\n  push:\n    branches: \[main\]\n/.test(`\n${triggers}`) && !/\b(?:tags|branches-ignore|tags-ignore)\s*:/.test(triggers),
+  "confidential images publish only on main or explicit dispatch");
+  check(workflow.includes("      - .github/workflows/publish-confidential-images.yml\n"),
+    "workflow edits rerun publication");
+  const jobs = jobsOf(workflow);
+  check([...jobs.keys()].join() === "guard,publish", "the only jobs are guard and publish");
+  const guard = jobs.get("guard") ?? "", publish = jobs.get("publish") ?? "";
+  const scan = guard.match(/name: Scan source and build contexts before publication\n\s+run: >-\n((?: {10}.+\n)+)/)?.[1];
+  const actualSources = scan?.trim().split(/\s+/);
+  check(JSON.stringify(actualSources) === JSON.stringify(["node", "scripts/publication-guard.mjs", ...CONFIDENTIAL_SOURCES]),
+    "the guard scans every copied source and Dockerfile");
+  check((guard.match(/\n\s+(?:-\s+)?run:/g) ?? []).length === 2 &&
+    (guard.match(/\n\s+- uses:/g) ?? []).length === 2 &&
+    guard.includes("run: node scripts/check-confidential-docker-bases.mjs") &&
+    !/continue-on-error|\n\s+if:|\n\s+(?:ref|repository):/.test(guard),
+  "the guard cannot be skipped or replace its checkout");
+  check(publishingJobs(jobs).join() === "publish" && /\n\s+needs: guard\n/.test(publish) &&
+    !/continue-on-error|\n\s+if:|\n\s+(?:ref|repository):/.test(publish),
+  "publication depends on the unskippable guard and the same tree");
+  check(publish.includes("role: [operator, agent, storage, storage-devices, browser]") &&
+    (publish.match(/uses: docker\/build-push-action@/g) ?? []).length === 1 &&
+    publish.includes("context: .") &&
+    publish.includes("file: docker/confidential-${{ matrix.role }}/Dockerfile") &&
+    publish.includes("push: true") &&
+    publish.includes("tags: ghcr.io/${{ github.repository_owner }}/nebula-confidential-${{ matrix.role }}:sha-${{ github.sha }}") &&
+    !/\n\s+build-contexts:/.test(publish) &&
+    (publish.match(/\n\s+- uses:/g) ?? []).length === 4 &&
+    (publish.match(/\n\s+run:/g) ?? []).length === 1,
+  "publication builds only the five reviewed source-pinned roles");
+  const summary = `        run: |
+          test -n "$DIGEST"
+          printf 'nebula-confidential-%s: ghcr.io/%s/nebula-confidential-%s@%s\\n' \\
+            "$ROLE" "$OWNER" "$ROLE" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"
+`;
+  check(publish.match(/        run: \|\n(?:          .*\n)+/)?.[0] === summary,
+    "the only publication command records the image digest");
+  for (const role of CONFIDENTIAL_ROLES) {
+    const dockerfile = readFileSync(join(WORKFLOWS, "..", "..", `docker/confidential-${role}/Dockerfile`), "utf8");
+    for (const [, copied] of dockerfile.matchAll(/^COPY\s+(?!--from=)(.+)$/gm)) {
+      for (const source of copied.trim().split(/\s+/).slice(0, -1)) {
+        check(CONFIDENTIAL_SOURCES.some((path) => source === path || source.startsWith(`${path}/`)),
+          `${role} copies only scanned source: ${source}`);
+      }
+    }
+  }
+  return violations;
+}
+
+test("confidential image publication scans every Docker input before publishing", () => {
+  const workflow = readFileSync(join(WORKFLOWS, "publish-confidential-images.yml"), "utf8");
+  assert.deepEqual(confidentialPublisherViolations(workflow), []);
+  for (const [name, changed] of [
+    ["skip guard", workflow.replace("    needs: guard\n", "")],
+    ["publish another Dockerfile", workflow.replace("file: docker/confidential-${{ matrix.role }}/Dockerfile", "file: Dockerfile")],
+    ["omit scanned source", workflow.replace("          packages/nebula/src/utils/secrets.ts\n", "")],
+    ["publish an unreviewed role", workflow.replace("role: [operator, agent, storage, storage-devices, browser]", "role: [operator, agent, storage, storage-devices, browser, extra]")],
+    ["omit the browser source scan", workflow.replace("packages/confidential-client packages/confidential-browser", "packages/confidential-client")],
+    ["build from another ref", workflow.replace("          persist-credentials: false\n", "          persist-credentials: false\n          ref: main\n")],
+    ["add an unscanned shell command", workflow.replace('          test -n "$DIGEST"\n', '          test -n "$DIGEST"\n          echo changed\n')],
+  ]) assert.notDeepEqual(confidentialPublisherViolations(changed), [], name);
+});
+
 test("every workflow that publishes is a guarded image or pinned upstream Helm workflow", () => {
-  const guarded = new Set([...IMAGES.map((i) => i.workflow), "publish-trustee-chart.yml"]);
+  const guarded = new Set([...IMAGES.map((i) => i.workflow), "publish-confidential-images.yml", "publish-trustee-chart.yml"]);
   for (const file of readdirSync(WORKFLOWS).filter((f) => /\.ya?ml$/.test(f))) {
     const publishing = publishingJobs(jobsOf(readFileSync(join(WORKFLOWS, file), "utf8")));
     if (publishing.length > 0) assert.ok(guarded.has(file), `${file} publishes (${publishing.join(", ")}) without a guarded image entry`);
@@ -761,4 +885,38 @@ test("EFI artifact upstreams are exact public owners and neighbouring names rema
     assert.deepEqual(classes(scan(`https://github.com/${owner}/upstream/releases`)), []);
     assert.deepEqual(classes(scan(`https://github.com/${owner}-private/private`)), ["repository-owner"]);
   }
+});
+
+test("the browser TLS dependency is an exact public upstream without allowing neighbouring owners", () => {
+  assert.deepEqual(classes(scan("https://github.com/MercuryWorkshop/epoxy-tls/tree/reviewed")), []);
+  assert.deepEqual(classes(scan("https://github.com/mercuryworkshop-private/private")), ["repository-owner"]);
+});
+
+test("confidential verification scans its unchanged source scope before generating ignored bundles", () => {
+  const workflow = readFileSync(join(WORKFLOWS, "verify-confidential-workloads.yml"), "utf8");
+  const expected = ["packages/confidential-operator", "packages/confidential-agent", "packages/confidential-storage",
+    "packages/confidential-storage-devices", "packages/confidential-browser/src", "packages/confidential-browser/test",
+    "packages/confidential-browser/package.json", "packages/confidential-browser/pnpm-lock.yaml", "tools/tng-browser",
+    "packages/nebula/src/modules/k8s/confidential-workloads", "docker/confidential-operator", "docker/confidential-agent",
+    "docker/confidential-storage", "docker/confidential-storage-devices", "docker/confidential-browser"];
+  const check = text => {
+    const job = jobsOf(text).get("operator");
+    assert.ok(job, "The source-verifying job must exist");
+    const marker = "      - name: Check public runtime sources\n";
+    assert.equal(job.split(marker).length, 2, "The source check must run exactly once");
+    const at = job.indexOf(marker), before = job.slice(0, at);
+    assert.match(before, /actions\/checkout@/);
+    assert.match(before, /actions\/setup-node@/);
+    assert.doesNotMatch(before, /\bpnpm\b|make generate|cargo build/,
+      "Scan original source before dependency setup, tests or builds generate ignored artifacts");
+    const command = job.slice(at).split("\n")[1].trim();
+    assert.ok(command.startsWith("run: node scripts/publication-guard.mjs "));
+    assert.deepEqual(command.slice("run: node scripts/publication-guard.mjs ".length).split(/\s+/), expected,
+      "Keep every previous source/build-context argument; change order only");
+  };
+  check(workflow);
+  assert.throws(() => check(workflow.replace("      - name: Check public runtime sources\n",
+    "      - run: pnpm --dir packages/confidential-agent build\n      - name: Check public runtime sources\n")), /original source/);
+  assert.throws(() => check(workflow.replace("packages/confidential-operator packages/confidential-agent packages/confidential-storage",
+    "packages/confidential-operator packages/confidential-storage")), /every previous/);
 });
