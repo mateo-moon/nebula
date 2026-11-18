@@ -145,24 +145,42 @@ function releaseControls() {
   el("application-approval").hidden = saved && !!owner.applicationApproval;
   if (saved && owner.applicationApproval) el("override-review").hidden = true;
   text("application-review-title", saved ? "Your saved application settings" : "Review how your application will run");
+  applicationOverview();
 }
 function applicationOverview() {
+  if (!connection) return;
   const parent = el("application-summary"); parent.replaceChildren();
+  const storages = summarizeStorage(connection);
   for (const container of applicationContract(connection).containers) {
-    const section = document.createElement("div"), title = document.createElement("h4"), values = document.createElement("dl");
-    title.textContent = container.name;
+    const section = document.createElement("div"), title = document.createElement("h4"), identity = document.createElement("p"), values = document.createElement("dl");
+    const userImage = !!container.imageKeyResource;
+    title.textContent = userImage ? "Your application container" : "Additional container";
+    identity.className = "hint";
+    identity.textContent = `Container identifier: ${container.name}. This is a name assigned by the stack, not the name of the software in the image.`;
+    const archive = input("archive").files?.[0], reference = input("source-reference").value.trim();
+    const image = !userImage ? container.image : owner.prepared ? `Published encrypted release: ${owner.prepared.digest}` :
+      sourceMode() === "registry" ? reference ? `Registry source: ${reference} (not inspected yet)` : "Choose a source registry image above." :
+      archive ? `${archive.name} (local archive; not inspected yet)` : "Choose a local image archive above.";
     const rows = [
-      ["Execution", container.execution.source === "image" ? "Use the entrypoint and command from your image" : "Override: " + JSON.stringify([...container.execution.command, ...container.execution.args])],
-      ["Environment overrides", Object.keys(container.env).length ? JSON.stringify(container.env) : "None — use your image defaults"],
-      ["Storage paths", container.mounts.map(mount => `${mount.path} → ${mount.storage}`).join("; ") || "No storage mounts"],
-      ["Application ports", container.ports.map(port => `${port.name}: ${port.port}`).join("; ") || "None declared"],
-      ["Runs as", `User ${container.uid}, group ${container.gid}`],
+      ["Image to run", image],
+      ...(container.execution.source === "image" ? [["Startup command", "Use the image's ENTRYPOINT and CMD. No command override is configured; image metadata is read during preparation."]] : [
+        ["Command override", JSON.stringify(container.execution.command)], ["Argument override", JSON.stringify(container.execution.args)],
+      ]),
+      ["Environment overrides", Object.keys(container.env).length ? `Added to or replaces values from the image: ${JSON.stringify(container.env)}` : "None configured. Use the environment from the image."],
+      ["Storage inside this container", container.mounts.map(mount => {
+        const storage = storages.find(storage => storage.name === mount.storage);
+        return `${mount.path} — ${storage ? `${storage.typeLabel.toLowerCase()} “${storage.name}” (${imageSizeLabel(storage.capacityBytes)})` : mount.storage}`;
+      }).join("; ") || "No storage mounts configured."],
+      ["Private files this container can access", container.applicationResources.map(path => path.join("/")).join("; ") || "No private application files granted."],
+      ["Declared container ports", (container.ports.map(port => `${port.name}: ${port.port}`).join("; ") || "None declared.") + " This does not determine public reachability or restrict outbound connections."],
+      ["Application process identity", `Linux user ${container.uid}, group ${container.gid}${container.uid === 0 ? " (root user)." : " (non-root user)."}`],
+      ["CPU and memory", container.resources ? `Requests: ${JSON.stringify(container.resources.requests)}; limits: ${JSON.stringify(container.resources.limits)}.` : "Uses the stack's default container CPU and memory settings. The VM's allocation is configured separately."],
     ];
     for (const [name, value] of rows) {
       const row = document.createElement("div"), term = document.createElement("dt"), detail = document.createElement("dd");
       term.textContent = name; detail.textContent = value; row.append(term, detail); values.append(row);
     }
-    section.append(title, values); parent.append(section);
+    section.append(title, identity, values); parent.append(section);
   }
 }
 function renderSteps() {
@@ -281,7 +299,6 @@ async function connect() {
   text("configuration", JSON.stringify(connection, null, 2));
   const contract = applicationContract(connection);
   text("application-contract", JSON.stringify(contract, null, 2));
-  applicationOverview();
   const hasOverrides = contract.containers.some(container => container.execution.source === "override" || Object.keys(container.env).length > 0);
   el("override-review").hidden = !hasOverrides;
   const security = el("security-values"); security.replaceChildren();
@@ -630,8 +647,9 @@ el("clear-local-cache").addEventListener("click", () => {
 });
 el("download-verification").addEventListener("click", verificationDownload(el("verification-download-status"), el<HTMLAnchorElement>("verification-download-retry"), evidence));
 el("deploy-form").addEventListener("input", selectionChecklist);
-el("deploy-form").addEventListener("change", () => { sourceControls(); selectionChecklist(); });
-fileSelection(input("archive"), "image archive");
+el("deploy-form").addEventListener("change", () => { sourceControls(); selectionChecklist(); applicationOverview(); });
+input("source-reference").addEventListener("input", applicationOverview);
+fileSelection(input("archive"), "image archive", { clear: applicationOverview });
 fileSelection(input("source-recovery"), "source recovery file", { clear: () => { input("source-recovery-password").value = ""; } });
 sourceControls();
 unconfirmedReadiness();
