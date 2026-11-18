@@ -16,14 +16,12 @@ cleanup() {
 }
 
 error_handler() {
-  local last_command="${BASH_COMMAND}"
-  local exit_code="$?"
-  echo -e "\033[0;31m${SCRIPT_NAME} failed: '${last_command}' exited with ${exit_code}.\033[0m" >&2
-  cleanup
+  local exit_code="$1" last_command="$2"
+  printf "%s failed: '%s' exited with %s.\n" "${SCRIPT_NAME}" "${last_command}" "${exit_code}" >&2
   exit "${exit_code}"
 }
 
-trap error_handler ERR
+trap 'error_handler "$?" "$BASH_COMMAND"' ERR
 trap cleanup EXIT
 
 usage() {
@@ -38,14 +36,14 @@ Options:
   --family NAME             Optional image family
   --description TEXT        Optional image description
   --storage-location LOC    Image storage location (e.g., us, eu)
-  --disk-size SIZE          Total disk size for GPT image (default: 2G)
+  --disk-size SIZE          Total disk size for GPT image (default: 5G)
   --esp-size SIZE           EFI System Partition size (default: 200M)
   --gpt                     Build a GPT disk with ESP+OS (default)
   --no-gpt                  Package usb as disk.raw without GPT (legacy behavior)
   --use-docker              Build GPT image inside qemu_machine container (default)
-  --no-docker               Build GPT image on host (requires losetup, sfdisk, mkfs, mount)
-  --local-only              Stop after creating local tarball (no upload/image create)
-  --tarball-out PATH        Where to write the tarball when using --local-only
+  --no-docker               Skip Docker (supported with --no-gpt only)
+  --local-only              Keep the tarball in a new nebula-image.* directory in the current directory
+  --tarball-out PATH        Local-only output path, overwriting an existing file
   --force                   Overwrite existing GCS object and delete existing image if present
   -h, --help                Show this help
 
@@ -146,13 +144,6 @@ if [ "${LOCAL_ONLY}" != "true" ]; then
     echo "gcloud CLI is required. Install and authenticate first." >&2
     exit 1
   fi
-  if ! command -v gsutil >/dev/null 2>&1; then
-    echo "gsutil is required (usually installed with gcloud)." >&2
-    exit 1
-  fi
-fi
-
-if [ "${LOCAL_ONLY}" != "true" ]; then
   if [ -z "${PROJECT_ID}" ]; then
     PROJECT_ID="$(gcloud config get-value project 2>/dev/null || true)"
   fi
@@ -165,7 +156,11 @@ fi
 # Normalize GCS URI (no trailing slash)
 GCS_URI_PREFIX="${GCS_URI_PREFIX%/}"
 
-temp_dir="$(mktemp -d)"
+if [ "${LOCAL_ONLY}" = "true" ] && [ -z "${TARBALL_OUT}" ]; then
+  temp_dir="$(mktemp -d "${PWD}/nebula-image.XXXXXXXX")"
+else
+  temp_dir="$(mktemp -d)"
+fi
 
 echo "Preparing disk.raw..."
 
@@ -180,7 +175,7 @@ PY
 
 USB_ABS_PATH="$(resolve_abs "${USB_PATH}")"
 TARBALL_NAME="${IMAGE_NAME}.tar.gz"
-TARBALL_PATH="${temp_dir}/${TARBALL_NAME}"
+TARBALL_PATH="${temp_dir}/${TARBALL_NAME##*/}"
 
 if [ "${USE_GPT}" = "true" ]; then
   echo "Building GPT disk with ESP=${ESP_SIZE}, total size=${DISK_SIZE} (USE_DOCKER=${USE_DOCKER})"
@@ -189,17 +184,14 @@ if [ "${USE_GPT}" = "true" ]; then
       -v "${temp_dir}:/output" \
       -v "${USB_ABS_PATH}:/input/boot.usb:ro" \
       --rm qemu_machine \
-      bash -c "
-        # Build inside the container's local filesystem (fast)
+      bash -ec '
         /usr/local/bin/container_build_gpt_disk.sh \
           --usb /input/boot.usb \
           --out /tmp/disk.raw \
-          --disk-size '${DISK_SIZE}' \
-          --esp-size '${ESP_SIZE}' && \
-        
-        # Package and write only the final small tarball to the host mount
-        tar -C /tmp -czSf /output/${TARBALL_NAME} disk.raw
-      "
+          --disk-size "$1" \
+          --esp-size "$2"
+        tar -C /tmp -czSf "$3" disk.raw
+      ' _ "${DISK_SIZE}" "${ESP_SIZE}" "/output/${TARBALL_NAME##*/}"
   else
     echo "Host GPT build not implemented; rerun with --use-docker (default)" >&2
     exit 1
@@ -207,7 +199,7 @@ if [ "${USE_GPT}" = "true" ]; then
 else
   echo "Legacy mode: copying USB image to disk.raw and tarring"
   cp "${USB_PATH}" "${temp_dir}/disk.raw"
-  tar -C "${temp_dir}" -czSf "${TARBALL_PATH}" disk.raw
+  COPYFILE_DISABLE=1 tar -C "${temp_dir}" -czSf "${TARBALL_PATH}" disk.raw
 fi
 
 if [ "${LOCAL_ONLY}" = "true" ]; then
@@ -216,6 +208,10 @@ if [ "${LOCAL_ONLY}" = "true" ]; then
     cp -f "${TARBALL_PATH}" "${TARBALL_OUT}"
     echo "Local tarball written to: ${TARBALL_OUT}"
   else
+    test -s "${TARBALL_PATH}"
+    rm -f "${temp_dir}/disk.raw"
+    # Transfer ownership of the finished directory to the caller.
+    temp_dir=""
     echo "Local tarball created at: ${TARBALL_PATH}"
   fi
   exit 0
