@@ -11,3 +11,4 @@ export { confidentialAccessTokenHash } from "./access-token";
 
 export { ConfidentialBrowser, confidentialBrowserPlan, type ConfidentialBrowserConfig } from "./browser";
 export { ConfidentialWelcome, type ConfidentialWelcomeConfig, type ConfidentialWelcomeReference } from "./welcome";
+export { ConfidentialPublicAddress, type ConfidentialPublicAddressConfig } from "./public-address";
