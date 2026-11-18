@@ -8,6 +8,7 @@ import { summarizeStorage, renderStorageOverview, type StorageSummary } from "@n
 import { readinessSummary, type StatusLabel } from "./readiness";
 import { registryReference, sourceImageKey, sourceKeyFromRecovery } from "./registry-source";
 import { verificationDownload } from "./verification-download";
+import { resourceReadExample } from "./resource-help";
 import type { SupervisorReport } from "./storage-status";
 const api = window.nebula, owner = api.owner;
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id)! as T;
@@ -97,7 +98,7 @@ function selectionChecklist() {
     { label: sourceMode() === "registry" ? "Registry source · verified and encrypted locally" : archive ? "Local image archive selected" : `Local image archive · up to ${imageSizeLabel(imageLimits.maxBytes)}`, supplied: sourceMode() === "registry" ? !!(document.getElementById("source-reference") as HTMLInputElement | null)?.value : !!archive || !!owner.prepared },
     { label: "Image storage · managed by this stack", supplied: !!connection.workload.spec.imageStore || !!owner.prepared },
     { label: existing.length ? `Existing disk keys · ${keyFiles} of ${existing.length} selected or saved` : "New disk keys · generated automatically in your browser", supplied: keyFiles === existing.length },
-    { label: files.length ? `Private application files · ${selected} of ${files.length} selected or saved` : "No private application files requested", supplied: selected === files.length },
+    { label: files.length ? `Private application resources · ${selected} of ${files.length} selected or saved` : "No private application resources requested", supplied: selected === files.length },
     { label: "Recovery backup password · at least 12 characters", supplied: input("recovery-password").value.length >= 12 },
     { label: "Application and storage settings reviewed", supplied: !!owner.applicationApproval || input("reviewed").checked && (!hasOverrides || input("approve-overrides").checked) },
   ];
@@ -166,7 +167,8 @@ function applicationOverview() {
         const storage = storages.find(storage => storage.name === mount.storage);
         return `${mount.path} — ${storage ? `${storage.typeLabel.toLowerCase()} “${storage.name}” (${imageSizeLabel(storage.capacityBytes)})` : mount.storage}`;
       }).join("; ") || "No storage mounts configured."],
-      ["Private files this container can access", container.applicationResources.map(path => path.join("/")).join("; ") || "No private application files granted."],
+      ["Private resource IDs this container may read", container.applicationResources.map(path => path.join("/")).join("; ") || "No private resource access granted."],
+      ...(container.applicationResources.length ? [["Container access socket", "/run/nebula-resources/resource.sock — resources are read as bytes, not mounted as files."]] : []),
       ["Declared container ports", (container.ports.map(port => `${port.name}: ${port.port}`).join("; ") || "None declared.") + " This does not determine public reachability or restrict outbound connections."],
       ["Application process identity", `Linux user ${container.uid}, group ${container.gid}${container.uid === 0 ? " (root user)." : " (non-root user)."}`],
       ["CPU and memory", container.resources ? `Requests: ${JSON.stringify(container.resources.requests)}; limits: ${JSON.stringify(container.resources.limits)}.` : "Uses the stack's default container CPU and memory settings. The VM's allocation is configured separately."],
@@ -319,16 +321,29 @@ async function connect() {
     ...connection.storages.filter((s: any) => s.spec.type === "EncryptedBlock").map((s: any) => s.spec.keyResource.join("/"))]);
   for (const resource of connection.workload.spec.resources) {
     const path = resource.join("/"); if (keyPaths.has(path)) continue;
-    const label = document.createElement("label"); label.textContent = `Private application file: ${path}`;
+    const label = document.createElement("label"); label.textContent = `Private application resource (Resource ID: ${path})`;
     const field = document.createElement("input"); field.type = "file"; field.id = "resource-" + path;
     label.htmlFor = field.id;
-    const consumers = connection.workload.spec.containers.filter((container: any) => (container.applicationResources ?? []).some((route: string[]) => route.join("/") === path)).map((container: any) => container.name);
+    const consumers = connection.workload.spec.containers.filter((container: any) => (container.applicationResources ?? []).some((route: string[]) => route.join("/") === path));
     const hint = document.createElement("p"); hint.className = "hint";
-    hint.textContent = `Select the file this application expects (up to 2 MiB). ${consumers.length ? `Declared application access: ${consumers.join(", ")}.` : "Consumed inside the verified guest according to the approved settings."} Its contents are not displayed here.`;
+    hint.textContent = `Upload the resource bytes from a file on your computer (up to 2 MiB). “${path}” is a Trustee resource ID, not a path inside your container. ` +
+      (consumers.length ? `Granted containers: ${consumers.map((container: any) => `${container.name} (Linux user ${container.uid}, group ${container.gid})`).join("; ")}. ` +
+        "Your application reads the bytes through its private Unix socket; the stack does not automatically create or mount a configuration file." :
+        "No application container is granted access to this resource; it remains available only to the declared guest bootstrap.");
     el("resource-files").append(label, field, hint);
-    fileSelection(field, `application file for ${path}`, { saved: () => !!owner.resources?.[path] });
+    if (consumers.length) {
+      const access = document.createElement("details"), summary = document.createElement("summary"), explanation = document.createElement("p"), example = document.createElement("pre");
+      summary.textContent = "How to read this resource in your container";
+      explanation.className = "hint";
+      explanation.textContent = "Container access socket: /run/nebula-resources/resource.sock. Run this Python 3 example inside a granted container as its configured user and group. " +
+        "This is not HTTP: send GET, a space, the exact Resource ID and a newline. Read a four-byte big-endian length, then exactly that many raw bytes. " +
+        "A denied or unavailable resource closes the connection. Stop on timeout, EOF or invalid length. Do not log the resource contents.";
+      example.textContent = resourceReadExample(path);
+      access.append(summary, explanation, example); el("resource-files").append(access);
+    }
+    fileSelection(field, `application resource for ${path}`, { saved: () => !!owner.resources?.[path] });
   }
-  text("private-files-hint", "New disk keys are generated automatically in your browser. Any existing disk keys or application files requested below must be supplied by you; they are separate from any source-registry login or source-image decryption key.");
+  text("private-files-hint", "New disk keys are generated automatically in your browser. Supply any requested existing disk keys and private application resources separately. Resource IDs identify Trustee entries; granted containers read them through a private socket, not an automatically mounted file. Source-registry credentials and source-image decryption keys are separate.");
   const currentJob = await (await request(api.channel, "/nebula/v1/job")).json();
   if (currentJob.state === "ready" && !owner.prepared) {
     if (!owner.imageKey) throw new Error("Restore the encrypted backup containing this release image key before resuming");

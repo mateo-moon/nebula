@@ -46,8 +46,8 @@
           <label class="check"><input id="source-reviewed" type="checkbox"><span>I chose this source registry, image and any token-service hostname. Source secrets stay in this browser and are not saved in the new recovery backup.</span></label>
         </fieldset>
         <p class="hint">Image storage is managed by this stack. Your browser encrypts the image before sending its encrypted layers and public OCI metadata to that storage. No destination registry account is needed.</p>
-        <fieldset id="private-files" class="form-group"><legend>Files needed by this stack</legend>
-          <p id="private-files-hint" class="hint">New disk keys are generated in your browser. Only stacks using existing encrypted disks need a disk-key file.</p>
+        <fieldset id="private-files" class="form-group"><legend>Private resources and disk keys</legend>
+          <p id="private-files-hint" class="hint">New disk keys are generated in your browser. Private application resource IDs identify Trustee entries, not container file paths.</p>
           <div id="volume-keys"></div><div id="resource-files"></div>
         </fieldset>
         <label for="recovery-password">Password for your recovery backup</label><input id="recovery-password" type="password" minlength="12" autocomplete="new-password" required>

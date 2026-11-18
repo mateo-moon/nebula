@@ -25,6 +25,13 @@ use std::{
 };
 use zeroize::Zeroizing;
 
+const MAX_APPLICATION_RESOURCE_BYTES: usize = 2 * 1024 * 1024;
+// Includes the status line and the terminating CRLF pair, independently of
+// the application payload. One extra transport byte detects total overflow.
+const MAX_LOCAL_HTTP_HEADER_BYTES: usize = 16 * 1024;
+const MAX_LOCAL_RESOURCE_RESPONSE_BYTES: usize =
+    MAX_LOCAL_HTTP_HEADER_BYTES + MAX_APPLICATION_RESOURCE_BYTES;
+
 fn tmpfs(path: &str) -> Result<()> {
     let path = std::ffi::CString::new(path)?;
     let mut stat: libc::statfs = unsafe { std::mem::zeroed() };
@@ -70,18 +77,34 @@ fn local_resource_at(resource: &str, address: &SocketAddr) -> Result<Option<Zero
         "GET /cdh/resource/{resource} HTTP/1.0\r\nHost: localhost\r\nConnection: close\r\n\r\n"
     )?;
     let mut response = Zeroizing::new(Vec::new());
-    socket.take(65_537).read_to_end(&mut response)?;
-    ensure!(response.len() <= 65_536, "invalid local resource response");
+    socket
+        .take((MAX_LOCAL_RESOURCE_RESPONSE_BYTES + 1) as u64)
+        .read_to_end(&mut response)?;
+    ensure!(
+        response.len() <= MAX_LOCAL_RESOURCE_RESPONSE_BYTES,
+        "invalid local resource response"
+    );
     let split = response
         .windows(4)
         .position(|v| v == b"\r\n\r\n")
         .context("invalid local response")?;
+    ensure!(
+        split + 4 <= MAX_LOCAL_HTTP_HEADER_BYTES,
+        "local response headers too large"
+    );
     let header = std::str::from_utf8(&response[..split])?;
     let mut lines = header.split("\r\n");
     let status = lines.next().context("missing local response status")?;
-    let code = status
-        .split_whitespace()
-        .nth(1)
+    let mut status_parts = status.split_whitespace();
+    let version = status_parts
+        .next()
+        .context("missing local response version")?;
+    ensure!(
+        matches!(version, "HTTP/1.0" | "HTTP/1.1"),
+        "invalid local response version"
+    );
+    let code = status_parts
+        .next()
         .and_then(|part| part.parse::<u16>().ok())
         .filter(|code| (100..=599).contains(code))
         .context("invalid guest CDH HTTP status")?;
@@ -91,20 +114,54 @@ fn local_resource_at(resource: &str, address: &SocketAddr) -> Result<Option<Zero
         bail!("guest CDH returned HTTP {code}");
     }
     let mut length = None;
+    let mut connection_close = false;
+    let mut connection_keep_alive = false;
     for line in lines {
         let (name, value) = line.split_once(':').context("invalid response header")?;
+        ensure!(
+            !name.is_empty()
+                && name.bytes().all(|byte| {
+                    byte.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&byte)
+                })
+                && !value
+                    .bytes()
+                    .any(|byte| byte.is_ascii_control() && byte != b'\t'),
+            "invalid response header"
+        );
         ensure!(
             !name.eq_ignore_ascii_case("transfer-encoding"),
             "unsupported transfer coding"
         );
         if name.eq_ignore_ascii_case("content-length") {
             ensure!(length.is_none(), "duplicate response length");
-            length = Some(value.trim().parse::<usize>()?);
+            let value = value.trim();
+            ensure!(
+                !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit()),
+                "invalid response length"
+            );
+            let declared = value.parse::<usize>()?;
+            ensure!(
+                declared <= MAX_APPLICATION_RESOURCE_BYTES,
+                "invalid local resource length"
+            );
+            length = Some(declared);
+        }
+        if name.eq_ignore_ascii_case("connection") {
+            for token in value.split(',').map(str::trim) {
+                connection_close |= token.eq_ignore_ascii_case("close");
+                connection_keep_alive |= token.eq_ignore_ascii_case("keep-alive");
+            }
         }
     }
+    ensure!(
+        length.is_some() || connection_close || version == "HTTP/1.0" && !connection_keep_alive,
+        "local response needs a length or connection close"
+    );
     let body = &response[split + 4..];
     ensure!(
-        !body.is_empty() && body.len() <= 64 * 1024 && length.is_none_or(|n| n == body.len()),
+        !body.is_empty()
+            && body.len() <= MAX_APPLICATION_RESOURCE_BYTES
+            && length.is_none_or(|n| n == body.len()),
         "invalid local resource length"
     );
     Ok(Some(Zeroizing::new(body.to_vec())))
@@ -565,6 +622,178 @@ mod tests {
     use std::net::TcpListener;
     use std::os::unix::process::CommandExt;
     use std::process::Command;
+
+    fn cdh_response(listener: TcpListener, response: Vec<u8>) -> thread::JoinHandle<()> {
+        thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            socket
+                .set_write_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut request = Vec::new();
+            while !request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+                let mut part = [0; 256];
+                let n = socket.read(&mut part).unwrap();
+                assert!(n > 0 && request.len() + n <= 512);
+                request.extend_from_slice(&part[..n]);
+            }
+            assert!(request.starts_with(b"GET /cdh/resource/"));
+            // Overflow cases can close the client before every fixture byte
+            // is written. A bounded reader must never drain an excess body.
+            let _ = socket.write_all(&response);
+        })
+    }
+
+    fn fetch_cdh_response(response: Vec<u8>) -> Result<Option<Zeroizing<Vec<u8>>>> {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = cdh_response(listener, response);
+        let result = local_resource_at("default/config/app", &address);
+        server.join().unwrap();
+        result
+    }
+
+    #[test]
+    fn local_cdh_serves_exact_application_limit_with_an_independent_header_budget() {
+        let body = vec![0xa5; MAX_APPLICATION_RESOURCE_BYTES];
+        let prefix = format!(
+            "HTTP/1.0 200 OK\r\nContent-Length: {}\r\nX-Padding: ",
+            body.len()
+        );
+        let mut response = prefix.into_bytes();
+        response.resize(MAX_LOCAL_HTTP_HEADER_BYTES - 4, b'x');
+        response.extend_from_slice(b"\r\n\r\n");
+        response.extend_from_slice(&body);
+        assert_eq!(response.len(), MAX_LOCAL_RESOURCE_RESPONSE_BYTES);
+        let result = fetch_cdh_response(response).unwrap().unwrap();
+        assert_eq!(result.len(), body.len());
+        assert!(
+            result.as_slice() == body.as_slice(),
+            "resource bytes changed"
+        );
+    }
+
+    #[test]
+    fn local_cdh_rejects_oversized_bodies_headers_and_transport_responses() {
+        for header in [
+            format!(
+                "HTTP/1.0 200 OK\r\nContent-Length: {}\r\n\r\n",
+                MAX_APPLICATION_RESOURCE_BYTES + 1
+            ),
+            "HTTP/1.0 200 OK\r\n\r\n".to_owned(),
+        ] {
+            let mut response = header.into_bytes();
+            response.resize(response.len() + MAX_APPLICATION_RESOURCE_BYTES + 1, b'x');
+            assert_eq!(
+                fetch_cdh_response(response).unwrap_err().to_string(),
+                "invalid local resource length"
+            );
+        }
+        let mut header = b"HTTP/1.0 200 OK\r\nX-Padding: ".to_vec();
+        header.resize(MAX_LOCAL_HTTP_HEADER_BYTES - 3, b'x');
+        header.extend_from_slice(b"\r\n\r\nx");
+        assert_eq!(
+            fetch_cdh_response(header).unwrap_err().to_string(),
+            "local response headers too large"
+        );
+        let mut response = b"HTTP/1.0 200 OK\r\nX-Padding: ".to_vec();
+        response.resize(MAX_LOCAL_HTTP_HEADER_BYTES - 4, b'x');
+        response.extend_from_slice(b"\r\n\r\n");
+        response.resize(MAX_LOCAL_RESOURCE_RESPONSE_BYTES + 1, b'x');
+        assert_eq!(
+            fetch_cdh_response(response).unwrap_err().to_string(),
+            "invalid local resource response"
+        );
+    }
+
+    #[test]
+    fn local_cdh_accepts_only_complete_length_or_connection_close_frames() {
+        for response in [
+            &b"HTTP/1.0 200 OK\r\n\r\nx"[..],
+            &b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nx"[..],
+        ] {
+            assert_eq!(
+                fetch_cdh_response(response.to_vec())
+                    .unwrap()
+                    .unwrap()
+                    .as_slice(),
+                b"x"
+            );
+        }
+        for response in [
+            &b"HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nx"[..],
+            &b"HTTP/1.0 200 OK\r\nContent-Length: 1\r\n\r\nxy"[..],
+            &b"HTTP/1.0 200 OK\r\nContent-Length: 0\r\n\r\n"[..],
+            &b"HTTP/1.0 200 OK\r\nContent-Length: 1\r\ncontent-length: 1\r\n\r\nx"[..],
+            &b"HTTP/1.0 200 OK\r\nContent-Length: +1\r\n\r\nx"[..],
+            &b"HTTP/1.0 200 OK\r\nContent-Length : 2\r\n\r\nx"[..],
+            &b"HTTP/1.0 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nx\r\n0\r\n\r\n"[..],
+            &b"HTTP/1.0 200 OK\r\nContent-Length: 1\r\nTransfer-Encoding: identity\r\n\r\nx"[..],
+            &b"HTTP/1.1 200 OK\r\n\r\nx"[..],
+            &b"HTTP/1.0 200 OK\r\nConnection: keep-alive\r\n\r\nx"[..],
+            &b"HTTP/1.0 200 OK\r\nContent-Length: 1\r\nx"[..],
+            &b"NOT-HTTP 200 OK\r\nContent-Length: 1\r\n\r\nx"[..],
+            &b"HTTP/1.0 200 OK\r\nX-Value: \0\r\n\r\nx"[..],
+        ] {
+            assert!(fetch_cdh_response(response.to_vec()).is_err());
+        }
+    }
+
+    #[test]
+    fn application_socket_delivers_two_mib_only_to_the_matching_peer_and_resource() {
+        // The production endpoint stays fixed. This is the only test binding
+        // that port, inside the isolated Linux test environment.
+        let listener = TcpListener::bind("127.0.0.1:8006").unwrap();
+        let body = vec![0xa5; MAX_APPLICATION_RESOURCE_BYTES];
+        let mut response =
+            format!("HTTP/1.0 200 OK\r\nContent-Length: {}\r\n\r\n", body.len()).into_bytes();
+        response.extend_from_slice(&body);
+        let server = cdh_response(listener, response);
+        // Use the test process's real kernel credentials. Production config
+        // validation separately restricts application identities to non-root.
+        let client = ResourceClient {
+            name: "app".to_owned(),
+            uid: unsafe { libc::geteuid() },
+            gid: unsafe { libc::getegid() },
+            resources: vec!["default/config/app".to_owned()],
+        };
+        for denied in [
+            ResourceClient {
+                uid: client.uid + 1,
+                ..client.clone()
+            },
+            ResourceClient {
+                gid: client.gid + 1,
+                ..client.clone()
+            },
+        ] {
+            let (mut caller, broker) = UnixStream::pair().unwrap();
+            serve_resource_client(&denied, broker).unwrap();
+            assert_eq!(caller.read(&mut [0]).unwrap(), 0);
+        }
+        let (mut caller, broker) = UnixStream::pair().unwrap();
+        caller.write_all(b"GET default/volume/agent\n").unwrap();
+        serve_resource_client(&client, broker).unwrap();
+        assert_eq!(caller.read(&mut [0]).unwrap(), 0);
+
+        let (mut caller, broker) = UnixStream::pair().unwrap();
+        caller
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let broker = thread::spawn(move || serve_resource_client(&client, broker));
+        caller.write_all(b"GET default/config/app\n").unwrap();
+        let mut length = [0; 4];
+        caller.read_exact(&mut length).unwrap();
+        assert_eq!(u32::from_be_bytes(length) as usize, body.len());
+        let mut received = vec![0; body.len()];
+        caller.read_exact(&mut received).unwrap();
+        assert!(received == body, "application resource bytes changed");
+        assert_eq!(caller.read(&mut [0]).unwrap(), 0);
+        broker.join().unwrap().unwrap();
+        server.join().unwrap();
+    }
 
     #[test]
     fn status_publication_permissions_under_private_umask() {

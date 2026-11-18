@@ -129,6 +129,57 @@ If preparation restarts before ownership or final-guest creation, the operator r
 
 Ordinary proxies may carry the preparation/final OHTTP endpoints: their contents remain encrypted to the separately attested VM. Their DNS/HTTPS authority does not authenticate the initial page. The generic [full-stack example](../nebula/example/confidential-workload-stack.ts) includes a TCP route for the frontend; the DevOps testcase uses the existing SNP host and preserves earlier guests and disks.
 
+## Private application resources
+
+`default/config/agent` is a **Resource ID in Trustee**, not a filename or a path inside the container. Selecting a local file uploads its bytes under that ID. The stack does not automatically create a configuration file or environment variable.
+
+Only the containers listed in the approved `applicationResources` grants receive access. Inside each granted container, read its private Unix socket at `/run/nebula-resources/resource.sock` as the configured application user and group. The broker checks peer credentials and the exact Resource ID; image and disk keys cannot be granted through this interface.
+
+The protocol is **not HTTP**. Send `GET ` followed by the exact Resource ID and one newline. A successful response starts with a four-byte unsigned big-endian payload length, followed by exactly that many raw bytes, up to 2 MiB. Denial, an unavailable resource or a wrong user/group closes the stream without a payload. Treat EOF, invalid length and timeout as errors; do not continue with empty or fallback credentials.
+
+Python 3 example, run **inside a granted application container**:
+
+```python
+import socket
+import struct
+import time
+
+RESOURCE_ID = "default/config/agent"
+SOCKET_PATH = "/run/nebula-resources/resource.sock"
+MAX_BYTES = 2 * 1024 * 1024
+deadline = time.monotonic() + 65
+
+def remaining():
+    seconds = deadline - time.monotonic()
+    if seconds <= 0:
+        raise TimeoutError("Resource request timed out")
+    return seconds
+
+def read_exact(stream, length):
+    result = bytearray()
+    while len(result) < length:
+        stream.settimeout(remaining())
+        chunk = stream.recv(length - len(result))
+        if not chunk:
+            raise RuntimeError("Resource denied, unavailable, or incomplete")
+        result.extend(chunk)
+    return bytes(result)
+
+with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as stream:
+    stream.settimeout(remaining())
+    stream.connect(SOCKET_PATH)
+    stream.settimeout(remaining())
+    stream.sendall(b"GET " + RESOURCE_ID.encode("ascii") + b"\n")
+    length = struct.unpack(">I", read_exact(stream, 4))[0]
+    if not 0 < length <= MAX_BYTES:
+        raise RuntimeError("Invalid resource length")
+    resource = read_exact(stream, length)
+
+# Use resource as raw bytes in your application. Do not print or log it.
+```
+
+Replace only `RESOURCE_ID` with a resource explicitly granted to that container. Consume the returned `resource` bytes in your application; no file path is created by this example. The overall deadline includes guest-local resource retrieval. The browser's collapsed **How to read this resource in your container** help shows the same protocol for the selected ID.
+
 ## Build and limits
 
 This package contains browser assets and encryption code. The backend modules and single service entrypoint live in [confidential-agent](../confidential-agent/README.md). Frontend and preparation images build that same agent and enable only their measured module; neither can activate workload storage modules through an HTTP request.

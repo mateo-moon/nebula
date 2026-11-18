@@ -230,7 +230,7 @@ test("runtime review shows configured access without unknown application identit
   assert.doesNotMatch(summary(), /images\.qualified\.svc/);
   assert.match(summary(), /\/data — encrypted disk “data” \(64 MiB\)/);
   assert.match(summary(), /\/scratch — temporary memory “scratch” \(32 MiB\)/);
-  assert.match(summary(), /No private application files granted/);
+  assert.match(summary(), /No private resource access granted/);
   assert.match(summary(), /does not determine public reachability or restrict outbound/);
   assert.match(summary(), /Linux user 11000, group 11000 \(non-root user\)/);
   assert.equal(ui.counts().publishes, 0);
@@ -249,7 +249,9 @@ test("application review exposes exact overrides and private access without conf
   const [application, helper] = ui.el("application-summary").children;
   assert.match(application.textContent, /Command override\["\/bin\/server"\]Argument override\["--message","<img src=x onerror=alert\(1\)>"\]/);
   assert.match(application.textContent, /Added to or replaces values from the image: \{"MODE":"private"\}/);
-  assert.match(application.textContent, /Private files this container can accessdefault\/config\/app/);
+  assert.match(application.textContent, /Private resource IDs this container may readdefault\/config\/app/);
+  assert.match(application.textContent, /Container access socket\/run\/nebula-resources\/resource.sock/);
+  assert.match(application.textContent, /not mounted as files/);
   assert.match(application.textContent, /http: 8080/);
   assert.match(application.textContent, /Requests: \{"cpu":"1","memory":"512Mi"\}; limits: \{"cpu":"2","memory":"1Gi"\}/);
   assert.equal(application.querySelectorAll("img").length, 0);
@@ -257,6 +259,19 @@ test("application review exposes exact overrides and private access without conf
   assert.match(helper.textContent, /Container: helper/);
   assert.match(helper.textContent, /Linux user 0, group 0 \(root user\)/);
   assert.doesNotMatch(helper.textContent, /test-image\.tar/);
+  assert.doesNotMatch(helper.textContent, /Container access socket/);
+  const instructions = ui.el("resource-files").textContent;
+  assert.match(instructions, /Private application resource \(Resource ID: default\/config\/app\)/);
+  assert.match(instructions, /not a path inside your container/);
+  assert.match(instructions, /Granted containers: app \(Linux user 11000, group 11000\)/);
+  assert.doesNotMatch(instructions, /Granted containers: helper/);
+  const details = ui.el("resource-files").querySelectorAll("details");
+  assert.equal(details.length, 1);
+  assert.match(details[0].textContent, /How to read this resource in your container/);
+  assert.match(details[0].textContent, /This is not HTTP/);
+  assert.match(details[0].textContent, /four-byte big-endian length/);
+  assert.match(details[0].textContent, /struct\.unpack\(">I", read_exact\(stream, 4\)\)/);
+  assert.doesNotMatch(details[0].textContent, /curl|\/cdh\/|\/kbs\/|8080/);
 });
 
 test("deployment shows progress while owner state saves and leaves recovery downloads to the user", async () => {
@@ -289,6 +304,8 @@ test("file names are readable and removals clear the specific local selection", 
     ui.el("deploy-form").listeners.get("change")!({ preventDefault() {} });
   };
   const resource = "resource-default/config/app";
+  assert.match(ui.el("resource-files").textContent, /No application container is granted access to this resource/);
+  assert.equal(ui.el("resource-files").querySelectorAll("details").length, 0);
   const filename = "<test> a long local image export.tar";
   change("archive", filename);
   change(resource, "application settings.json");
