@@ -55,7 +55,7 @@ for (const dryRun of [true, false]) {
     const writes = calls.filter(call => call.file);
     const expected = [['platform'], ['settings'], ['runtime'], ['cloud'], ['credentials'], ['first', 'second']];
     if (!dryRun) expected.push(['first', 'second']);
-    assert.deepEqual(writes.map(call => parseAllDocuments(call.yaml!).map(doc => {
+    assert.deepEqual(writes.map(call => parseAllDocuments(call.yaml!, { version: '1.1' }).map(doc => {
       const resource = doc.toJS();
       assert.equal(resource.data.value, 'no');
       return resource.metadata.name;
