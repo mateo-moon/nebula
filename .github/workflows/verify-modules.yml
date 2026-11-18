@@ -62,10 +62,13 @@ jobs:
           printf 'b38228f367fc0fdc2b08f4c83ea50ac5f16c60ff8d62d76a66157c33c47b70ae  %s\n' "$RUNNER_TEMP/kyverno-cli.tar.gz" | sha256sum --check
           tar -xzf "$RUNNER_TEMP/kyverno-cli.tar.gz" -C "$RUNNER_TEMP" kyverno
       - name: Fetch the pinned Envoy Gateway chart for offline synthesis tests
-        run: helm pull oci://docker.io/envoyproxy/gateway-helm@sha256:dcb82a14c04b426615a71d97222c7edf9f5ff58b800d241e71ac5784ae6dc7b7 --destination "$RUNNER_TEMP"
+        run: |
+          chart_dir=$(mktemp -d "$RUNNER_TEMP/envoy-gateway.XXXXXX")
+          helm pull oci://docker.io/envoyproxy/gateway-helm@sha256:dcb82a14c04b426615a71d97222c7edf9f5ff58b800d241e71ac5784ae6dc7b7 --destination "$chart_dir"
+          mv "$chart_dir"/*.tgz "$RUNNER_TEMP/envoy-gateway.tgz"
       - name: Tests (including the packed-tarball import test)
         env:
-          ENVOY_GATEWAY_CHART: ${{ runner.temp }}/gateway-helm-v1.10.0.tgz
+          ENVOY_GATEWAY_CHART: ${{ runner.temp }}/envoy-gateway.tgz
           ECR_READER_CONTAINER_TEST: "1"
           BAREMETAL_CROSSPLANE_CLI: ${{ runner.temp }}/crossplane
           KYVERNO_CHART_ARCHIVE: ${{ runner.temp }}/kyverno-3.9.1.tgz
