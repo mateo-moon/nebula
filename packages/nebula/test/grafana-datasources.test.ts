@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { App, Chart, Testing } from "cdk8s";
 import { GrafanaOperator } from "../src/modules/k8s/grafana-operator";
@@ -85,6 +88,32 @@ test("the operator module installs the chart and manages content of an existing 
     assert.equal(tempo.metadata.namespace, "monitoring");
     assert.equal(tempo.metadata.annotations, undefined);
     assert.throws(() => new GrafanaOperator(chart, "bare").folder("x", "X"), /needs an instance/);
+  });
+});
+
+test("the operator release and its Grafana resources use the resolved configuration", t => {
+  const bin = mkdtempSync(join(tmpdir(), "grafana-vals-"));
+  const oldPath = process.env.PATH;
+  t.after(() => {
+    if (oldPath === undefined) delete process.env.PATH;
+    else process.env.PATH = oldPath;
+    rmSync(bin, { recursive: true, force: true });
+  });
+  writeFileSync(join(bin, "vals"), '#!/bin/sh\necho example\n', { mode: 0o755 });
+  process.env.PATH = `${bin}:${oldPath ?? ""}`;
+  const ref = "ref+sops://./grafana-fixture.yaml#label";
+  withStubHelm(valuesOf => {
+    const chart = Testing.chart();
+    const grafana = new GrafanaOperator(chart, "op", {
+      values: { podLabels: { grafana: ref } },
+      instance: { name: "main", namespace: "monitoring", labels: { grafana: ref }, url: "http://grafana" },
+    });
+    grafana.folder("platform", "Platform");
+    const objects = Testing.synth(chart);
+    const labels = { grafana: "example" };
+    assert.deepEqual(valuesOf("grafana-operator").podLabels, labels);
+    assert.deepEqual(named(objects, "Grafana").main.metadata.labels, labels);
+    assert.deepEqual(named(objects, "GrafanaFolder").platform.spec.instanceSelector.matchLabels, labels);
   });
 });
 

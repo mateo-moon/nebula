@@ -91,25 +91,25 @@ export class GrafanaOperator extends HelmModule<GrafanaOperatorConfig> {
 
   constructor(scope: Construct, id: string, config: GrafanaOperatorConfig = {}) {
     super(scope, id, config);
-    const namespace = config.namespace ?? "grafana-operator-system";
+    const namespace = this.config.namespace ?? "grafana-operator-system";
     this.createNamespace(namespace);
     this.helm = this.createHelmRelease({
       namespace,
       chart: "grafana-operator",
       releaseName: "grafana-operator",
       repo: "https://grafana.github.io/helm-charts",
-      version: config.version ?? "5.24.0",
-      defaultValues: config.kubeAuthAudience
-        ? { kubeAuth: { audience: config.kubeAuthAudience, expirationSeconds: config.kubeAuthExpirationSeconds ?? 3600 } }
+      version: this.config.version ?? "5.24.0",
+      defaultValues: this.config.kubeAuthAudience
+        ? { kubeAuth: { audience: this.config.kubeAuthAudience, expirationSeconds: this.config.kubeAuthExpirationSeconds ?? 3600 } }
         : {},
-      values: config.values,
+      values: this.config.values,
       helmFlags: ["--include-crds"],
     });
-    if (config.instance) {
-      const { name, namespace: instanceNamespace, labels, url } = config.instance;
+    if (this.config.instance) {
+      const { name, namespace: instanceNamespace, labels, url } = this.config.instance;
       this.grafana = new Grafana(this, "grafana", {
         metadata: { name, namespace: instanceNamespace, labels },
-        spec: { ...(config.kubeAuthAudience ? { client: { useKubeAuth: true } } : {}), external: { url } },
+        spec: { ...(this.config.kubeAuthAudience ? { client: { useKubeAuth: true } } : {}), external: { url } },
       });
     }
   }
