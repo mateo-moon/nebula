@@ -25,6 +25,7 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 let connection: any = owner.connection, final: AttestedChannel | undefined;
 let busy = false;
 let connected = false;
+let connecting = false;
 let recoveryUrl: string | undefined;
 let imageLimits = imageUploadLimits();
 let storageCards: StorageSummary[] = [];
@@ -45,7 +46,7 @@ let failedPhase: Phase | undefined;
 let keyDeliveryStarted = false;
 const stepFailures = new WeakMap<HTMLElement, HTMLElement>();
 class UserFacingError extends Error {
-  constructor(message: string, readonly kind?: "attestation" | "owner-auth" | "instance" | "final-timeout") { super(message); }
+  constructor(message: string, readonly kind?: "attestation" | "owner-auth" | "instance" | "final-timeout" | "setup") { super(message); }
 }
 function errorMessage(error: unknown): string {
   try {
@@ -291,6 +292,11 @@ function failure(error: unknown) {
 async function request(channel: AttestedChannel, path: string, method = "GET", body?: BodyInit, audience = "nebula-browser", headers: Record<string, string> = {}) {
   const response = await channel.request(path, { method, headers: { "Content-Type": "application/json", ...headers,
     Authorization: `Bearer ${await api.jwt(audience)}` }, ...(body !== undefined ? { body } : {}) });
+  if (path === "/nebula/v1/connection" && method === "POST" && response.status === 400) {
+    let code: unknown;
+    try { code = (await response.json())?.error; } catch { /* Unreviewed responses use the fixed generic error below. */ }
+    if (code === "unapproved_runtime") throw new UserFacingError("Workload software does not match the reviewed release. The preparation service refused these stack settings.", "setup");
+  }
   if (response.status < 200 || response.status >= 300) throw new UserFacingError(`The attested service refused ${path} (${response.status}). Existing enrollment was preserved.`);
   return response;
 }
@@ -425,6 +431,43 @@ async function connect() {
     else text("job-title", "Ciphertext published; native policy needs attention");
     text("job-description", "The attested preparation service confirmed publication of your saved encrypted release. Native policy preparation is not complete.");
   } else renderSteps();
+}
+function setupVisibility(ready: boolean) {
+  for (const id of ["stack-details", "deployment-section", "readiness-section", "deployment-progress"]) el(id).hidden = !ready;
+  el("setup-panel").hidden = ready;
+  el<HTMLFieldSetElement>("deployment-inputs").disabled = !ready;
+}
+async function connectSafely() {
+  if (connecting || connected || busy) return;
+  connecting = true;
+  setupVisibility(false);
+  input("deploy").disabled = true;
+  input("retry-connect").disabled = true;
+  el("retry-connect").hidden = true;
+  el("setup-error").hidden = true;
+  text("setup-title", "Connecting to your stack…");
+  text("setup-description", "Authenticating the saved stack settings and checking the reviewed workload software. Deployment inputs appear only after these checks succeed.");
+  try {
+    await connect();
+    setupVisibility(true);
+  } catch (error) {
+    connected = false;
+    setupVisibility(false);
+    const reason = error instanceof UserFacingError ? error.message : attestationRejected(error) ?
+      "The requested confidential VM's attestation was rejected by the approved policy." :
+      "The authenticated stack settings could not be loaded. A network, verification or browser operation failed.";
+    const next = error instanceof UserFacingError && error.kind === "setup" ?
+      "Ask the administrator to select the reviewed runtime software for this stack, then retry connecting. Keep the approved measurements and existing instance pins." :
+      "Check the stack's availability and approved configuration, then retry connecting. Keep this owner session and existing instance pins.";
+    text("setup-title", "Stack setup could not finish");
+    text("setup-description", "The workload, storage and private-resource requirements have not been confirmed. Deployment is unavailable. No new image encryption, upload or key delivery was started during this setup attempt. Earlier saved releases are unchanged.");
+    text("setup-error", `${reason} ${next}`);
+    el("setup-error").hidden = false;
+    el("retry-connect").hidden = false;
+  } finally {
+    connecting = false;
+    input("retry-connect").disabled = false;
+  }
 }
 function progress(phase: Phase, title: string) {
   text("job-title", title);
@@ -666,7 +709,7 @@ el("deploy-form").addEventListener("submit", event => {
 });
 el("inspect").addEventListener("click", () => { if (!busy && connected) { busy = true; el("notice").hidden = true; void (owner.provisioned ? inspect() : provision()).then(() => { busy = false; }).catch(failure); } });
 el("storage-recovery").addEventListener("click", () => {
-  if (busy || !owner.finalPin || !owner.prepared) return;
+  if (busy || !connected || !owner.finalPin || !owner.prepared) return;
   void (async () => {
     const channel = final ?? await finalConnection();
     const resources: Record<string,string> = {};
@@ -710,7 +753,7 @@ el("deploy-form").addEventListener("change", () => { sourceControls(); selection
 fileSelection(input("archive"), "image archive");
 fileSelection(input("source-recovery"), "source recovery file", { clear: () => { input("source-recovery-password").value = ""; } });
 sourceControls();
-unconfirmedReadiness();
 input("storage-recovery").disabled = true;
 el("storage-recovery-section").hidden = true;
-void connect().catch(failure);
+el("retry-connect").addEventListener("click", () => { void connectSafely(); });
+void connectSafely();

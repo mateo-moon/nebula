@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { webcrypto } from "node:crypto";
+import { createHash, webcrypto } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { build } from "esbuild";
 import { imageUploadLimits } from "@nebula/confidential-client/image-protocol";
@@ -20,6 +21,7 @@ async function deployment(restored = false, rejectedConnection = false, options:
   autoSubmit?: boolean; privateFile?: boolean; approvalSave?: Promise<void>;
   configureApplication?: (containers: any[]) => void;
   finalVerificationError?: string; transientFinalErrors?: string[]; transientFinalStatuses?: number[]; finalInstanceStatus?: number; keyWriteFailureAfter?: number;
+  freshSetup?: boolean; setupErrorBody?: unknown; pauseSetup?: boolean;
 } = {}) {
   const blobs = new Map<string, Blob>(), activeUrls = new Set<string>();
   const anchorClicks: { href: string; download: string; connected: boolean }[] = [];
@@ -106,6 +108,11 @@ async function deployment(restored = false, rejectedConnection = false, options:
     policies: { attestationPolicy: "test attestation policy", resourcePolicy: "test resource policy" } };
   const owner: any = { connection, imageKey: "9".repeat(64), token: "8".repeat(64), restored,
     ...(!restored || options.newRecovery ? { enrollmentJournalVersion: 1 } : {}) };
+  if (options.freshSetup) { delete owner.connection; owner.publicKeyPem = "same-test-owner-public-key"; }
+  let setupRejected = rejectedConnection, connectionSaved = !options.freshSetup, preparationClaimed = !options.freshSetup;
+  let setupClaims = 0, metadataClaims = 0, connectionWrites = 0, setupEntered = false;
+  let allowSetup!: () => void;
+  const setupGate = options.pauseSetup ? new Promise<void>(resolve => { allowSetup = resolve; }) : Promise.resolve();
   let enrollment: any = options.journalPin ? { version: 1, manifestDigest: prepared.digest, transportPublicKey: options.journalPin } : undefined;
   if (options.provisionedCheckpoint) Object.assign(owner, { prepared, finalPin: "b".repeat(64), finalClaimed: true, provisioned: true });
   if (options.pendingCheckpoint) owner.encryptedImage = { id: "test-only-cache", manifestDigest: prepared.digest };
@@ -120,8 +127,18 @@ async function deployment(restored = false, rejectedConnection = false, options:
   const attestation = (role: string) => ({ attestation_result: "fixture." + Buffer.from(JSON.stringify({ role, verdict: "affirming" })).toString("base64url") + ".signature" });
   const channel = { identity: {}, pin: "a".repeat(64), lastAttestation: options.attestationFixtures ? attestation("preparation") : undefined,
     request: async (path: string, init?: RequestInit) => {
-    if (path === "/nebula/v1/browser") return response({ finalEnrollmentJournal: 1, imageUpload: imageUploadLimits(), imageEncryption: { protocol: "oci-encrypted-v2", location: "owner-browser", preparationReceivesImageKey: false } });
-    if (path === "/nebula/v1/connection") return response(connection, rejectedConnection ? 400 : 200);
+    if (path === "/nebula/v1/browser") return response({ claimed: preparationClaimed, claimSha256: createHash("sha256").update(Buffer.from("8".repeat(64), "hex")).digest("hex"), finalEnrollmentJournal: 1, imageUpload: imageUploadLimits(), imageEncryption: { protocol: "oci-encrypted-v2", location: "owner-browser", preparationReceivesImageKey: false } });
+    if (path === "/nebula/v1/claim") { setupClaims++; preparationClaimed = true; return response({}); }
+    if (path === "/nebula/v1/connection") {
+      setupEntered = true; await setupGate;
+      if (init?.method === "POST") {
+        connectionWrites++;
+        if (setupRejected) return response(options.setupErrorBody ?? { error: "unapproved_runtime" }, 400);
+        connectionSaved = true; return response(connection);
+      }
+      if (!connectionSaved) return response({}, 404);
+      return response(connection, setupRejected ? 400 : 200);
+    }
     if (path === "/nebula/v1/enrollment") {
       if (init?.method === "POST") { const value = JSON.parse(init.body as string); if (enrollment && enrollment.transportPublicKey !== value.transportPublicKey) return response({}, 409); enrollment ??= value; return response(enrollment); }
       return response(enrollment ?? {}, enrollment ? 200 : 404);
@@ -170,10 +187,15 @@ async function deployment(restored = false, rejectedConnection = false, options:
   }
   const timers: { at: number; callback: () => void }[] = [];
   const document = { getElementById: el, querySelectorAll: (selector: string) => selector === "[data-phase]" ? steps : [], createElement: (tag: string) => new Element(tag) };
-  runInNewContext(bundle.outputFiles[0].text, { window: { nebula: { owner, channel, target: "https://prep.example",
+  runInNewContext(bundle.outputFiles[0].text, { window: { nebula: { owner, channel, target: "https://prep.example", discovery: "https://discovery.example",
     finalChannel: (_origin: string, _identity: unknown, pin?: string) => { if (pin && pin !== final.pin) throw new Error("The enrolled final transport key changed"); return final; }, save: async () => { await options.approvalSave; }, backup: async () => ({}), jwt: async () => "test-owner-proof",
     ...(options.manualTls ? { manualTls: options.manualTls } : {}) } },
     document, crypto: webcrypto, TextEncoder, TextDecoder, Blob, Response, atob, btoa, Date: Clock, Worker: LocalWorker,
+    fetch: async (url: string, init: RequestInit) => {
+      assert.match(url, /^https:\/\/discovery\.example\/\.well-known\/nebula\/confidential(?:\/claim)?$/);
+      if (init.method === "POST") { metadataClaims++; return response({}); }
+      return response({ connection });
+    },
     navigator: { storage: { getDirectory: async () => ({ removeEntry: async () => {} }) } },
     URL: Object.assign(class extends URL {}, {
       createObjectURL: (blob: Blob) => {
@@ -195,11 +217,11 @@ async function deployment(restored = false, rejectedConnection = false, options:
     } while (Date.now() < deadline);
     assert.fail("The UI did not settle");
   };
-  await wait(() => rejectedConnection ? el("notice").textContent.length > 0 :
+  await wait(() => options.pauseSetup ? setupEntered : rejectedConnection ? el("setup-error").textContent.length > 0 :
     el("job-title").textContent === (options.provisionedCheckpoint ? "Release prepared" : options.pendingCheckpoint === "running" ?
       "Compiling native genpolicy independently…" : options.pendingCheckpoint ? "Ciphertext published; native policy needs attention" : "Ready when you are"));
   const submit = () => el("deploy-form").listeners.get("submit")!({ preventDefault() {} });
-  if (options.autoSubmit !== false && !options.provisionedCheckpoint && !options.pendingCheckpoint) {
+  if (!rejectedConnection && !options.pauseSetup && options.autoSubmit !== false && !options.provisionedCheckpoint && !options.pendingCheckpoint) {
     submit();
     await wait(() => !el("notice").hidden && el("notice").textContent.length > 0);
   }
@@ -214,19 +236,82 @@ async function deployment(restored = false, rejectedConnection = false, options:
     completed: () => phases.filter((_, index) => steps[index].classes.has("done")),
     active: () => phases.filter((_, index) => steps[index].classes.has("active")),
     counts: () => ({ publishes, keyWrites, uploadRequests, finalAttempts }),
+    setupCounts: () => ({ setupClaims, metadataClaims, connectionWrites }),
+    allowSetup: () => allowSetup(), acceptSetup() { setupRejected = false; },
     restoreConnectivity(ready = true) { available = true; storageReady = ready; },
     completeStatus() { missingResource = false; missingDisk = undefined; storageReady = true; supervisorPhase = "running"; } };
 }
 
 test("rejected stack settings keep image encryption and publication disabled", async () => {
   const ui = await deployment(false, true);
-  assert.match(ui.el("notice").textContent, /connection.*400/);
+  assert.match(ui.el("setup-error").textContent, /connection.*400/);
+  assert.equal(ui.el("setup-panel").hidden, false);
+  assert.equal(ui.el("retry-connect").hidden, false);
+  for (const id of ["stack-details", "deployment-section", "readiness-section", "deployment-progress"]) assert.equal(ui.el(id).hidden, true);
+  assert.equal(ui.el("input-checklist").textContent, "");
+  assert.equal(ui.el("storage-summary").textContent, "");
+  assert.equal(ui.el("resource-files").textContent, "");
   assert.equal(ui.el("deploy").disabled, true);
   assert.equal(ui.counts().publishes, 0);
   assert.equal(ui.counts().uploadRequests, 0);
   assert.equal(ui.counts().keyWrites, 0);
   assert.deepEqual(ui.completed(), []);
   assert.deepEqual(ui.active(), []);
+});
+
+test("the initial page hides unconfirmed requirements even before JavaScript connects", () => {
+  const html = readFileSync(new URL("../src/ui/index.html", import.meta.url), "utf8");
+  for (const id of ["stack-details", "deployment-section", "readiness-section", "deployment-progress"]) assert.match(html, new RegExp(`<section id="${id}"[^>]* hidden>`));
+  assert.match(html, /<fieldset id="deployment-inputs"[^>]* disabled>/);
+  assert.match(html, /id="setup-panel"/);
+  const security = html.slice(html.indexOf('<section class="card security-card"'));
+  assert.match(security, /id="recovery-backup"/);
+  assert.match(security, /id="download-verification"/);
+});
+
+test("connecting cannot encrypt or display empty requirements as a confirmed stack", async () => {
+  const ui = await deployment(false, false, { pauseSetup: true, privateFile: true });
+  assert.equal(ui.el("setup-panel").hidden, false);
+  assert.equal(ui.el("deployment-section").hidden, true);
+  assert.equal(ui.el("deployment-inputs").disabled, true);
+  ui.submit(); ui.el("inspect").click(); ui.el("storage-recovery").click();
+  assert.equal(ui.counts().uploadRequests, 0); assert.equal(ui.counts().publishes, 0); assert.equal(ui.counts().keyWrites, 0);
+  assert.equal(ui.el("input-checklist").textContent, ""); assert.equal(ui.el("resource-files").textContent, "");
+  ui.allowSetup();
+  await ui.wait(() => ui.el("setup-panel").hidden);
+  assert.equal(ui.el("deployment-section").hidden, false);
+  assert.equal(ui.el("deployment-inputs").disabled, false);
+  assert.equal(ui.el("resource-default/config/app").type, "file");
+});
+
+test("reviewed runtime setup refusal explains the blocker and retries with the same owner without reclaiming", async () => {
+  const ui = await deployment(false, true, { freshSetup: true, privateFile: true,
+    setupErrorBody: { error: "unapproved_runtime", message: "private-sentinel-never-display" } });
+  const owner = ui.owner, imageKey = ui.owner.imageKey, publicKey = ui.owner.publicKeyPem;
+  assert.match(ui.el("setup-error").textContent, /Workload software does not match the reviewed release/);
+  assert.match(ui.el("setup-error").textContent, /administrator.*reviewed runtime software/);
+  assert.doesNotMatch(ui.el("setup-error").textContent, /private-sentinel-never-display/);
+  assert.equal(ui.el("deployment-section").hidden, true); assert.equal(ui.el("resource-files").textContent, "");
+  assert.equal(ui.setupCounts().setupClaims, 1); assert.equal(ui.setupCounts().metadataClaims, 0);
+  ui.submit(); assert.equal(ui.counts().uploadRequests, 0); assert.equal(ui.counts().keyWrites, 0);
+  ui.acceptSetup(); ui.el("retry-connect").click(); ui.el("retry-connect").click();
+  await ui.wait(() => ui.el("setup-panel").hidden);
+  assert.equal(ui.owner, owner); assert.equal(ui.owner.imageKey, imageKey); assert.equal(ui.owner.publicKeyPem, publicKey);
+  assert.equal(ui.setupCounts().setupClaims, 1, "Retry must not claim or create another owner");
+  assert.equal(ui.setupCounts().metadataClaims, 1); assert.equal(ui.setupCounts().connectionWrites, 2);
+  assert.equal(ui.el("stack-details").hidden, false); assert.equal(ui.el("deployment-section").hidden, false);
+  assert.equal(ui.el("readiness-section").hidden, false); assert.equal(ui.el("deployment-progress").hidden, false);
+  assert.equal(ui.el("resource-default/config/app").type, "file");
+  assert.match(ui.el("resource-files").textContent, /Resource ID: default\/config\/app/);
+  assert.equal(ui.el("deploy").disabled, false);
+  assert.equal(ui.counts().publishes, 0); assert.equal(ui.counts().keyWrites, 0);
+});
+
+test("unreviewed setup error bodies never become user-facing reasons", async () => {
+  const ui = await deployment(false, true, { freshSetup: true, setupErrorBody: { error: "private-sentinel-never-display" } });
+  assert.match(ui.el("setup-error").textContent, /connection.*400/);
+  assert.doesNotMatch(ui.el("setup-error").textContent, /private-sentinel-never-display|Workload software does not match/);
+  assert.equal(ui.el("deployment-section").hidden, true);
 });
 
 test("runtime review shows configured access without unknown application identity or startup placeholders", async () => {

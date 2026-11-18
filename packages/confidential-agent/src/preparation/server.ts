@@ -126,11 +126,13 @@ export function startPreparation(assets: string, maxImageSizeMiB = 256, signal?:
         const raw = await body(request);
         try {
           const value = readConnection(raw.toString());
-          trustedStack(value);
+          let trustedProfile: string;
+          try { trustedProfile = trustedStack(value); }
+          catch { json(response, 400, { error: "unapproved_runtime" }); return; }
           assertImageStoreBinding(value, imageStore);
           if (value.workload.spec.ownerClaimSha256 !== commitment || value.workload.spec.browserOwner !== true) throw new Error("Stack invitation differs");
           writeCheckpoint(join(directory, "connection.json"), JSON.stringify(value), true);
-          connection = value; json(response, 200, { version: 1, trustedProfile: trustedStack(value) });
+          connection = value; json(response, 200, { version: 1, trustedProfile });
         } finally { raw.fill(0); }
         return;
       }

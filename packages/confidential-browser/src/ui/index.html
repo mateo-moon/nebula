@@ -3,8 +3,14 @@
 <header><div class="brand">nebula<span> / confidential</span></div><span class="local">VERIFIED BROWSER CLIENT</span></header>
 <main>
   <div class="intro"><p class="eyebrow">YOUR WORKLOAD. YOUR KEYS.</p><h1>Deploy with confidence.</h1><p>Choose a local image or an optional registry source, review how it will run, then deploy it to your verified confidential stack. Image layers are encrypted in your browser.</p></div>
+  <section id="setup-panel" class="card" aria-labelledby="setup-title">
+    <h2 id="setup-title">Connecting to your stack…</h2>
+    <p id="setup-description" role="status">Authenticating the saved stack settings and checking the reviewed workload software. Deployment inputs appear only after these checks succeed.</p>
+    <p id="setup-error" role="alert" hidden></p>
+    <button id="retry-connect" type="button" class="secondary" hidden>Retry connecting</button>
+  </section>
   <div class="columns"><div>
-    <section class="card" aria-labelledby="stack-heading">
+    <section id="stack-details" class="card" aria-labelledby="stack-heading" hidden>
       <div class="section-title"><span class="number">1</span><h2 id="stack-heading">Your stack and storage</h2></div>
       <p id="connection-status" role="status">Connecting to the verified preparation service…</p>
       <div id="stack-name" class="stack-name"></div><p id="destination" class="destination"></p>
@@ -15,12 +21,12 @@
       <details><summary>Technical stack settings</summary><p class="hint">Cluster metadata is untrusted input. The measured preparation service validates it and independently runs native genpolicy. The browser then verifies the final workload against that policy.</p><pre id="configuration"></pre></details>
     </section>
 
-    <section class="card" aria-labelledby="deploy-heading">
+    <section id="deployment-section" class="card" aria-labelledby="deploy-heading" hidden>
       <div class="section-title"><span class="number">2</span><h2 id="deploy-heading">Prepare your deployment</h2></div>
       <div id="input-preflight" class="preflight"><h3>What you need</h3><ul id="input-checklist" class="input-checklist" aria-live="polite"></ul></div>
       <p id="release-saved" class="release-saved" hidden>Your encrypted image is already published. Use <strong>Verify again &amp; refresh status</strong> to continue or check this release. You do not need to upload the image again.</p>
       <form id="deploy-form">
-        <fieldset id="deployment-inputs" class="deployment-inputs">
+        <fieldset id="deployment-inputs" class="deployment-inputs" disabled>
         <div id="new-release-inputs">
         <label for="image-source">Image source</label><select id="image-source"><option value="local">Local image archive</option><option value="registry">External registry (optional source)</option></select>
         <div id="local-source-inputs"><label for="archive">Image archive on your computer</label><input id="archive" type="file" accept=".tar" required>
@@ -66,18 +72,14 @@
       <p class="privacy">Plaintext image layers stay on your computer until the final guest decrypts them. Image and disk keys go directly to that verified guest's Trustee. The application receives its declared files and mounted storage, without the disk keys.</p>
     </section>
   </div><aside>
-    <section class="card readiness-card" aria-labelledby="readiness-title">
+    <section id="readiness-section" class="card readiness-card" aria-labelledby="readiness-title" hidden>
       <p class="eyebrow">DATA READINESS</p><h2 id="readiness-title" aria-live="polite">Not checked yet</h2>
       <p id="readiness-description">After publication, this browser verifies the final VM, delivers your keys and checks every encrypted disk. Saved deployment steps are not a current readiness check.</p>
       <dl id="readiness-checks" class="status-list"></dl><p id="readiness-time" class="hint">No live final-workload check yet.</p>
     </section>
-    <section class="card progress-card" aria-labelledby="job-title">
+    <section id="deployment-progress" class="card progress-card" aria-labelledby="job-title" hidden>
       <p class="eyebrow">DEPLOYMENT PROGRESS</p><h2 id="job-title" aria-live="polite" tabindex="-1">Connecting…</h2><p id="job-description">Your owner key will control this release.</p>
       <div id="notice" role="alert" hidden></div>
-      <div id="recovery-backup" class="recovery-backup" hidden>
-        <a id="recovery-download" class="verification-download-retry" download="nebula-owner-recovery.json">Download encrypted recovery backup</a>
-        <p id="recovery-backup-status" class="hint" role="status"></p>
-      </div>
       <ol id="steps" aria-label="Deployment steps">
         <li data-phase="encrypting"><span aria-hidden="true"></span>Encrypt locally and publish ciphertext</li>
         <li data-phase="measuring"><span aria-hidden="true"></span>Prepare the approved workload policy</li>
@@ -90,6 +92,10 @@
       <details><summary>Technical workload and storage status</summary><pre id="result"></pre><pre id="supervisor-status"></pre></details>
       <details id="storage-recovery-section"><summary>Recover interrupted empty-disk setup</summary><p class="hint">Use this only when a disk says your approval is needed. Recovery stays bound to the enrolled VM and is refused for existing filesystems or nonzero data.</p><button id="storage-recovery" type="button" class="secondary">Check recovery options</button><div id="storage-recovery-plans"></div></details>
     </section>
+      <div id="recovery-backup" class="recovery-backup" hidden>
+        <a id="recovery-download" class="verification-download-retry" download="nebula-owner-recovery.json">Download encrypted recovery backup</a>
+        <p id="recovery-backup-status" class="hint" role="status"></p>
+      </div>
     <section class="card security-card"><p class="eyebrow">SECURITY AND VERIFICATION</p><h2>Know what you trust.</h2>
       <div class="security-badges"><span class="badge verified">Preparation VM verified</span><span id="final-status" class="badge pending">Final workload pending</span></div>
       <p id="security-description">The loader verified the AMD certificate chain, fresh hardware report and approved native workload policy before running this interface.</p><dl id="security-values"></dl>
