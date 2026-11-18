@@ -94,7 +94,7 @@ function selectionChecklist() {
   const selected = files.filter(field => field.files?.length || owner.resources?.[field.id.slice("resource-".length)]).length;
   const hasOverrides = applicationContract(connection).containers.some(container => container.execution.source === "override" || Object.keys(container.env).length > 0);
   const items = [
-    { label: sourceMode() === "registry" ? "Registry source · verified and encrypted locally" : archive ? `${archive.name} · ${imageSizeLabel(archive.size)} selected` : `Local image archive · up to ${imageSizeLabel(imageLimits.maxBytes)}`, supplied: sourceMode() === "registry" ? !!(document.getElementById("source-reference") as HTMLInputElement | null)?.value : !!archive || !!owner.prepared },
+    { label: sourceMode() === "registry" ? "Registry source · verified and encrypted locally" : archive ? "Local image archive selected" : `Local image archive · up to ${imageSizeLabel(imageLimits.maxBytes)}`, supplied: sourceMode() === "registry" ? !!(document.getElementById("source-reference") as HTMLInputElement | null)?.value : !!archive || !!owner.prepared },
     { label: "Image storage · managed by this stack", supplied: !!connection.workload.spec.imageStore || !!owner.prepared },
     { label: existing.length ? `Existing disk keys · ${keyFiles} of ${existing.length} selected or saved` : "New disk keys · generated automatically in your browser", supplied: keyFiles === existing.length },
     { label: files.length ? `Private application files · ${selected} of ${files.length} selected or saved` : "No private application files requested", supplied: selected === files.length },
@@ -107,6 +107,34 @@ function selectionChecklist() {
     marker.textContent = item.supplied ? "✓" : "○"; marker.setAttribute("aria-hidden", "true");
     label.textContent = item.label; row.dataset.supplied = String(item.supplied); row.append(marker, label); list.append(row);
   }
+}
+function fileSelection(field: HTMLInputElement, label: string, options: { saved?: () => boolean; clear?: () => void } = {}) {
+  const row = document.createElement("div"), detail = document.createElement("div"), filename = document.createElement("strong");
+  const status = document.createElement("span"), remove = document.createElement("button");
+  row.className = "file-selection"; row.id = field.id + "-selection";
+  detail.setAttribute("aria-live", "polite"); detail.append(filename, status);
+  remove.type = "button"; remove.className = "text-button";
+  remove.textContent = "Remove"; remove.setAttribute("aria-label", `Remove selected ${label}`);
+  row.append(detail, remove); field.after(row);
+  const render = () => {
+    const file = field.files?.[0], saved = options.saved?.();
+    if (options.saved) field.required = !saved;
+    row.hidden = !file && !saved;
+    filename.textContent = file?.name ?? "";
+    if (file) {
+      const size = file.size < 1024 ? `${file.size} B` : file.size < 1024 ** 2 ? `${Math.round(file.size / 1024)} KiB` : imageSizeLabel(file.size);
+      status.textContent = `${size} selected${saved ? " · Replaces saved file" : ""}`;
+    } else status.textContent = "Your saved file will be used";
+    remove.hidden = !file;
+  };
+  field.addEventListener("change", render);
+  remove.addEventListener("click", () => {
+    if (busy || owner.prepared) return;
+    field.value = "";
+    options.clear?.();
+    render(); selectionChecklist(); field.focus();
+  });
+  render();
 }
 function releaseControls() {
   const saved = !!owner.prepared;
@@ -173,21 +201,22 @@ function evidence() {
   if (value.final) text("final-attestation", JSON.stringify(value.final, null, 2));
   return value;
 }
-function downloadRecovery(name: string, value: unknown) {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: "application/json" }));
-  const a = document.createElement("a"); a.href = url; a.download = name;
+function offerRecoveryBackup(value: unknown) {
+  const nextUrl = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: "application/json" }));
+  const link = el<HTMLAnchorElement>("recovery-download");
+  link.href = nextUrl;
+  el("recovery-backup").hidden = false;
+  text("recovery-backup-status", recoveryUrl ? "The backup has been updated. Save the latest copy." : "Save this encrypted backup before closing the tab.");
   if (recoveryUrl) URL.revokeObjectURL(recoveryUrl);
-  recoveryUrl = url;
-  document.getElementById("recovery-download")?.remove();
-  a.id = "recovery-download"; a.className = "secondary";
-  a.textContent = name.includes("updated") ? "Download updated encrypted recovery backup" : "Download encrypted recovery backup";
-  el("deploy-form").after(a);
-  a.click();
+  recoveryUrl = nextUrl;
 }
 function failure(error: unknown) {
   const notice = el("notice"); notice.hidden = false;
   notice.textContent = error instanceof Error ? error.message : "Verification or deployment stopped. No unverified fallback was used.";
+  const deploymentInputs = el<HTMLFieldSetElement>("deployment-inputs");
+  if (deploymentInputs.disabled && !completed.has("ready")) text("job-title", "Deployment paused");
   busy = false; input("deploy").disabled = !connected || !!owner.prepared;
+  deploymentInputs.disabled = false;
   activePhase = undefined; renderSteps();
   if (currentReadiness) staleReadiness();
   else if (readinessChecking) {
@@ -268,10 +297,11 @@ async function connect() {
     const alias = storageCards.find(card => card.resourceName === storage.metadata.name)!.name;
     const label = document.createElement("label"); label.textContent = `Existing encryption key for ${alias}`;
     const field = document.createElement("input"); field.type = "file"; field.id = "key-" + storage.metadata.name;
-    field.required = !owner.volumeKeys?.[storage.metadata.name]; label.htmlFor = field.id;
+    label.htmlFor = field.id;
     const hint = document.createElement("p"); hint.className = "hint";
     hint.textContent = "Choose the original 32-byte disk key. This disk will not be initialized or reformatted. A new key cannot unlock existing data.";
     el("volume-keys").append(label, field, hint);
+    fileSelection(field, `disk key for ${alias}`, { saved: () => !!owner.volumeKeys?.[storage.metadata.name] });
   }
   const keyPaths = new Set([connection.workload.spec.containers[0].imageKeyResource.join("/"),
     ...connection.storages.filter((s: any) => s.spec.type === "EncryptedBlock").map((s: any) => s.spec.keyResource.join("/"))]);
@@ -279,11 +309,12 @@ async function connect() {
     const path = resource.join("/"); if (keyPaths.has(path)) continue;
     const label = document.createElement("label"); label.textContent = `Private application file: ${path}`;
     const field = document.createElement("input"); field.type = "file"; field.id = "resource-" + path;
-    field.required = !owner.resources?.[path]; label.htmlFor = field.id;
+    label.htmlFor = field.id;
     const consumers = connection.workload.spec.containers.filter((container: any) => (container.applicationResources ?? []).some((route: string[]) => route.join("/") === path)).map((container: any) => container.name);
     const hint = document.createElement("p"); hint.className = "hint";
     hint.textContent = `Select the file this application expects (up to 2 MiB). ${consumers.length ? `Declared application access: ${consumers.join(", ")}.` : "Consumed inside the verified guest according to the approved settings."} Its contents are not displayed here.`;
     el("resource-files").append(label, field, hint);
+    fileSelection(field, `application file for ${path}`, { saved: () => !!owner.resources?.[path] });
   }
   text("private-files-hint", "New disk keys are generated automatically in your browser. Any existing disk keys or application files requested below must be supplied by you; they are separate from any source-registry login or source-image decryption key.");
   const currentJob = await (await request(api.channel, "/nebula/v1/job")).json();
@@ -448,7 +479,12 @@ async function inspect() {
   input("inspect").disabled = false; input("storage-recovery").disabled = false;
 }
 el("deploy-form").addEventListener("submit", event => {
-  event.preventDefault(); if (busy || !connected) return; busy = true; input("deploy").disabled = true;
+  event.preventDefault(); if (busy || !connected || owner.prepared) return; busy = true; input("deploy").disabled = true;
+  el<HTMLFieldSetElement>("deployment-inputs").disabled = true;
+  el("notice").hidden = true;
+  text("job-title", "Checking your deployment inputs…");
+  text("job-description", "Keep this tab open while your browser prepares the release.");
+  el("job-title").focus();
   void (async () => {
     const archive = input("archive").files?.[0], registryMode = sourceMode() === "registry";
     if (!registryMode && (!archive || !archive.size || archive.size > imageLimits.maxBytes)) {
@@ -462,8 +498,9 @@ el("deploy-form").addEventListener("submit", event => {
     await approveApplication();
     requireManagedImageStore();
     owner.imageKey ??= hex(crypto.getRandomValues(new Uint8Array(32))); owner.volumeKeys ??= {};
-    for (const storage of connection.storages) if (storage.spec.type === "EncryptedBlock" && !owner.volumeKeys[storage.metadata.name]) {
+    for (const storage of connection.storages) if (storage.spec.type === "EncryptedBlock") {
       const selected = (document.getElementById("key-" + storage.metadata.name) as HTMLInputElement | null)?.files?.[0];
+      if (!selected && owner.volumeKeys[storage.metadata.name]) continue;
       if (storage.spec.initialization === "Never" && !selected) throw new Error("Provide the existing encrypted disk key");
       const raw = selected ? new Uint8Array(await selected.arrayBuffer()) : crypto.getRandomValues(new Uint8Array(32));
       if (raw.length !== 32) throw new Error("Disk keys must contain exactly 32 bytes");
@@ -482,7 +519,7 @@ el("deploy-form").addEventListener("submit", event => {
     await api.save();
     selectionChecklist();
     let recoveryPassword = input("recovery-password").value;
-    downloadRecovery("nebula-owner-recovery.json", await api.backup(recoveryPassword)); input("recovery-password").value = "";
+    offerRecoveryBackup(await api.backup(recoveryPassword)); input("recovery-password").value = "";
     try {
     completed.clear();
     progress("encrypting", "Encrypting image locally in your browser…");
@@ -517,7 +554,7 @@ el("deploy-form").addEventListener("submit", event => {
       local = await prepareLocalImage(archive!, owner.imageKey, keyId, imageLimits, owner.encryptedImage, encryptionProgress, owner.cipherCacheAttempt);
     }
     owner.encryptedImage = local.cache; delete owner.cipherCacheAttempt; await api.save();
-    downloadRecovery("nebula-owner-recovery-updated.json", await api.backup(recoveryPassword));
+    offerRecoveryBackup(await api.backup(recoveryPassword));
     await uploadEncryptedImage(local.image, imageLimits,
       (path, method, body, headers) => request(api.channel, path, method, body, "nebula-browser", headers),
       (sent, total) => progress("encrypting", `Uploading encrypted layers: ${imageSizeLabel(sent)} / ${imageSizeLabel(total)} (${Math.floor(sent * 100 / total)}%)`));
@@ -541,12 +578,15 @@ el("deploy-form").addEventListener("submit", event => {
         await removeCipherCache(owner.encryptedImage); delete owner.encryptedImage; await api.save(); break;
       }
     }
-    await provision(); busy = false;
+    await provision();
     } finally {
-      if (owner.prepared || owner.finalPin) downloadRecovery("nebula-owner-recovery-updated.json", await api.backup(recoveryPassword));
+      if (owner.prepared || owner.finalPin) offerRecoveryBackup(await api.backup(recoveryPassword));
       recoveryPassword = "";
     }
-  })().catch(failure);
+  })().then(() => {
+    busy = false;
+    el<HTMLFieldSetElement>("deployment-inputs").disabled = false;
+  }).catch(failure);
 });
 el("inspect").addEventListener("click", () => { if (!busy && connected) { busy = true; el("notice").hidden = true; void (owner.provisioned ? inspect() : provision()).then(() => { busy = false; }).catch(failure); } });
 el("storage-recovery").addEventListener("click", () => {
@@ -591,6 +631,8 @@ el("clear-local-cache").addEventListener("click", () => {
 el("download-verification").addEventListener("click", verificationDownload(el("verification-download-status"), el<HTMLAnchorElement>("verification-download-retry"), evidence));
 el("deploy-form").addEventListener("input", selectionChecklist);
 el("deploy-form").addEventListener("change", () => { sourceControls(); selectionChecklist(); });
+fileSelection(input("archive"), "image archive");
+fileSelection(input("source-recovery"), "source recovery file", { clear: () => { input("source-recovery-password").value = ""; } });
 sourceControls();
 unconfirmedReadiness();
 input("storage-recovery").disabled = true;

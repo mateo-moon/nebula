@@ -186,6 +186,42 @@ h4 {
 .input-checklist [data-supplied=true] span:first-child {
   color:#236b47
 }
+.deployment-inputs {
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.file-selection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 7px 0;
+  padding: 9px 12px;
+  border: 1px solid #e2e6ed;
+  border-radius: 6px;
+  background: #f6f8fa;
+  overflow-wrap: anywhere;
+}
+.file-selection strong {
+  display: block;
+  font-size: 14px;
+}
+.file-selection span {
+  display: block;
+  color: #546174;
+  font-size: 12px;
+}
+.file-selection button { flex-shrink: 0; font-size: 12px; }
+#job-title { scroll-margin-block-start: 24px; }
+.recovery-backup {
+  margin-block: 14px;
+  padding: 10px 12px;
+  background: #f6f8fa;
+  border-radius: 6px;
+}
+.recovery-backup .hint { margin: 5px 0 0; }
 .application-review {
   margin-top:25px;
   padding-top:1px;

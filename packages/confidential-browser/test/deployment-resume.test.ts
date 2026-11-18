@@ -17,15 +17,24 @@ async function deployment(restored = false, rejectedConnection = false, options:
   missingResource?: boolean; missingDisk?: "audit" | "all" | "resource-names";
   supervisorPhase?: "starting" | "running" | "backoff" | "stopped";
   manualTls?: Record<string, unknown>; attestationFixtures?: boolean; missingImageStore?: boolean; registrySource?: boolean;
+  autoSubmit?: boolean; privateFile?: boolean; approvalSave?: Promise<void>;
 } = {}) {
   const blobs = new Map<string, Blob>(), activeUrls = new Set<string>();
   const anchorClicks: { href: string; download: string; connected: boolean }[] = [];
   const revocations: { url: string; retryHref: string; retryConnected: boolean }[] = [];
   let failObjectUrl = false, failRetryClick = false, urlSequence = 0;
+  let focused: Element | undefined;
   class Element {
-    id = ""; value = ""; private ownText = ""; hidden = false; disabled = false;
+    id = ""; type = ""; private currentValue = ""; private ownText = ""; hidden = false; disabled = false;
+    get value() { return this.currentValue; }
+    set value(value: string) {
+      this.currentValue = value;
+      if (!value && this.type === "file") this.files = [];
+    }
     href = ""; download = ""; isConnected = false;
     children: Element[] = [];
+    parent?: Element;
+    constructor(readonly tag = "") {}
     get ownerDocument() { return document; }
     get textContent(): string { return this.ownText + this.children.map(child => child.textContent).join(""); }
     set textContent(value: string) { this.ownText = value; this.children = []; }
@@ -44,11 +53,23 @@ async function deployment(restored = false, rejectedConnection = false, options:
       if (this.href) anchorClicks.push({ href: this.href, download: this.download, connected: this.isConnected });
       this.listeners.get("click")?.({ preventDefault() {} });
     }
-    append(...children: Element[]) { this.children.push(...children); }
+    append(...children: Element[]) {
+      for (const child of children) {
+        child.parent = this;
+        if (child.id) elements.set(child.id, child);
+      }
+      this.children.push(...children);
+    }
     replaceChildren(...children: Element[]) { this.ownText = ""; this.children = children; }
-    after(...nodes: Element[]) { for (const node of nodes) { node.isConnected = this.isConnected; if (node.id) elements.set(node.id, node); } }
+    after(...nodes: Element[]) {
+      for (const node of nodes) if (node.id) elements.set(node.id, node);
+      if (this.parent) this.parent.children.splice(this.parent.children.indexOf(this) + 1, 0, ...nodes);
+    }
     remove() { this.isConnected = false; if (elements.get(this.id) === this) elements.delete(this.id); }
-    querySelectorAll() { return []; }
+    focus() { focused = this; }
+    querySelectorAll(selector: string): Element[] {
+      return this.children.flatMap(child => [ ...(child.tag === selector ? [child] : []), ...child.querySelectorAll(selector) ]);
+    }
   }
   const elements = new Map<string, Element>();
   const el = (id: string) => {
@@ -59,11 +80,12 @@ async function deployment(restored = false, rejectedConnection = false, options:
   el("verification-download-retry").hidden = true;
   el("final-status").textContent = "Final workload pending";
   if (options.registrySource) { el("image-source").value = "registry"; el("source-reference").value = "registry.example.com/team/private:release"; el("source-password").value = "source-login-sentinel"; el("source-image-key").value = "source-key-sentinel"; }
-  el("archive").files = [new Blob(["test-only local image"])];
+  el("archive").type = el("source-recovery").type = "file";
+  el("archive").files = [new File(["test-only local image"], "test-image.tar")];
   el("approved-registry").value = "ghcr.io";
   el("registry-username").value = "test-owner"; el("registry-password").value = "test-token";
   el("recovery-password").value = "test-only-recovery-password";
-  const resourcePaths = ["default/image/app", "default/volume/data", "default/volume/audit"];
+  const resourcePaths = ["default/image/app", "default/volume/data", "default/volume/audit", ...(options.privateFile ? ["default/config/app"] : [])];
   const connection = { version: 1, browserEndpoint: "https://final.example", endpoint: { host: "final.example", port: 8443 },
     workload: { metadata: { name: "test", namespace: "qualified" }, spec: { profile: "test",
       ...(!options.missingImageStore ? { imageStore: { endpoint: "http://images.qualified.svc:8084", writeEndpoint: "http://images.qualified.svc:8085", repository: "qualified/test" } } : {}),
@@ -136,9 +158,9 @@ async function deployment(restored = false, rejectedConnection = false, options:
     static now() { return now; }
   }
   const timers: { at: number; callback: () => void }[] = [];
-  const document = { getElementById: el, querySelectorAll: (selector: string) => selector === "[data-phase]" ? steps : [], createElement: () => new Element() };
+  const document = { getElementById: el, querySelectorAll: (selector: string) => selector === "[data-phase]" ? steps : [], createElement: (tag: string) => new Element(tag) };
   runInNewContext(bundle.outputFiles[0].text, { window: { nebula: { owner, channel, target: "https://prep.example",
-    finalChannel: (_origin: string, _identity: unknown, pin?: string) => { if (pin && pin !== final.pin) throw new Error("The enrolled final transport key changed"); return final; }, save: async () => {}, backup: async () => ({}), jwt: async () => "test-owner-proof",
+    finalChannel: (_origin: string, _identity: unknown, pin?: string) => { if (pin && pin !== final.pin) throw new Error("The enrolled final transport key changed"); return final; }, save: async () => { await options.approvalSave; }, backup: async () => ({}), jwt: async () => "test-owner-proof",
     ...(options.manualTls ? { manualTls: options.manualTls } : {}) } },
     document, crypto: webcrypto, TextEncoder, TextDecoder, Blob, Response, atob, btoa, Date: Clock, Worker: LocalWorker,
     navigator: { storage: { getDirectory: async () => ({ removeEntry: async () => {} }) } },
@@ -165,11 +187,12 @@ async function deployment(restored = false, rejectedConnection = false, options:
   await wait(() => rejectedConnection ? el("notice").textContent.length > 0 :
     el("job-title").textContent === (options.provisionedCheckpoint ? "Release prepared" : options.pendingCheckpoint === "running" ?
       "Compiling native genpolicy independently…" : options.pendingCheckpoint ? "Ciphertext published; native policy needs attention" : "Ready when you are"));
-  if (!options.provisionedCheckpoint && !options.pendingCheckpoint) {
-    el("deploy-form").listeners.get("submit")!({ preventDefault() {} });
+  const submit = () => el("deploy-form").listeners.get("submit")!({ preventDefault() {} });
+  if (options.autoSubmit !== false && !options.provisionedCheckpoint && !options.pendingCheckpoint) {
+    submit();
     await wait(() => !el("notice").hidden && el("notice").textContent.length > 0);
   }
-  return { owner, el, wait, steps,
+  return { owner, el, wait, steps, submit, focused: () => focused,
     downloads: { blobs, activeUrls, anchorClicks, revocations, failNextObjectUrl() { failObjectUrl = true; },
       failNextRetryClick() { failRetryClick = true; } },
     advanceClock(ms: number) {
@@ -193,6 +216,61 @@ test("rejected stack settings keep image encryption and publication disabled", a
   assert.equal(ui.counts().keyWrites, 0);
   assert.deepEqual(ui.completed(), []);
   assert.deepEqual(ui.active(), []);
+});
+
+test("deployment shows progress while owner state saves and leaves recovery downloads to the user", async () => {
+  let releaseSave!: () => void;
+  const approvalSave = new Promise<void>(resolve => { releaseSave = resolve; });
+  const ui = await deployment(false, false, { autoSubmit: false, approvalSave });
+  ui.submit();
+  assert.equal(ui.el("job-title").textContent, "Checking your deployment inputs…");
+  assert.equal(ui.focused(), ui.el("job-title"));
+  assert.equal(ui.el("deployment-inputs").disabled, true);
+  ui.el("archive-selection").children[1].click();
+  assert.equal(ui.el("archive").files.length, 1, "The selected file stays locked during deployment");
+  assert.equal(ui.counts().publishes, 0);
+  releaseSave();
+  await ui.wait(() => !ui.el("notice").hidden);
+  assert.equal(ui.el("deployment-inputs").disabled, false);
+  assert.equal(ui.downloads.anchorClicks.length, 0);
+  assert.equal(ui.el("recovery-backup").hidden, false);
+  const backup = ui.el("recovery-download");
+  assert.ok(ui.downloads.activeUrls.has(backup.href));
+  backup.click();
+  assert.equal(ui.downloads.anchorClicks[0].href, backup.href);
+});
+
+test("file names are readable and removals clear the specific local selection", async () => {
+  const ui = await deployment(false, false, { autoSubmit: false, privateFile: true });
+  const change = (id: string, filename: string) => {
+    ui.el(id).files = [new File(["local only"], filename)];
+    ui.el(id).listeners.get("change")!({ preventDefault() {} });
+    ui.el("deploy-form").listeners.get("change")!({ preventDefault() {} });
+  };
+  const resource = "resource-default/config/app";
+  const filename = "<test> a long local image export.tar";
+  change("archive", filename);
+  change(resource, "application settings.json");
+  change("source-recovery", "previous backup.json");
+  ui.el("source-recovery-password").value = "test-only password";
+  assert.equal(ui.el("archive-selection").children[0].children[0].textContent, filename);
+  assert.match(ui.el(resource + "-selection").textContent, /application settings\.json/);
+  assert.match(ui.el("input-checklist").textContent, /1 of 1 selected or saved/);
+
+  ui.el(resource + "-selection").children[1].click();
+  assert.equal(ui.el(resource).files.length, 0);
+  assert.equal(ui.el(resource + "-selection").hidden, true);
+  assert.match(ui.el("input-checklist").textContent, /0 of 1 selected or saved/);
+  assert.equal(ui.el("archive").files.length, 1);
+  ui.el("archive-selection").children[1].click();
+  assert.equal(ui.el("archive-selection").hidden, true);
+  assert.equal(ui.focused(), ui.el("archive"));
+  change("archive", filename);
+  assert.equal(ui.el("archive-selection").hidden, false);
+  ui.el("source-recovery-selection").children[1].click();
+  assert.equal(ui.el("source-recovery").files.length, 0);
+  assert.equal(ui.el("source-recovery-password").value, "");
+  assert.equal(ui.counts().uploadRequests, 0);
 });
 
 test("a post-publication timeout offers retry and resumes without republishing or changing the owner", async () => {
