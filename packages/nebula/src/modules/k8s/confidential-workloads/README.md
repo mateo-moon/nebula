@@ -41,6 +41,7 @@ new ConfidentialOperator(chart, "operator", {
     claimName: "application-images", repository: imageStore.repository,
     maxBytes: 8 * 1024 ** 3,
     preparationPodSelector: { "confidential.nebula.dev/browser": "preparation" },
+    nodeRegistryHostsDirectory: "/etc/containerd/certs.d",
   },
   accessLinkSecrets: [{ namespace: "example", name: "application-access" }],
 });
@@ -49,6 +50,12 @@ new ConfidentialOperator(chart, "operator", {
 Pass the same `imageStore` tuple to the preparation `ConfidentialBrowser` and the `ConfidentialWorkload.spec`. Set the application's image to `imageStoreImage(imageStore)`, imported from `nebula-cdk8s/confidential-workloads`. The diskless frontend does not receive the store configuration. Endpoints must name one internal Service on ports 8084/8085; the repository must equal the workload's namespace/name. The preparation guest compares this tuple with its measured configuration before accepting a connection.
 
 Port 8084 serves immutable OCI image content; port 8085 accepts publication only through the exact preparation Pod's private network route. The preparation API accepts only ciphertext uploads and application approval. Native CoCo pulls the encrypted image through the store's OCI API. HTTP is scoped to that exact internal repository in the publisher/operator and native genpolicy transport; CDH's guest pull routing is separately included in measured Init-Data. External registries keep certificate verification. No image-store service needs a decryption key or an external bootstrap Trustee.
+
+Kubelet/containerd also fetches image metadata on the node before guest pulling starts. A cluster-only Service name and HTTP transport therefore need a matching node-side registry mapping. Set `imageStore.nodeRegistryHostsDirectory` to the directory the node's CRI already uses for native per-registry `hosts.toml` files. On Linux, containerd 2.3 defaults to `/etc/containerd/certs.d:/etc/docker/certs.d` when its loaded path and mirrors are empty; the first directory is appropriate for the example. See the [containerd host configuration](https://github.com/containerd/containerd/blob/v2.3.3/docs/hosts.md). This option requires the default operator name, `confidential-operator`, so its authority matches the native `CONFIDENTIAL_OPERATOR_IMAGES_SERVICE_HOST` Service environment variable.
+
+This opt-in adds one init container using the operator image. It writes only this store's authority subdirectory, mapping it to the private Service IP, then exits. The root init has no API-token mount; the nonroot manager retains its rotating, read-only projected API credentials and never mounts the host directory. The store Service and NetworkPolicy share the operator's Argo wave so native Service metadata can be available at startup. A retained `WaitForFirstConsumer` ciphertext PVC must also share its actual consumer's wave. No runtime configuration, other registry, external port or daemon restart is required. The mapping handles untrusted ciphertext/public-metadata transport; enrolled guest policy, image integrity checks and key release remain authoritative. Omitting the option preserves the previous deployment bytes for clusters whose node transport is already configured.
+
+The init configures only the node hosting the operator. Pin the store PVC/operator to the same node as the final workload, using the filesystem StorageClass's topology, or provide the corresponding native mapping on every consumer node. The option does not configure an entire cluster. Preserve the Service identity and ClusterIP while its mappings are in use.
 
 The store publishes its `release` tag only after every referenced object is complete and hash-checked. Repeating the same publication is safe; replacing that tag with different content is refused. Retain the PVC across operator replacement. Administrators may delete or withhold ciphertext, but different bytes cannot satisfy the owner-approved digest and policy. Existing declarations without `imageStore` retain their external-publication path and measured layout.
 

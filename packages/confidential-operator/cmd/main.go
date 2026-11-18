@@ -24,12 +24,36 @@ import (
 func main() {
 	var leader bool
 	var probes string
+	var configureRegistryHosts bool
+	var imageStoreAuthority, imageStoreHostsDirectory string
 	flag.BoolVar(&leader, "leader-elect", true, "Use a namespace-scoped Lease to serialize reconciliation")
 	flag.StringVar(&probes, "health-probe-bind-address", ":8081", "Health and readiness listener")
+	flag.BoolVar(&configureRegistryHosts, "configure-image-store-registry-hosts", false, "Configure only the mounted image store registry authority, then exit")
+	flag.StringVar(&imageStoreAuthority, "image-store-authority", "", "Exact private image store Service authority for native registry reads")
+	flag.StringVar(&imageStoreHostsDirectory, "image-store-hosts-directory", "", "Exact authority directory mounted only into registry configuration init")
 	opts := zap.Options{}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	if configureRegistryHosts {
+		if err := imagestore.ConfigureRegistryHosts(imageStoreAuthority, os.Getenv("CONFIDENTIAL_OPERATOR_IMAGES_SERVICE_HOST"), imageStoreHostsDirectory); err != nil {
+			ctrl.Log.Error(err, "cannot configure image store registry hosts")
+			os.Exit(1)
+		}
+		return
+	}
+	if imageStoreHostsDirectory != "" {
+		ctrl.Log.Error(nil, "registry hosts directory is only valid in one-shot configuration mode")
+		os.Exit(1)
+	}
+	imageStore, err := imagestore.ConfigFromEnv(os.Getenv)
+	if err != nil || (imageStoreAuthority != "" && (imageStore == nil || imagestore.ValidateRegistryAuthority(imageStoreAuthority) != nil)) {
+		ctrl.Log.Error(nil, "invalid image store configuration or authority")
+		os.Exit(1)
+	}
+	if imageStore != nil {
+		imageStore.Authority = imageStoreAuthority
+	}
 	names := strings.Split(os.Getenv("WATCH_NAMESPACES"), ",")
 	if err := controller.ValidateNamespaces(names); err != nil {
 		ctrl.Log.Error(err, "invalid namespace scope")
@@ -76,11 +100,6 @@ func main() {
 			}
 			return nil
 		})))
-	}
-	imageStore, err := imagestore.ConfigFromEnv(os.Getenv)
-	if err != nil {
-		ctrl.Log.Error(err, "invalid image store configuration")
-		os.Exit(1)
 	}
 	if imageStore != nil {
 		store, err := imagestore.New(*imageStore)

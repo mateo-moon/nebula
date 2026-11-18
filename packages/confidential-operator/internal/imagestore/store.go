@@ -47,6 +47,7 @@ var (
 
 type Config struct {
 	Directory, Repository string
+	Authority             string
 	MaxBytes              int64
 }
 
@@ -77,6 +78,9 @@ func ConfigFromEnv(get func(string) string) (*Config, error) {
 func (c Config) validate() error {
 	if c.Directory == "" || !filepath.IsAbs(c.Directory) || filepath.Clean(c.Directory) != c.Directory || c.Directory == "/" || len(c.Directory) > 1024 || !repositoryRE.MatchString(c.Repository) || c.MaxBytes < 1<<20 || c.MaxBytes > 64<<30 {
 		return errors.New("image store needs an absolute directory, exact namespace/workload repository and bounded byte limit")
+	}
+	if c.Authority != "" {
+		return ValidateRegistryAuthority(c.Authority)
 	}
 	return nil
 }
@@ -263,6 +267,10 @@ func (s *Store) handler(write bool) http.Handler {
 			registryError(w, r, 405, "DENIED", "read-only image endpoint")
 			return
 		}
+		if !write && !s.readerQuery(r.URL) {
+			registryError(w, r, 400, "DENIED", "unexpected registry query")
+			return
+		}
 		if r.URL.Path == "/v2/" || r.URL.Path == "/v2" {
 			if r.Method != "GET" && r.Method != "HEAD" {
 				registryError(w, r, 405, "DENIED", "unsupported registry operation")
@@ -282,7 +290,7 @@ func (s *Store) handler(write bool) http.Handler {
 			return
 		}
 		if r.Method == "GET" || r.Method == "HEAD" {
-			if r.URL.RawQuery != "" {
+			if write && r.URL.RawQuery != "" {
 				registryError(w, r, 400, "DENIED", "unexpected registry query")
 				return
 			}
@@ -301,6 +309,20 @@ func (s *Store) handler(write bool) http.Handler {
 		}
 		registryError(w, r, 405, "DENIED", "unsupported registry operation")
 	})
+}
+
+// Containerd preserves the original registry authority in ns when an exact
+// hosts.toml entry sends a read to its private ClusterIP. This never changes
+// repository scope or permits a writer operation.
+func (s *Store) readerQuery(u *url.URL) bool {
+	if u.RawQuery == "" {
+		return !u.ForceQuery
+	}
+	if s.config.Authority == "" || !strings.HasPrefix(u.RawQuery, "ns=") || strings.Contains(u.RawQuery, "&") {
+		return false
+	}
+	query, err := url.ParseQuery(u.RawQuery)
+	return err == nil && len(query) == 1 && len(query["ns"]) == 1 && query["ns"][0] == s.config.Authority
 }
 
 func (s *Store) readBlob(w http.ResponseWriter, r *http.Request, value string) {

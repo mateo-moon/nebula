@@ -64,13 +64,17 @@ new ApiObject(chart, "namespace", { apiVersion: "v1", kind: "Namespace", metadat
 } });
 // This ordinary retained filesystem claim stores ciphertext and public OCI
 // metadata. It contains no owner state or usable image/disk keys.
+// Its existing default StorageClass must place the PVC/operator on `node`,
+// because the one-shot native registry mapping configures that node only.
 new ApiObject(chart, "image-store-claim", { apiVersion: "v1", kind: "PersistentVolumeClaim",
   metadata: { name: "example-images", namespace, annotations: {
-    "argocd.argoproj.io/sync-wave": "-3", "argocd.argoproj.io/sync-options": "Prune=false,Delete=false",
+    "argocd.argoproj.io/sync-wave": "-2", "argocd.argoproj.io/sync-options": "Prune=false,Delete=false",
   } }, spec: { accessModes: ["ReadWriteOnce"], volumeMode: "Filesystem",
     resources: { requests: { storage: "8Gi" } } } });
 new ConfidentialOperator(chart, "operator", { namespace, image: images.operator, watchNamespaces: [namespace],
   imageStore: { claimName: "example-images", repository: imageStore.repository, maxBytes: 8 * 1024 ** 3,
+    // Use the node's existing native hosts directory; configure only this authority.
+    nodeRegistryHostsDirectory: "/etc/containerd/certs.d",
     preparationPodSelector: { "confidential.nebula.dev/browser": "example-preparation" } },
   accessLinkSecrets: [{ namespace, name: "workload-access" }] });
 // Preparation receives ciphertext and runs native policy generation. The

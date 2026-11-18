@@ -1,5 +1,6 @@
 import { ApiObject } from "cdk8s";
 import type { Construct } from "constructs";
+import { posix } from "node:path";
 import { BaseConstruct } from "../../../core/base-construct";
 import { isDigestImage } from "../confidential-guests/types";
 import { publicConfig } from "../trustee/validation";
@@ -79,6 +80,11 @@ export interface ConfidentialOperatorConfig {
     /** Exact preparation label in the repository namespace. Omission denies
      * all remote writes instead of opening a wildcard publisher. */
     preparationPodSelector?: Readonly<Record<string, string>>;
+    /** Opt-in host registry transport for the default-named operator. The
+     * runtime must already read per-authority hosts files from this directory.
+     * Only this store's authority subdirectory is mounted into a one-shot init
+     * on the operator's node; store PVC placement must match consumer nodes. */
+    nodeRegistryHostsDirectory?: string;
   };
 }
 
@@ -96,13 +102,23 @@ export class ConfidentialOperator extends BaseConstruct<ConfidentialOperatorConf
           !config.watchNamespaces.includes(secret.namespace) || !/^[a-z][a-z0-9-]{0,39}$/.test(secret.name))) throw new Error("Invalid operator configuration");
     const imageStore = config.imageStore;
     const storeService = `${name}-images`;
+    const storeAuthority = `${storeService}.${namespace}.svc:8084`;
+    const registryHostsDirectory = imageStore?.nodeRegistryHostsDirectory;
+    const configureRegistryHosts = registryHostsDirectory !== undefined;
     if (imageStore !== undefined) {
       if (!imageStore || typeof imageStore !== "object" || Array.isArray(imageStore) ||
-          Object.keys(imageStore).some(key => !["claimName", "repository", "maxBytes", "preparationPodSelector"].includes(key)) ||
+          Object.keys(imageStore).some(key => !["claimName", "repository", "maxBytes", "preparationPodSelector", "nodeRegistryHostsDirectory"].includes(key)) ||
           !/^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(imageStore.claimName) ||
           !Number.isSafeInteger(imageStore.maxBytes ?? 8 * 1024 ** 3) ||
           (imageStore.maxBytes ?? 8 * 1024 ** 3) < 1024 ** 2 || (imageStore.maxBytes ?? 8 * 1024 ** 3) > 64 * 1024 ** 3) {
         throw new Error("Invalid public ciphertext store configuration");
+      }
+      if (configureRegistryHosts && (name !== "confidential-operator" || typeof registryHostsDirectory !== "string" ||
+          registryHostsDirectory.length > 1024 || !posix.isAbsolute(registryHostsDirectory) ||
+          registryHostsDirectory !== posix.normalize(registryHostsDirectory) ||
+          !/^(?:\/[A-Za-z0-9_.-]+)+$/.test(registryHostsDirectory) ||
+          registryHostsDirectory.split("/").some(part => part === "." || part === ".."))) {
+        throw new Error("Host registry transport requires the default operator name and a normalized absolute hosts directory");
       }
       validateImageStore({ endpoint: `http://${storeService}.${namespace}.svc:8084`,
         writeEndpoint: `http://${storeService}.${namespace}.svc:8085`, repository: imageStore.repository });
@@ -155,8 +171,17 @@ export class ConfidentialOperator extends BaseConstruct<ConfidentialOperatorConf
       spec: { replicas: 1, strategy: { type: "Recreate" }, selector: { matchLabels: { app: name } },
         template: { metadata: { labels: { app: name } }, spec: {
           ...(imageStore ? { securityContext: { fsGroup: 10001, fsGroupChangePolicy: "OnRootMismatch" } } : {}),
+          ...(configureRegistryHosts ? { enableServiceLinks: true, automountServiceAccountToken: false,
+            initContainers: [{ name: "image-store-registry-hosts", image: config.image, command: ["/manager"],
+              args: ["--configure-image-store-registry-hosts", `--image-store-authority=${storeAuthority}`,
+                "--image-store-hosts-directory=/node-registry-hosts"],
+              securityContext: { runAsUser: 0, runAsGroup: 0, allowPrivilegeEscalation: false,
+                readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } },
+              volumeMounts: [{ name: "registry-hosts", mountPath: "/node-registry-hosts" }],
+              resources: { requests: { cpu: "10m", memory: "16Mi" }, limits: { memory: "128Mi" } },
+            }] } : {}),
           serviceAccountName: name, containers: [{ name: "operator", image: config.image,
-            command: ["/manager"], args: ["--leader-elect"],
+            command: ["/manager"], args: ["--leader-elect", ...(configureRegistryHosts ? [`--image-store-authority=${storeAuthority}`] : [])],
             env: [{ name: "WATCH_NAMESPACES", value: config.watchNamespaces.join(",") },
               ...(accessSecrets.length ? [{ name: "ACCESS_LINKS", value: "true" }] : []),
               ...(imageStore ? [{ name: "IMAGE_STORE_DIRECTORY", value: "/var/lib/nebula-images" },
@@ -172,20 +197,30 @@ export class ConfidentialOperator extends BaseConstruct<ConfidentialOperatorConf
               allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } },
             resources: { requests: { cpu: "100m", memory: "256Mi" }, limits: { memory: "2Gi" } },
             volumeMounts: [{ name: "tmp", mountPath: "/tmp" },
-              ...(imageStore ? [{ name: "image-store", mountPath: "/var/lib/nebula-images" }] : [])],
+              ...(imageStore ? [{ name: "image-store", mountPath: "/var/lib/nebula-images" }] : []),
+              ...(configureRegistryHosts ? [{ name: "operator-api", mountPath: "/var/run/secrets/kubernetes.io/serviceaccount", readOnly: true }] : [])],
           }], volumes: [{ name: "tmp", emptyDir: { sizeLimit: "2Gi" } },
-            ...(imageStore ? [{ name: "image-store", persistentVolumeClaim: { claimName: imageStore.claimName } }] : [])],
+            ...(imageStore ? [{ name: "image-store", persistentVolumeClaim: { claimName: imageStore.claimName } }] : []),
+            ...(configureRegistryHosts ? [{ name: "registry-hosts", hostPath: {
+              path: `${registryHostsDirectory}/${storeAuthority}`, type: "DirectoryOrCreate" } },
+            { name: "operator-api", projected: { defaultMode: 0o644, sources: [
+              { serviceAccountToken: { path: "token", expirationSeconds: 3600 } },
+              { configMap: { name: "kube-root-ca.crt", items: [{ key: "ca.crt", path: "ca.crt" }] } },
+              { downwardAPI: { items: [{ path: "namespace", fieldRef: { apiVersion: "v1", fieldPath: "metadata.namespace" } }] } },
+            ] } }] : [])],
         } } },
     });
     if (accessSecrets.length) new ApiObject(this, "access-service", { apiVersion: "v1", kind: "Service", metadata: {
       name: `${name}-access`, namespace }, spec: { selector: { app: name }, ports: [{ name: "http", port: 8083, targetPort: "access" }] } });
     if (imageStore) {
-      new ApiObject(this, "image-store-service", { apiVersion: "v1", kind: "Service", metadata: { name: storeService, namespace },
+      const storeMetadata = { name: storeService, namespace,
+        ...(configureRegistryHosts ? { annotations: { "argocd.argoproj.io/sync-wave": "-2" } } : {}) };
+      new ApiObject(this, "image-store-service", { apiVersion: "v1", kind: "Service", metadata: storeMetadata,
         spec: { selector: { app: name }, ports: [{ name: "read", port: 8084, targetPort: "image-read" }, { name: "write", port: 8085, targetPort: "image-write" }] } });
       const [workloadNamespace, workload] = imageStore.repository.split("/");
       const peer = (labels: Readonly<Record<string, string>>) => ({ namespaceSelector: { matchLabels: { "kubernetes.io/metadata.name": workloadNamespace } }, podSelector: { matchLabels: labels } });
       const preparation = imageStore.preparationPodSelector ? peer(imageStore.preparationPodSelector) : undefined;
-      new ApiObject(this, "image-store-network", { apiVersion: "networking.k8s.io/v1", kind: "NetworkPolicy", metadata: { name: storeService, namespace },
+      new ApiObject(this, "image-store-network", { apiVersion: "networking.k8s.io/v1", kind: "NetworkPolicy", metadata: storeMetadata,
         spec: { podSelector: { matchLabels: { app: name } }, policyTypes: ["Ingress"], ingress: [
           // Preserve ordinary health and the existing public access service; only store ports add restrictions.
           { ports: [{ protocol: "TCP", port: 8081 }, ...(accessSecrets.length ? [{ protocol: "TCP", port: 8083 }] : [])] },
