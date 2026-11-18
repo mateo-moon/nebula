@@ -10,6 +10,7 @@ use std::{
         fd::{AsRawFd, FromRawFd, RawFd},
         unix::fs::{FileTypeExt, OpenOptionsExt},
     },
+    time::{Duration, Instant},
 };
 
 // The supported LUKS2 layout puts its data segment at this fixed offset.
@@ -17,6 +18,29 @@ use std::{
 pub(crate) const LUKS_HEADER_BYTES: u64 = 16 * 1024 * 1024;
 const HEADER_SEALS: libc::c_int =
     libc::F_SEAL_WRITE | libc::F_SEAL_GROW | libc::F_SEAL_SHRINK | libc::F_SEAL_SEAL;
+
+// Heap allocation bounds every volume's scan to 4 MiB while reducing device
+// reads by 64x from the original 64 KiB chunks. Every byte is still examined.
+pub(crate) const EMPTY_SCAN_BUFFER_BYTES: usize = 4 * 1024 * 1024;
+
+pub(crate) fn empty_scan_budget(bytes: u64) -> Duration {
+    // Allow 30s overhead plus a budgeted 512 MiB/s scan, capped at 20min.
+    // 500 GiB receives 17m10s, leaving time in the fixed 30min mount admission
+    // window for LUKS/filesystem creation. Slow or stalled proofs fail closed.
+    Duration::from_secs((30 + bytes.div_ceil(512 * 1024 * 1024)).clamp(30, 20 * 60))
+}
+
+pub(crate) fn check_empty_scan(deadline: Instant) -> Result<()> {
+    ensure!(
+        crate::mount_handoff::SIGNAL.load(std::sync::atomic::Ordering::SeqCst) == 0,
+        "empty-storage proof interrupted"
+    );
+    ensure!(
+        Instant::now() < deadline,
+        "empty-storage proof deadline exceeded"
+    );
+    Ok(())
+}
 
 pub struct OwnedDevice {
     file: File,
@@ -112,24 +136,29 @@ impl OwnedDevice {
     }
 
     pub(crate) fn ciphertext_payload_zero(&self, bytes: u64) -> Result<bool> {
+        ensure!(bytes > LUKS_HEADER_BYTES, "recovery payload absent");
+        self.ciphertext_payload_zero_until(
+            bytes,
+            Instant::now() + empty_scan_budget(bytes - LUKS_HEADER_BYTES),
+        )
+    }
+
+    fn ciphertext_payload_zero_until(&self, bytes: u64, deadline: Instant) -> Result<bool> {
         use std::os::unix::fs::FileExt;
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
         let mut offset = LUKS_HEADER_BYTES;
-        let mut buffer = [0; 65536];
+        let mut buffer = vec![0; EMPTY_SCAN_BUFFER_BYTES];
         while offset < bytes {
-            ensure!(
-                std::time::Instant::now() < deadline
-                    && crate::mount_handoff::SIGNAL.load(std::sync::atomic::Ordering::SeqCst) == 0,
-                "empty-payload proof interrupted"
-            );
+            check_empty_scan(deadline)?;
             let want = buffer.len().min((bytes - offset) as usize);
             let count = self.file.read_at(&mut buffer[..want], offset)?;
+            check_empty_scan(deadline)?;
             ensure!(count > 0, "short ciphertext payload");
             if buffer[..count].iter().any(|byte| *byte != 0) {
                 return Ok(false);
             }
             offset += count as u64;
         }
+        check_empty_scan(deadline)?;
         Ok(true)
     }
 }
@@ -155,6 +184,41 @@ mod tests {
     use super::*;
     use std::os::fd::FromRawFd;
     use std::os::unix::fs::FileExt;
+
+    #[test]
+    fn exhaustive_scan_budget_scales_to_capacity_without_exceeding_twenty_minutes() {
+        for (bytes, seconds) in [
+            (0, 30),
+            (64 * 1024 * 1024, 31),
+            (500 * 1024 * 1024 * 1024, 1030),
+            (1_u64 << 50, 1200),
+            (u64::MAX, 1200),
+        ] {
+            assert_eq!(empty_scan_budget(bytes), Duration::from_secs(seconds));
+        }
+    }
+
+    #[test]
+    fn recovery_scan_checks_the_complete_payload_and_refuses_expiry_or_short_reads() {
+        let file = fixture();
+        let bytes = LUKS_HEADER_BYTES + EMPTY_SCAN_BUFFER_BYTES as u64 + 7;
+        file.set_len(bytes).unwrap();
+        // Metadata is intentionally excluded; recovery_proof separately pins
+        // and authenticates the complete header before this payload scan.
+        file.write_all_at(b"not-payload", 0).unwrap();
+        let disk = OwnedDevice::open(file.try_clone().unwrap()).unwrap();
+        assert!(disk.ciphertext_payload_zero(bytes).unwrap());
+        file.write_all_at(&[1], bytes - 1).unwrap();
+        assert!(!disk.ciphertext_payload_zero(bytes).unwrap());
+        file.write_all_at(&[0], bytes - 1).unwrap();
+        assert!(disk.ciphertext_payload_zero(bytes + 1).is_err());
+        assert!(disk
+            .ciphertext_payload_zero_until(bytes, Instant::now())
+            .unwrap_err()
+            .to_string()
+            .contains("deadline"));
+        assert!(disk.ciphertext_payload_zero(LUKS_HEADER_BYTES).is_err());
+    }
 
     pub(crate) fn fixture() -> File {
         let fd = unsafe { libc::memfd_create(c"owned-device-test".as_ptr(), libc::MFD_CLOEXEC) };

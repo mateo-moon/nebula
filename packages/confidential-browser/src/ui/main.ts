@@ -5,7 +5,7 @@ import { checkedImageUploadLimits, imageUploadLimits, imageSizeLabel } from "@ne
 import { checkedSupervisors, storageClientsRunning, checkedStorageRecovery } from "./storage-status";
 import { prepareLocalImage, prepareRegistryImage, uploadEncryptedImage, removeCipherCache, type LocalCipherImage, type CipherCache } from "./upload";
 import { summarizeStorage, renderStorageOverview, type StorageSummary } from "@nebula/confidential-client/storage-overview";
-import { readinessSummary, type StatusLabel } from "./readiness";
+import { readinessSummary, storageReadinessTimeoutMs, type StatusLabel } from "./readiness";
 import { registryReference, sourceImageKey, sourceKeyFromRecovery, RegistrySourceError } from "./registry-source";
 import { verificationDownload } from "./verification-download";
 import { resourceReadExample } from "./resource-help";
@@ -567,7 +567,7 @@ async function inspect() {
   input("inspect").disabled = true; input("storage-recovery").disabled = true;
   unconfirmedReadiness(true);
   const channel = final ?? await finalConnection();
-  const deadline = Date.now() + 300_000;
+  const deadline = Date.now() + storageReadinessTimeoutMs(storageCards);
   const encryptedStorage = storageCards.filter(storage => storage.type === "EncryptedBlock").map(storage => storage.name);
   progress("ready", "Checking workload and encrypted storage…");
   while (true) {

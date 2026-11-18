@@ -7,6 +7,21 @@ export interface StatusLabel {
   tone: "neutral" | "pending" | "success" | "danger";
 }
 
+/** The guest must still verify every byte before formatting a fresh disk.
+ * Large disks need a longer observation window; this never authorizes format
+ * or treats elapsed time as evidence of readiness. */
+export function storageReadinessTimeoutMs(storages: readonly { type: "EncryptedBlock" | "Memory"; capacityBytes: number }[]): number {
+  let bytes = 0n;
+  for (const storage of storages) {
+    if (storage.type !== "EncryptedBlock") continue;
+    if (!Number.isSafeInteger(storage.capacityBytes) || storage.capacityBytes <= 0) throw new Error("Invalid encrypted disk capacity");
+    bytes += BigInt(storage.capacityBytes);
+  }
+  const bytesPerSecond = 512n * 1024n * 1024n;
+  const extraSeconds = (bytes + bytesPerSecond - 1n) / bytesPerSecond;
+  return 300_000 + Number(extraSeconds > 1500n ? 1500n : extraSeconds) * 1000;
+}
+
 /** Only a fresh, owner-authenticated guest response may select these states. */
 export function diskStatus(phase: unknown): StatusLabel {
   switch (phase) {

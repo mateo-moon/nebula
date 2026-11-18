@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { diskStatus, readinessSummary } from "../src/ui/readiness";
+import { diskStatus, readinessSummary, storageReadinessTimeoutMs } from "../src/ui/readiness";
 import { checkedSupervisors } from "../src/ui/storage-status";
 
 const required = { resources: ["default/image/app", "default/volume/data"], encryptedStorage: ["data"] };
@@ -40,4 +40,19 @@ test("recovery and denied unlock states explain the user action without authoriz
   assert.match(diskStatus("manual-recovery-required").detail, /do not replace or reformat/);
   assert.equal(diskStatus("unlock-denied").tone, "danger");
   assert.notEqual(diskStatus("unrecognized").tone, "success");
+});
+
+test("large encrypted disks extend bounded readiness observation without declaring readiness", () => {
+  const disk = (gib: number) => ({ type: "EncryptedBlock" as const, capacityBytes: gib * 1024 ** 3 });
+  assert.equal(storageReadinessTimeoutMs([]), 300_000);
+  assert.equal(storageReadinessTimeoutMs([{ type: "Memory", capacityBytes: 500 * 1024 ** 3 }]), 300_000);
+  assert.equal(storageReadinessTimeoutMs([disk(500)]), 1_300_000);
+  assert.equal(storageReadinessTimeoutMs([disk(500), disk(500)]), 1_800_000);
+  assert.equal(storageReadinessTimeoutMs([disk(1024 * 1024)]), 1_800_000);
+  for (const capacityBytes of [0, -1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.throws(() => storageReadinessTimeoutMs([{ type: "EncryptedBlock", capacityBytes }]));
+  }
+  const pending = readinessSummary(required, { ...snapshot, storage: { data: { phase: "initializing" } } }, undefined, "unavailable");
+  assert.equal(pending.data.ready, false);
+  assert.equal(pending.disks.data.label, "Preparing an empty disk");
 });

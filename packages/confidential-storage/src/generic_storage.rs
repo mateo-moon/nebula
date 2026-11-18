@@ -375,6 +375,9 @@ pub(crate) fn serve_volume(
     };
     let (mut active, report) = loop {
         let key = retrieve(&config.key_resource, profile)?;
+        // Key acquisition is complete. A full-capacity empty-media proof may
+        // now run; do not keep reporting that the volume awaits its owner.
+        publish(profile, "initializing")?;
         match volume::open_lifecycle(Zeroizing::new(*key), profile, format) {
             Ok((Some(active), report)) => break (active, report),
             opened => {

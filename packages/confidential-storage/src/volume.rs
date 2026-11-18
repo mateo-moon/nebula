@@ -1,5 +1,5 @@
 //! Fixed encrypted data volume; no storage key API and no disk discovery.
-use crate::device::OwnedDevice;
+use crate::device::{check_empty_scan, empty_scan_budget, OwnedDevice, EMPTY_SCAN_BUFFER_BYTES};
 use crate::{
     keyslots::Layout,
     lifecycle::{Exit, Format},
@@ -291,14 +291,20 @@ fn command(program: &str, args: &[&str]) -> Result<()> {
 }
 
 fn entirely_zero(reader: &mut impl Read, expected: u64) -> Result<bool> {
+    entirely_zero_until(
+        reader,
+        expected,
+        Instant::now() + empty_scan_budget(expected),
+    )
+}
+
+fn entirely_zero_until(reader: &mut impl Read, expected: u64, deadline: Instant) -> Result<bool> {
     let mut total = 0_u64;
-    let mut buffer = [0; 64 * 1024];
+    let mut buffer = vec![0; EMPTY_SCAN_BUFFER_BYTES];
     loop {
-        ensure!(
-            crate::mount_handoff::SIGNAL.load(std::sync::atomic::Ordering::SeqCst) == 0,
-            "storage initialization interrupted before formatting"
-        );
+        check_empty_scan(deadline)?;
         let count = reader.read(&mut buffer)?;
+        check_empty_scan(deadline)?;
         if count == 0 {
             ensure!(total == expected, "short disk read; refusing format");
             return Ok(true);
@@ -589,6 +595,14 @@ fn open_with(
             "recovery header or exhaustive empty-payload proof changed"
         );
     }
+    // An exhaustive capacity-bounded recovery proof can legitimately take
+    // longer than metadata inspection. Its spent time must not expire the
+    // subsequent cryptsetup open/layout operation before it is started.
+    let deadline = if recovery_header.is_some() {
+        Instant::now() + Duration::from_secs(60)
+    } else {
+        deadline
+    };
     let opened = crypt_run(
         &disk,
         &[
@@ -729,11 +743,113 @@ mod tests {
         }
         assert!(entirely_zero(&mut Broken, 131073).is_err());
     }
+
+    #[test]
+    fn large_scan_checks_chunk_boundaries_and_the_exact_device_length() {
+        struct Counted {
+            reader: std::io::Cursor<Vec<u8>>,
+            reads: usize,
+        }
+        impl Read for Counted {
+            fn read(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
+                self.reads += 1;
+                self.reader.read(output)
+            }
+        }
+        let bytes = EMPTY_SCAN_BUFFER_BYTES as u64 + 17;
+        let mut disk = Counted {
+            reader: std::io::Cursor::new(vec![0; bytes as usize]),
+            reads: 0,
+        };
+        assert!(entirely_zero(&mut disk, bytes).unwrap());
+        assert_eq!(disk.reads, 3, "full chunk, tail and EOF must be read");
+        let mut data = vec![0; bytes as usize];
+        data[bytes as usize - 1] = 1;
+        assert!(!entirely_zero(&mut &data[..], bytes).unwrap());
+        assert!(entirely_zero(&mut &vec![0; bytes as usize + 1][..], bytes).is_err());
+    }
+
+    #[test]
+    fn an_expired_or_late_scan_cannot_authorize_formatting() {
+        struct Late {
+            reads: usize,
+        }
+        impl Read for Late {
+            fn read(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
+                self.reads += 1;
+                thread::sleep(Duration::from_millis(120));
+                output[..8].fill(0);
+                Ok(8)
+            }
+        }
+        let mut disk = Late { reads: 0 };
+        assert!(entirely_zero_until(&mut disk, 8, Instant::now()).is_err());
+        assert_eq!(disk.reads, 0, "expired proof must start no read");
+        let deadline = Instant::now() + Duration::from_millis(100);
+        assert!(plan(false, Format::Allow, || entirely_zero_until(
+            &mut disk, 8, deadline
+        ))
+        .is_err());
+        assert_eq!(disk.reads, 1, "late progress must not renew the deadline");
+    }
+
+    #[test]
+    fn shutdown_stops_both_empty_disk_and_recovery_payload_proofs() {
+        const CHILD: &str = "NEBULA_ZERO_SCAN_SIGNAL_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            assert!(Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "volume::tests::shutdown_stops_both_empty_disk_and_recovery_payload_proofs",
+                ])
+                .env(CHILD, "1")
+                .status()
+                .unwrap()
+                .success());
+            return;
+        }
+        crate::mount_handoff::SIGNAL.store(libc::SIGTERM, std::sync::atomic::Ordering::SeqCst);
+        assert!(entirely_zero(&mut &[0; 8][..], 8).is_err());
+        let file = memfd_file();
+        let bytes = crate::device::LUKS_HEADER_BYTES + 4096;
+        file.set_len(bytes).unwrap();
+        let disk = OwnedDevice::open(file).unwrap();
+        assert!(disk.ciphertext_payload_zero(bytes).is_err());
+    }
+
+    #[test]
+    #[ignore = "explicit isolated 500 GiB exhaustive-read qualification; never opens host devices"]
+    fn isolated_five_hundred_gib_scans_every_byte_and_rejects_a_nonzero_last_byte() {
+        use std::os::unix::fs::FileExt;
+        let bytes = 500 * 1024 * 1024 * 1024;
+        let file = memfd_file();
+        file.set_len(bytes).unwrap();
+        let mut disk = OwnedDevice::open(file.try_clone().unwrap()).unwrap();
+        let start = Instant::now();
+        assert_eq!(
+            plan(false, Format::Allow, || entirely_zero(&mut disk, bytes)).unwrap(),
+            Action::Create
+        );
+        let empty_seconds = start.elapsed().as_secs_f64();
+        drop(disk);
+        file.write_all_at(&[1], bytes - 1).unwrap();
+        let mut disk = OwnedDevice::open(file).unwrap();
+        let start = Instant::now();
+        assert!(plan(false, Format::Allow, || entirely_zero(&mut disk, bytes)).is_err());
+        println!(
+            "full_read_bytes={bytes} empty_seconds={empty_seconds:.3} nonzero_tail_seconds={:.3} budget_seconds={}",
+            start.elapsed().as_secs_f64(),
+            empty_scan_budget(bytes).as_secs()
+        );
+    }
     // Refusals happen before spawn: cryptsetup would accept these arguments.
-    fn memfd() -> OwnedDevice {
+    fn memfd_file() -> File {
         let fd = unsafe { libc::memfd_create(c"crypt-test".as_ptr(), libc::MFD_CLOEXEC) };
         assert!(fd >= 0);
-        OwnedDevice::open(unsafe { File::from_raw_fd(fd) }).unwrap()
+        unsafe { File::from_raw_fd(fd) }
+    }
+    fn memfd() -> OwnedDevice {
+        OwnedDevice::open(memfd_file()).unwrap()
     }
     #[test]
     fn a_piped_key_needs_its_own_pipe_argument() {
