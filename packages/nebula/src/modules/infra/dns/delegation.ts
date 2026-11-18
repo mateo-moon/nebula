@@ -5,22 +5,6 @@ import {
   RecordSetSpecDeletionPolicy,
 } from '#imports/dns.gcp.upbound.io';
 
-// Cloudflare delegation is now implemented via Crossplane Composition with provider-http
-// See: ./cloudflare-composition.ts
-// Usage:
-//   1. Deploy DnsCloudflareComposition (XRD + Composition) once
-//   2. Create DnsZoneCloudflare XRs for each zone with automatic delegation
-//
-// For standalone delegation (without Composition), this file still supports
-// manual delegation which outputs instructions for manual NS record creation.
-
-// TODO: Hetzner delegation requires a Crossplane provider
-// There is no official Crossplane provider for Hetzner DNS
-// Options:
-// 1. Create a custom provider using provider-jet or upjet
-// 2. Use a Kubernetes Job to call Hetzner DNS API
-// 3. Use manual delegation
-
 /** Delegation to a GCP parent zone */
 export interface GcpDelegationConfig {
   provider: 'gcp';
@@ -67,8 +51,8 @@ export interface CloudflareDelegationConfig {
 /**
  * Delegation to Hetzner DNS
  * 
- * TODO: Not yet implemented - requires Crossplane provider for Hetzner
- * For now, use 'manual' delegation and create NS records in Hetzner dashboard
+ * This standalone path provides manual setup instructions. To delegate a
+ * Route53 child zone automatically, use DnsHetznerComposition and DnsZoneHetzner.
  */
 export interface HetznerDelegationConfig {
   provider: 'hetzner';
@@ -116,7 +100,7 @@ export interface DelegationOptions {
  * - GCP Cloud DNS (fully implemented via Crossplane)
  * - Manual (outputs instructions for manual setup)
  * - Cloudflare (outputs instructions; for automatic delegation use DnsCloudflareComposition)
- * - Hetzner (outputs instructions; automatic delegation planned)
+ * - Hetzner (outputs instructions; use DnsHetznerComposition for a Route53 child)
  * 
  * For Cloudflare with automatic nameserver resolution, use the Composition-based approach:
  * @see DnsCloudflareComposition from './cloudflare-composition.ts'
@@ -149,13 +133,11 @@ export class DnsDelegation extends Construct {
       console.warn(`[DNS Delegation] Cloudflare delegation for '${options.dnsName}' requires manual setup.`);
       console.warn(`[DNS Delegation] For automatic delegation, use DnsCloudflareComposition + DnsZoneCloudflare instead.`);
       console.warn(`[DNS Delegation] Or manually create NS records in Cloudflare zone ${delegation.zoneId}`);
-      this.manualSetupInstructions = this.getCloudflareInstructions(delegation, options);
+      this.manualSetupInstructions = this.externalInstructions('Cloudflare', delegation.zoneId, options);
     } else if (delegation.provider === 'hetzner') {
-      // TODO: Hetzner delegation not yet implemented
-      // Treating as manual delegation for now
-      console.warn(`[DNS Delegation] Hetzner delegation for '${options.dnsName}' is not yet automated.`);
+      console.warn(`[DNS Delegation] Hetzner delegation for '${options.dnsName}' requires manual setup with this construct.`);
       console.warn(`[DNS Delegation] Please manually create NS records in Hetzner zone ${delegation.zoneId}`);
-      this.manualSetupInstructions = this.getHetznerInstructions(delegation, options);
+      this.manualSetupInstructions = this.externalInstructions('Hetzner', delegation.zoneId, options);
     }
   }
   
@@ -166,21 +148,12 @@ export class DnsDelegation extends Construct {
     return `Manual delegation required for '${options.dnsName}'.\n${nsInfo}`;
   }
   
-  private getCloudflareInstructions(delegation: CloudflareDelegationConfig, options: DelegationOptions): string {
+  private externalInstructions(provider: 'Cloudflare' | 'Hetzner', zoneId: string, options: DelegationOptions): string {
     const nsInfo = options.nameservers?.length
       ? options.nameservers.map(ns => `  - ${ns.replace(/\.$/, '')}`).join('\n')
       : `  (Get nameservers after zone creation)`;
-    return `Cloudflare delegation for '${options.dnsName}':\n` +
-      `Zone ID: ${delegation.zoneId}\n` +
-      `Create NS records with name '${options.dnsName.replace(/\.$/, '')}' pointing to:\n${nsInfo}`;
-  }
-  
-  private getHetznerInstructions(delegation: HetznerDelegationConfig, options: DelegationOptions): string {
-    const nsInfo = options.nameservers?.length
-      ? options.nameservers.map(ns => `  - ${ns.replace(/\.$/, '')}`).join('\n')
-      : `  (Get nameservers after zone creation)`;
-    return `Hetzner delegation for '${options.dnsName}':\n` +
-      `Zone ID: ${delegation.zoneId}\n` +
+    return `${provider} delegation for '${options.dnsName}':\n` +
+      `Zone ID: ${zoneId}\n` +
       `Create NS records with name '${options.dnsName.replace(/\.$/, '')}' pointing to:\n${nsInfo}`;
   }
 
@@ -227,16 +200,6 @@ export class DnsDelegation extends Construct {
 
     this.records.push(nsRecord);
   }
-
-  // Note: Cloudflare automatic delegation is implemented via Composition in cloudflare-composition.ts
-  // This class intentionally outputs manual instructions for standalone use cases
-  // where the Composition-based approach is not used.
-
-  // TODO: Implement Hetzner delegation via provider-http (similar to Cloudflare Composition approach)
-  // private createHetznerDelegation(delegation: HetznerDelegationConfig, options: DelegationOptions): void {
-  //   // Use provider-http to call Hetzner DNS API
-  //   // Create NS records for each nameserver
-  // }
 }
 
 /**
