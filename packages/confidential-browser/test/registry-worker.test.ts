@@ -33,16 +33,22 @@ test("registry worker RPC cannot call other owner APIs, use another job's sessio
 });
 test("worker failure terminates TLS state and closes a TCP session that finishes opening afterward", async () => {
   let opened!: (response: Response) => void, worker: any; const deleted: string[] = [];
+  let notifyOpen!: () => void, notifyClosed!: () => void, timer!: ReturnType<typeof setTimeout>;
+  const started = new Promise<void>(resolve => { notifyOpen = resolve; });
+  const closed = new Promise<void>(resolve => { notifyClosed = resolve; });
+  const deadline = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Registry relay fixture timed out")), 5000); });
   const test = await fixture(value => { worker = value; value.emit({ type: "tunnel", id: 1, path: "/nebula/v1/registry-tunnels", method: "POST", body: JSON.stringify({ host: "registry.example.com" }) }); }, async (path, method) => {
-    if (method === "DELETE") { deleted.push(path); return Response.json({ closed: true }); }
-    return new Promise<Response>(resolve => { opened = resolve; });
+    if (method === "DELETE") { deleted.push(path); notifyClosed(); return Response.json({ closed: true }); }
+    return new Promise<Response>(resolve => { opened = resolve; notifyOpen(); });
   });
   try {
-    await new Promise(resolve => setTimeout(resolve, 0)); worker.emit({ type: "error", error: "Source verification stopped" });
+    // Relay validation imports its URL checker asynchronously. A timer tick
+    // cannot establish that the stubbed connection attempt has started.
+    await Promise.race([started, deadline]); worker.emit({ type: "error", error: "Source verification stopped" });
     await assert.rejects(test.result, /Source verification stopped/); assert.equal(test.terminations(), 1);
-    opened(Response.json({ id: session })); await new Promise(resolve => setTimeout(resolve, 5));
+    opened(Response.json({ id: session })); await Promise.race([closed, deadline]);
     assert.deepEqual(deleted, [`/nebula/v1/registry-tunnels/${session}`]);
-  } finally { test.restore(); }
+  } finally { clearTimeout(timer); test.restore(); }
 });
 test("worker completion removes only its source ciphertext children, retaining the destination recovery cache", async () => {
   const child = "nebula-source-aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
