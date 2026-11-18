@@ -264,9 +264,12 @@ test("the initial page hides unconfirmed requirements even before JavaScript con
   for (const id of ["stack-details", "deployment-section", "readiness-section", "deployment-progress"]) assert.match(html, new RegExp(`<section id="${id}"[^>]* hidden>`));
   assert.match(html, /<fieldset id="deployment-inputs"[^>]* disabled>/);
   assert.match(html, /id="setup-panel"/);
-  const security = html.slice(html.indexOf('<section class="card security-card"'));
-  assert.match(security, /id="recovery-backup"/);
-  assert.match(security, /id="download-verification"/);
+  const securityStart = html.indexOf('<section class="card security-card"');
+  const progressEnd = html.indexOf('</section>', html.indexOf('<section id="deployment-progress"'));
+  const recoveryStart = html.indexOf('<div id="recovery-backup"');
+  assert.ok(recoveryStart > progressEnd && recoveryStart < securityStart,
+    "Recovery download stays beside progress, outside every setup-hidden section");
+  assert.match(html.slice(securityStart), /id="download-verification"/);
 });
 
 test("connecting cannot encrypt or display empty requirements as a confirmed stack", async () => {
