@@ -5,9 +5,8 @@ inputs, using the same `KubernetesOidcIdentity` module that renders the
 control-plane authenticator. It contacts no cluster, so it works before the
 first login, on a new machine, and when no administrator kubeconfig is at hand.
 
-Bootstrap is unchanged: it still writes `~/.nebula/<cluster>/kubeconfig` for
-administration. Create the sign-in profile at any time; signing in works once
-the cluster's API endpoint for OIDC users is reachable.
+Create the sign-in profile at any time. Signing in works once the cluster's
+API endpoint for OIDC users is reachable.
 
 ## Identity
 
@@ -41,6 +40,28 @@ npx tsx -e 'import { identity } from "./access"; console.log(JSON.stringify(iden
 ```
 
 If the deployment loads it from a JSON file, pass that file with `--config`.
+
+## AWS bootstrap handoff
+
+For a management cluster that renders structured workforce OIDC authentication,
+pass the local identity to bootstrap:
+
+```sh
+nebula bootstrap --provider aws --gitops-dir ./infra \
+  --oidc-config ./management-oidc.json
+```
+
+Use `--oidc-config -` to pipe the identity from the deployment's source, or
+add `--oidc-client-config` and `--oidc-ca-file` for a local Desktop registration
+and custom endpoint CA. Both follow the same rules as the standalone command.
+
+Bootstrap validates the identity against the control-plane manifests before
+provisioning resources. After GitOps handoff it reports and returns
+`~/.nebula/<cluster>/kubeconfig-oidc`. The administrator kubeconfig used internally
+is removed from local temporary storage after the handoff succeeds or fails.
+Bootstrap without workforce OIDC continues to use the provider's normal
+access output. An AWS ServiceAccount issuer for workload identity does not
+enable the workforce handoff.
 
 ## Run and sign in
 
