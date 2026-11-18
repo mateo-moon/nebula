@@ -158,7 +158,7 @@ export async function startAgent(raw: string, lifecycle = new AgentLifecycle()):
       const { startPreparation } = await import("./preparation/server.js");
       lifecycle.signal.throwIfAborted();
       for (const server of startPreparation("/app/ui", config.maxImageSizeMiB, lifecycle.signal,
-        task => lifecycle.task(task))) lifecycle.server(server);
+        task => lifecycle.task(task), config.imageStore)) lifecycle.server(server);
     } else if (NEBULA_AGENT_BROWSER_MODULES && config.role === "frontend") {
       const { startManualTls } = await import("./frontend/server.js");
       lifecycle.signal.throwIfAborted();

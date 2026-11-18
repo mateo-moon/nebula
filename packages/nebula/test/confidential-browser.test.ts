@@ -30,6 +30,31 @@ test("browser preparation rejects mutable images before running native policy ge
   assert.throws(() => confidentialBrowserPlan({ ...config, runtime: { memoryMiB: 4096, vcpus: 2 } as any }), /guest memory/);
 });
 
+test("image store routing rejects legacy/frontends and non-measured origins before native synthesis", () => {
+  const imageStore={endpoint:"http://operator-images.qualified.svc:8084",writeEndpoint:"http://operator-images.qualified.svc:8085",repository:"qualified/workload"};
+  assert.throws(()=>confidentialBrowserPlan({...config,imageStore}),/unified preparation/);
+  const {image:agentImage,...base}=config;
+  assert.throws(()=>confidentialBrowserPlan({...base,agentImage,imageStore,manualTls:{preparationEndpoint:"https://preparation.example/",stackEndpoint:"https://stack.example/"}}),/unified preparation/);
+  for(const changed of [{...imageStore,repository:"other/workload"},{...imageStore,endpoint:"https://operator-images.qualified.svc:8084"},{...imageStore,writeEndpoint:"http://different.qualified.svc:8085"},{...imageStore,ownerKey:"synthetic-not-allowed"}])
+    assert.throws(()=>confidentialBrowserPlan({...base,agentImage,imageStore:changed}));
+});
+
+test("native image store preparation measures exact public routing and never mounts host storage", {skip:!native,timeout:600_000},()=>{
+  const {image:agentImage,...base}=config;
+  const imageStore={endpoint:"http://operator-images.qualified.svc:8084",writeEndpoint:"http://operator-images.qualified.svc:8085",repository:"qualified/workload"};
+  const legacy=confidentialBrowserPlan({...base,agentImage});
+  assert.deepEqual(confidentialBrowserPlan({...base,agentImage,imageStore:undefined}),legacy);
+  const configured=confidentialBrowserPlan({...base,agentImage,imageStore});
+  assert.deepEqual(JSON.parse(configured.pod.spec!.containers![0].args![0]),{version:1,role:"preparation",imageStore});
+  assert.notEqual(configured.initDataSha256,legacy.initDataSha256);
+  const changed=confidentialBrowserPlan({...base,agentImage,imageStore:{...imageStore,repository:"qualified/other"}});
+  assert.notEqual(changed.initDataSha256,configured.initDataSha256,"Another repository must require another approved native preparation identity");
+  assert.deepEqual(configured.pod.spec!.volumes,legacy.pod.spec!.volumes);
+  assert.ok(configured.pod.spec!.volumes!.every(v=>v.emptyDir?.medium==="Memory"));
+  assert.ok(configured.pod.spec!.containers!.every(c=>!c.volumeMounts!.some(m=>m.mountPath==="/var/lib/nebula-images")));
+  assert.equal(configured.pod.metadata!.labels!["confidential.nebula.dev/browser"],config.name);
+});
+
 test("small preparation and frontend budgets preserve default plans and upload floors", { skip: !native, timeout: 600_000 }, () => {
   const small = confidentialBrowserPlan({ ...config, runtime: { memoryMiB: 2048 } });
   assert.equal(small.pod.metadata!.annotations!["io.katacontainers.config.hypervisor.default_memory"], "2048");

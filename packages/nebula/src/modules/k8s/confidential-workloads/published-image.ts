@@ -1,6 +1,12 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { stringify } from "smol-toml";
 import type { TrusteeResourcePath } from "../trustee/policies";
+import type { ConfidentialImageStore } from "./types";
+import { assertImageStoreImage, imageStoreRegistry } from "./image-store";
 
 const annotation = "org.opencontainers.image.enc.keys.provider.attestation-agent";
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
@@ -33,7 +39,23 @@ export function encryptedManifestDigest(raw: Buffer, resource: TrusteeResourcePa
   return `sha256:${createHash("sha256").update(raw).digest("hex")}`;
 }
 
-export function resolvePublishedImage(tag: string, resource: TrusteeResourcePath, expected?: string): string {
+/** An isolated configuration enables HTTP for one exact ciphertext repository.
+ * Other registries keep normal TLS; no inherited registry credentials are used. */
+function storeInspect<T>(image: string, store: ConfidentialImageStore | undefined,
+  operation: (globalArgs: string[], inspectArgs: string[]) => T): T {
+  if (!store) return operation([], []);
+  assertImageStoreImage(image, store, image.includes("@sha256:"));
+  const directory = mkdtempSync(join(tmpdir(), "nebula-image-store-"));
+  try {
+    const registries = join(directory, "registries.conf"), auth = join(directory, "auth.json");
+    writeFileSync(registries, stringify({ "unqualified-search-registries": [], registry: [imageStoreRegistry(store)] }), { mode: 0o600 });
+    writeFileSync(auth, '{"auths":{}}\n', { mode: 0o600 });
+    return operation(["--registries-conf", registries], ["--authfile", auth]);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+}
+
+export function resolvePublishedImage(tag: string, resource: TrusteeResourcePath, expected?: string, store?: ConfidentialImageStore): string {
+  if (store) assertImageStoreImage(tag, store);
   if (expected !== undefined && !digestPattern.test(expected)) throw new Error("Invalid approved image digest");
   // The owner publisher has already verified every ciphertext layer and the
   // registry digest. Measuring its receipt avoids needing registry credentials
@@ -41,8 +63,8 @@ export function resolvePublishedImage(tag: string, resource: TrusteeResourcePath
   if (expected !== undefined) return `${tag.slice(0, tag.lastIndexOf(":"))}@${expected}`;
   let raw: Buffer;
   try {
-    raw = execFileSync("skopeo", ["--insecure-policy", "inspect", "--raw", `docker://${tag}`],
-      { stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, maxBuffer: 4 * 1024 * 1024 });
+    raw = storeInspect(tag, store, (globalArgs, inspectArgs) => execFileSync("skopeo", [...globalArgs, "--insecure-policy", "inspect", "--raw", ...inspectArgs, `docker://${tag}`],
+      { stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, maxBuffer: 4 * 1024 * 1024 }));
   } catch {
     throw new ConfidentialPublicationPending();
   }
@@ -52,12 +74,13 @@ export function resolvePublishedImage(tag: string, resource: TrusteeResourcePath
 
 /** Never trust registry command metadata without binding it to the measured
  * manifest. Config bytes remain public; decryption keys are not needed here. */
-export function imageProcess(image: string, supplied?: { manifest: Uint8Array; config: Uint8Array }, useImageCommand = true): { command: string[]; env: Record<string, string> } {
+export function imageProcess(image: string, supplied?: { manifest: Uint8Array; config: Uint8Array }, useImageCommand = true, store?: ConfidentialImageStore): { command: string[]; env: Record<string, string> } {
+  if (store) assertImageStoreImage(image, store, true);
   const expected = image.split("@")[1];
   if (!digestPattern.test(expected ?? "")) throw new Error("Image command requires an immutable digest");
-  const inspect = (config: boolean): Buffer => execFileSync("skopeo", ["--insecure-policy", "inspect", "--raw",
-    ...(config ? ["--config"] : []), `docker://${image}`],
-  { stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, maxBuffer: 4 * 1024 * 1024 });
+  const inspect = (config: boolean): Buffer => storeInspect(image, store, (globalArgs, inspectArgs) => execFileSync("skopeo", [...globalArgs, "--insecure-policy", "inspect", "--raw",
+    ...(config ? ["--config"] : []), ...inspectArgs, `docker://${image}`],
+  { stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, maxBuffer: 4 * 1024 * 1024 }));
   const manifest = Buffer.from(supplied?.manifest ?? inspect(false));
   if (manifest.length > 4 * 1024 * 1024 || `sha256:${createHash("sha256").update(manifest).digest("hex")}` !== expected) {
     throw new Error("Image command manifest differs from the approved digest");

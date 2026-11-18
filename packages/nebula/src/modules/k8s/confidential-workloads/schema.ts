@@ -1,6 +1,7 @@
 import { CONFIDENTIAL_GROUP } from "./types";
 import { TRUSTEE_CHART, TRUSTEE_CHART_VERSION } from "./chart";
 import { namePattern, pathPattern } from "./validation";
+import { imageStoreReadEndpointPattern, imageStoreWriteEndpointPattern, imageStoreRepositoryPattern } from "./image-store";
 
 type Schema = Record<string, unknown>;
 const str = (extra: Schema = {}): Schema => ({ type: "string", maxLength: 4096, ...extra });
@@ -44,6 +45,13 @@ const runtime = obj({
   memoryMiB: int(2048, 65536), vcpus: int(1, 32), createContainerTimeoutSeconds: int(1, 3600),
   k8sDistribution: str({ enum: ["k0s", "kubernetes"] }), ociVersion: str({ enum: ["1.1.0", "1.2.0", "1.3.0"] }),
 }, []);
+const imageStore = { ...obj({
+  endpoint: str({ pattern: imageStoreReadEndpointPattern, maxLength: 160 }),
+  writeEndpoint: str({ pattern: imageStoreWriteEndpointPattern, maxLength: 160 }),
+  repository: str({ pattern: imageStoreRepositoryPattern, maxLength: 81 }),
+}), "x-kubernetes-validations": [
+  { rule: "self.writeEndpoint == self.endpoint.replace(':8084', ':8085')", message: "Image store reader and writer must use the same service host" },
+] };
 export const guestIdentitySchema = obj({
   measurement: str({ pattern: "^[a-f0-9]{96}$" }), chipId: str({ pattern: "^[a-f0-9]{128}$" }),
   minimumReportedTcb: obj({ bootloader: int(0, 255), tee: int(0, 255), snp: int(0, 255), microcode: int(0, 255) }),
@@ -94,9 +102,12 @@ export const workloadSpecSchema = obj({
   storage: list(obj({ name, resource: name }), 8),
   resources: list(resource, 64, 1),
   registryMirrors: list(obj({ prefix: str(), location: str(), insecure: { type: "boolean" } }), 16),
+  imageStore,
   runtime,
 }, ["profile", "guest", "nodeSelector", "network", "trustee", "containers", "resources"]);
 (workloadSpecSchema as Schema)["x-kubernetes-validations"] = [
+  { rule: "!has(self.imageStore) || (self.containers.size() == 1 && has(self.containers[0].imageKeyResource) && self.containers[0].image == self.imageStore.endpoint.replace('http://', '') + '/' + self.imageStore.repository + ':release')", message: "Image store requires one owner-keyed image at its exact release reference" },
+  { rule: "!has(self.imageStore) || !has(self.registryMirrors) || self.registryMirrors.all(m, m.prefix != self.imageStore.endpoint.replace('http://', '') && !m.prefix.startsWith(self.imageStore.endpoint.replace('http://', '') + '/') && m.location != self.imageStore.endpoint.replace('http://', '') && !m.location.startsWith(self.imageStore.endpoint.replace('http://', '') + '/'))", message: "Registry mirrors cannot override or broaden image store routing" },
   { rule: "self.containers.all(c, self.containers.filter(other, other.name == c.name).size() == 1 && self.containers.filter(other, other.uid == c.uid).size() == 1 && self.containers.filter(other, other.gid == c.gid).size() == 1)", message: "Container names and application identities must be unique" },
   { rule: "self.containers.all(c, !has(c.ports) || c.ports.all(p, self.containers.all(other, c.name == other.name || !has(other.ports) || other.ports.all(q, p.name != q.name && p.port != q.port))))", message: "Ports must be unique across all application containers" },
   { rule: "!has(self.storage) || self.storage.all(b, self.storage.filter(other, b.name == other.name).size() == 1)", message: "Storage binding names must be unique" },

@@ -5,6 +5,7 @@ import (
 	"flag"
 	api "github.com/mateo-moon/nebula/packages/confidential-operator/api/v1alpha1"
 	"github.com/mateo-moon/nebula/packages/confidential-operator/internal/controller"
+	"github.com/mateo-moon/nebula/packages/confidential-operator/internal/imagestore"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -75,6 +76,19 @@ func main() {
 			}
 			return nil
 		})))
+	}
+	imageStore, err := imagestore.ConfigFromEnv(os.Getenv)
+	if err != nil {
+		ctrl.Log.Error(err, "invalid image store configuration")
+		os.Exit(1)
+	}
+	if imageStore != nil {
+		store, err := imagestore.New(*imageStore)
+		if err != nil {
+			ctrl.Log.Error(err, "cannot initialize ciphertext image store")
+			os.Exit(1)
+		}
+		utilruntime.Must(mgr.Add(manager.RunnableFunc(store.Start)))
 	}
 	utilruntime.Must(mgr.AddHealthzCheck("healthz", healthz.Ping))
 	utilruntime.Must(mgr.AddReadyzCheck("readyz", healthz.Ping))

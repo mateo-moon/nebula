@@ -40,8 +40,8 @@ export async function verifiedAssets(channel: AttestedChannel) {
   const response = await channel.request("/ui/manifest.json");
   if (response.status !== 200) throw new Error("The attested UI manifest is unavailable");
   const manifest = await response.json();
-  if (manifest.version !== 1 || !Array.isArray(manifest.assets) || manifest.assets.length !== 3 ||
-      manifest.assets.map((a: any) => a.path).sort().join() !== "/ui/app.js,/ui/index.html,/ui/style.css") throw new Error("Invalid attested UI manifest");
+  if (manifest.version !== 1 || !Array.isArray(manifest.assets) || ![3, 4].includes(manifest.assets.length) ||
+      manifest.assets.map((a: any) => a.path).sort().join() !== (manifest.assets.length === 3 ? "/ui/app.js,/ui/index.html,/ui/style.css" : "/ui/app.js,/ui/index.html,/ui/registry-source.wasm,/ui/style.css")) throw new Error("Invalid attested UI manifest");
   const result = new Map<string, Uint8Array>();
   for (const asset of manifest.assets) {
     if (!/^[a-f0-9]{64}$/.test(asset.sha256)) throw new Error("Invalid UI asset digest");
@@ -131,6 +131,7 @@ async function start() {
     save: () => manual ? manual.save(owner) : saveOwner(target, owner), jwt: (audience: string, discovery = false) => jwt(owner, audience, discovery),
     backup: (password: string) => manual ? manual.backup(owner, password) : encryptedBackup(owner, password),
     manualTls: manual?.certificate,
+    registrySourceWasm: assets.get("/ui/registry-source.wasm"),
     finalChannel: (origin: string, identity: SnpIdentity, pin?: string) => new AttestedChannel(fetcher, origin, identity, pin),
   }), writable: false, configurable: false });
   const html = new DOMParser().parseFromString(new TextDecoder().decode(assets.get("/ui/index.html")), "text/html");

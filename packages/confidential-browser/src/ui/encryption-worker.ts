@@ -27,7 +27,7 @@ self.onmessage = event => { void (async () => {
       result = await encryptDockerArchive(archive, key, keyId, async name => {
         const output = await (await directory.getFileHandle(name, { create: true })).createWritable();
         return { write: async data => { await output.write(data as FileSystemWriteChunkType); }, close: () => output.close() };
-      }, (done, total) => self.postMessage({ type: "progress", done, total }), recovery);
+      }, (done, total) => self.postMessage({ type: "progress", done, total }), recovery, maxBytes);
       const receipt = await (await directory.getFileHandle("receipt.json", { create: true })).createWritable();
       await receipt.write(JSON.stringify({ version: 2, keySha256, sourceSize: archive.size, sourceName: (archive as File).name, result })); await receipt.close();
     }

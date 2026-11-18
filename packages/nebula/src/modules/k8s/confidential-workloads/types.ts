@@ -12,6 +12,13 @@ export interface ResourceMetadata {
   resourceVersion?: string;
 }
 
+/** Public ciphertext-only routing. No credentials or decryption keys belong here. */
+export interface ConfidentialImageStore {
+  endpoint: string;
+  writeEndpoint: string;
+  repository: string;
+}
+
 /** Public declaration. A block claim holds ciphertext, never a key. */
 export type ConfidentialStorageSpec =
   | { type: "Memory"; sizeLimit: string }
@@ -101,6 +108,8 @@ export interface ConfidentialWorkloadSpec {
   resources: readonly TrusteeResourcePath[];
   /** Public registry routing only. Credentials cannot be embedded in this API. */
   registryMirrors?: readonly { prefix: string; location: string; insecure: boolean }[];
+  /** Opt-in durable ciphertext publication, scoped to this namespace/name. */
+  imageStore?: ConfidentialImageStore;
   /** Kata base resources. With static resource management, workload resource
    * limits are added at launch; approve the resulting total vCPU measurement. */
   runtime?: {

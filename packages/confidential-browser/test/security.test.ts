@@ -109,3 +109,14 @@ test("password-encrypted recovery retains instance enrollment and rejects a wron
   changed[0] ^= 1;
   await assert.rejects(restoreBackup(JSON.stringify({ ...backup, ciphertext: changed.toString("base64") }), "test-recovery-password-only"));
 });
+
+
+test("new registry TLS WASM is a fourth exact, bounded, attested asset; legacy three-asset UI remains supported", async () => {
+  const assets: Record<string,Uint8Array> = { "/ui/index.html": utf8("<main>verified</main>"), "/ui/app.js": utf8("verified();"), "/ui/style.css": utf8("main {}"), "/ui/registry-source.wasm": new Uint8Array([0,97,115,109,1,0,0,0]) };
+  const manifest = { version: 1, assets: await Promise.all(Object.entries(assets).map(async ([path, raw]) => ({ path, sha256: await hash(raw) }))) };
+  const make = (changed = false) => new AttestedChannel(async url => response(url.endsWith("manifest.json") ? JSON.stringify(manifest) : new Uint8Array(changed && url.endsWith(".wasm") ? [1] : assets[new URL(url).pathname])), "https://workload.example", identity, pin);
+  assert.deepEqual((await verifiedAssets(make())).get("/ui/registry-source.wasm"), assets["/ui/registry-source.wasm"]);
+  await assert.rejects(verifiedAssets(make(true)), /digest mismatch/);
+  const wrong = { ...manifest, assets: manifest.assets.map(asset => asset.path.endsWith(".wasm") ? { ...asset, path: "/ui/unreviewed.wasm" } : asset) };
+  await assert.rejects(verifiedAssets(new AttestedChannel(async () => response(JSON.stringify(wrong)), "https://workload.example", identity, pin)), /Invalid attested UI manifest/);
+});

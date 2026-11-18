@@ -4,12 +4,13 @@ import { readFileSync, writeFileSync, mkdirSync, statfsSync, existsSync, rmSync 
 import { join } from "node:path";
 import { readConnection, trustedStack, type ConfidentialConnection } from "@nebula/confidential-client";
 import { claimOwner, readClaimedOwner, verifyOwnerJwt } from "../claim.js";
-import { publish, type PublishInput } from "./publish";
+import { publish, assertImageStoreBinding, assertPublicationInput, type PublishInput, type MeasuredImageStore } from "./publish";
 import { imageUploadLimits } from "@nebula/confidential-client/image-protocol";
 import { ImageUploadError } from "./image-upload";
 import { writeCheckpoint } from "./checkpoint";
 import { readFinalEnrollment, commitFinalEnrollment } from "./enrollment";
 import { EncryptedImageUpload } from "./encrypted-upload";
+import { RegistryTunnels } from "./registry-tunnel";
 
 const root = "/run/browser", audience = "nebula-browser";
 async function body(request: IncomingMessage, limit = 2 * 1024 * 1024) {
@@ -26,16 +27,18 @@ function json(response: ServerResponse, status: number, value: unknown) {
 }
 
 export function startPreparation(assets: string, maxImageSizeMiB = 256, signal?: AbortSignal,
-  background: (task: Promise<void>) => void = () => {}) {
+  background: (task: Promise<void>) => void = () => {}, imageStore?: MeasuredImageStore) {
   process.umask(0o077);
   if (Number(statfsSync(root).type) !== 0x01021994) throw new Error("Browser preparation requires guest tmpfs");
   // A sidecar restart reuses this instance; partial state fails closed.
   const directory = join(root, "state");
   const imageLimits = imageUploadLimits(maxImageSizeMiB);
+  const registryTunnels = imageStore ? new RegistryTunnels(signal) : undefined;
 
   let receivingImage = false;
   // Registry credentials are deliberately not restart/recovery state.
   rmSync(join(directory, "publish", "config.json"), { force: true });
+  rmSync(join(directory, "publish", "registries.conf"), { force: true });
   if (!existsSync(directory)) {
     mkdirSync(directory, { mode: 0o700 });
     writeFileSync(join(directory, "token"), randomBytes(32).toString("hex"), { mode: 0o600, flag: "wx" });
@@ -52,6 +55,7 @@ export function startPreparation(assets: string, maxImageSizeMiB = 256, signal?:
   if (existsSync(join(directory, "connection.json"))) {
     connection = readConnection(readFileSync(join(directory, "connection.json"), "utf8"));
     trustedStack(connection);
+    assertImageStoreBinding(connection, imageStore);
   }
   const imageUpload = () => {
     if (!connection) throw new Error("Bind this instance to a workload first");
@@ -60,7 +64,7 @@ export function startPreparation(assets: string, maxImageSizeMiB = 256, signal?:
   let job: { state: "running" | "ready" | "failed"; phase?: string; error?: string; result?: unknown } | undefined;
   if (existsSync(join(directory, "job.json"))) {
     job = JSON.parse(readFileSync(join(directory, "job.json"), "utf8"));
-    if (job?.state === "running") job = { state: "failed", phase: job.phase, error: "Preparation was interrupted. Retry with the same encrypted image and registry approval." };
+    if (job?.state === "running") job = { state: "failed", phase: job.phase, error: "Preparation was interrupted. Retry with the same encrypted image and application approval." };
   }
   const saveJob = () => writeCheckpoint(join(directory, "job.json"), JSON.stringify(job));
   const server = createServer(async (request, response) => {
@@ -69,10 +73,11 @@ export function startPreparation(assets: string, maxImageSizeMiB = 256, signal?:
     try {
       if (request.method === "GET" && path === "/nebula/v1/browser") {
         json(response, 200, { version: 1, audience, finalEnrollmentJournal: 1, claimed: !!readClaimedOwner(directory), claimSha256: commitment, imageUpload: imageLimits,
-          imageEncryption: { protocol: "oci-encrypted-v2", location: "owner-browser", preparationReceivesImageKey: false } }); return;
+          imageEncryption: { protocol: "oci-encrypted-v2", location: "owner-browser", preparationReceivesImageKey: false },
+          ...(imageStore ? { imageStorage: { type: "built-in" } } : {}) }); return;
       }
-      if (request.method === "GET" && (path === "/ui/manifest.json" || path === "/ui/index.html" || path === "/ui/app.js" || path === "/ui/style.css")) {
-        const type = path.endsWith(".js") ? "text/javascript" : path.endsWith(".css") ? "text/css" : path.endsWith(".html") ? "text/html" : "application/json";
+      if (request.method === "GET" && (path === "/ui/manifest.json" || path === "/ui/index.html" || path === "/ui/app.js" || path === "/ui/style.css" || path === "/ui/registry-source.wasm")) {
+        const type = path.endsWith(".wasm") ? "application/wasm" : path.endsWith(".js") ? "text/javascript" : path.endsWith(".css") ? "text/css" : path.endsWith(".html") ? "text/html" : "application/json";
         response.writeHead(200, { "Content-Type": type }).end(readFileSync(join(assets, path.split("/").at(-1)!))); return;
       }
       if (request.method === "POST" && path === "/nebula/v1/claim") {
@@ -86,6 +91,25 @@ export function startPreparation(assets: string, maxImageSizeMiB = 256, signal?:
         return;
       }
       if (!authorized(request.headers.authorization)) { request.resume(); json(response, 403, { error: "Owner authentication required" }); return; }
+      if (registryTunnels && path === "/nebula/v1/registry-tunnels" && request.method === "POST") {
+        const raw = await body(request, 1024);
+        try {
+          const input = JSON.parse(raw.toString());
+          if (!input || Object.keys(input).join() !== "host") throw new Error("Registry source requires one host");
+          json(response, 200, await registryTunnels.create(input.host));
+        } finally { raw.fill(0); }
+        return;
+      }
+      const tunnel = registryTunnels && /^\/nebula\/v1\/registry-tunnels\/([a-f0-9-]{36})(?:\/(read|write))?$/.exec(path);
+      if (tunnel) {
+        if (request.method === "GET" && tunnel[2] === "read") json(response, 200, await registryTunnels!.read(tunnel[1]));
+        else if (request.method === "POST" && tunnel[2] === "write") {
+          const raw = await body(request, 1024 * 1024);
+          try { json(response, 200, await registryTunnels!.write(tunnel[1], raw)); } finally { raw.fill(0); }
+        } else if (request.method === "DELETE" && !tunnel[2]) { request.resume(); registryTunnels!.close(tunnel[1]); json(response, 200, { closed: true }); }
+        else { request.resume(); json(response, 405, { error: "Unsupported source transport operation" }); }
+        return;
+      }
       if (request.method === "GET" && path === "/nebula/v1/enrollment") { const saved = readFinalEnrollment(directory); json(response, saved ? 200 : 404, saved ?? {}); return; }
       if (request.method === "POST" && path === "/nebula/v1/enrollment") {
         const raw = await body(request, 1024);
@@ -103,6 +127,7 @@ export function startPreparation(assets: string, maxImageSizeMiB = 256, signal?:
         try {
           const value = readConnection(raw.toString());
           trustedStack(value);
+          assertImageStoreBinding(value, imageStore);
           if (value.workload.spec.ownerClaimSha256 !== commitment || value.workload.spec.browserOwner !== true) throw new Error("Stack invitation differs");
           writeCheckpoint(join(directory, "connection.json"), JSON.stringify(value), true);
           connection = value; json(response, 200, { version: 1, trustedProfile: trustedStack(value) });
@@ -141,12 +166,12 @@ export function startPreparation(assets: string, maxImageSizeMiB = 256, signal?:
           const raw = await body(request, 2 * 1024 * 1024 + 16384);
           try { input = JSON.parse(raw.toString()); }
           finally { raw.fill(0); }
-          if (!input || Object.keys(input).sort().join() !== "applicationApproval,approvedRegistry,registryPassword,registryUsername") throw new Error("Publication accepts registry credentials only; encrypt the image locally first");
+          assertPublicationInput(input, !!imageStore);
           if (!imageUpload().complete()) throw new ImageUploadError(409, "Complete the encrypted layer upload before publishing");
           job = { state: "running" }; saveJob();
         } finally { receivingImage = false; }
         const operation = publish(directory, connection, input, { phase: phase => { if (job) { job.phase = phase; saveJob(); } },
-          timeoutMs: Math.max(600_000, imageLimits.jobTimeoutMs / 2), limits: imageLimits, signal }).then(result => {
+          timeoutMs: Math.max(600_000, imageLimits.jobTimeoutMs / 2), limits: imageLimits, signal, imageStore }).then(result => {
           job = { state: "ready", result }; saveJob();
         })
           .catch(error => { job = { state: "failed", phase: job?.phase,
@@ -160,6 +185,7 @@ export function startPreparation(assets: string, maxImageSizeMiB = 256, signal?:
       { error: error instanceof ImageUploadError ? error.message : "The verified preparation service refused this operation" }); else response.end(); }
   });
   server.maxConnections = 16; server.requestTimeout = 120_000; server.headersTimeout = 10_000;
+  server.once("close", () => registryTunnels?.stop());
   server.listen(8446, "127.0.0.1");
   // Cluster-internal invitation export only. This port is never mapped by TNG
   // or the public service. Kubernetes stores bootstrap authority, never keys.

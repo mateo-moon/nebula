@@ -43,6 +43,16 @@ test("frontend and preparation cannot activate workload modules or accept secret
   }
 });
 
+test("only measured preparation accepts an exact public ciphertext store tuple", () => {
+  const imageStore={endpoint:"http://operator-images.qualified.svc:8084",writeEndpoint:"http://operator-images.qualified.svc:8085",repository:"qualified/workload"};
+  const config={version:1,role:"preparation",imageStore};
+  assert.deepEqual(parseAgentConfig(JSON.stringify(config)),config);
+  for(const changed of [{...imageStore,endpoint:"https://operator-images.qualified.svc:8084"},{...imageStore,writeEndpoint:"http://different.qualified.svc:8085"},{...imageStore,repository:"qualified/../other"},{...imageStore,credentials:"synthetic-not-permitted"}])
+    assert.throws(()=>parseAgentConfig(JSON.stringify({...config,imageStore:changed})));
+  for(const changed of [{version:1,role:"owner-gate",imageStore},{...workload(),imageStore},{version:1,role:"frontend",entry:{preparationEndpoint:"https://preparation.example/",stackEndpoint:"https://stack.example/"},imageStore}])
+    assert.throws(()=>parseAgentConfig(JSON.stringify(changed)));
+});
+
 
 test("native recipient reservations and serialized module limits reject before helper startup", () => {
   for (const role of ["volume", "broker"]) {

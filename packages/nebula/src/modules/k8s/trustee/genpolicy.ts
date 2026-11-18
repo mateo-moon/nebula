@@ -9,6 +9,8 @@ import { parseAllDocuments, stringify as yaml } from "yaml";
 import { initDataDocument, INIT_DATA_ANNOTATION, initDataSha256, type GuestPodManifest } from "../confidential-guests/measured";
 import type { TrusteeDeploymentManifest } from "./manifests";
 import type { TrusteeConfig, TrusteeNetworkConfig } from "./types";
+import type { ConfidentialImageStore } from "../confidential-workloads/types";
+import { assertImageStoreImage, imageStoreAuthorityMatches, validateImageStore } from "../confidential-workloads/image-store";
 
 const asset = (name: string) => readFileSync(new URL(`./assets/genpolicy/${name}`, import.meta.url), "utf8");
 export const GENPOLICY_REVISION = "5b57d5c41ffb9d9515e76ef51cfa851068cfc439";
@@ -122,7 +124,23 @@ export function generateTrusteePolicy(workload: TrusteeDeploymentManifest, aaTom
     { "aa.toml": aaToml }, config, asset("trustee.rego"), true);
 }
 
-type NativePolicyConfig = Pick<TrusteeConfig, "network" | "genpolicy" | "k8sDistribution" | "ociVersion">;
+type NativePolicyConfig = Pick<TrusteeConfig, "network" | "genpolicy" | "k8sDistribution" | "ociVersion"> & {
+  /** Internal transport derived from a validated workload declaration, never arbitrary tool flags. */
+  imageStore?: ConfidentialImageStore;
+};
+
+export function nativeImageStoreRegistryArgs(images: readonly string[], store?: ConfidentialImageStore): string[] {
+  if (store === undefined) return [];
+  validateImageStore(store);
+  const authority = new URL(store.endpoint).host;
+  const matching = images.filter(image => imageStoreAuthorityMatches(image, store));
+  if (!matching.length) throw new TypeError("Trustee: image store transport requires its exact digest image");
+  // genpolicy's official flag is authority-scoped. Fence every image at that
+  // authority to the one approved repository before passing it; no helper may
+  // use a sibling repository or receive a broader HTTP exception.
+  for (const image of matching) assertImageStoreImage(image, store, true);
+  return ["--insecure-registry", authority];
+}
 
 /** Native guest policy for workloads consuming an attested Trustee. Public
  * bootstrap sidecars start before encrypted containers; all run in one TEE.
@@ -195,6 +213,7 @@ function generateWorkloadPolicy(workload: GuestPodManifest,
 function generatePolicy(workload: any, containers: readonly any[], guestConfig: Record<string, string>,
   config: NativePolicyConfig, profile: string, trustee: boolean, block = false) {
   validateNetwork(config.network);
+  const registryArgs = nativeImageStoreRegistryArgs(containers.map(container => container.image), config.imageStore);
   const directory = mkdtempSync(join(tmpdir(), "nebula-trustee-genpolicy-"));
   try {
     let nativeRules = asset("rules.rego");
@@ -245,7 +264,7 @@ function generatePolicy(workload: any, containers: readonly any[], guestConfig: 
         { cwd: directory, encoding: "utf8", timeout: 15_000, stdio: ["ignore", "pipe", "pipe"] });
       if (!version.includes(GENPOLICY_REVISION) || version.includes("-dirty")) throw new Error("Unexpected genpolicy revision");
       output = execFileSync(executable, ["-p", rulesPath, "-j", directory,
-        `--initdata-path=${initdataPath}`, "--use-cached-files"], { cwd: cache, input: yaml(workload),
+        `--initdata-path=${initdataPath}`, "--use-cached-files", ...registryArgs], { cwd: cache, input: yaml(workload),
         encoding: "utf8", timeout: 600_000, maxBuffer: 4 * 1024 * 1024, stdio: ["pipe", "pipe", "pipe"],
         env: { ...process.env, RUST_LOG: "error" } });
     } catch (error) {

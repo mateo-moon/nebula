@@ -8,7 +8,7 @@ type Send = (path: string, method: string, body: BodyInit, headers?: Record<stri
 export interface LocalCipherImage extends Omit<LocalEncryptionResult, "layers"> {
   layers: (LocalEncryptionResult["layers"][number] & { file: Blob })[];
 }
-export interface CipherCache { id: string; manifestDigest: string; recovery?: LocalEncryptionResult }
+export interface CipherCache { id: string; manifestDigest: string; recovery?: LocalEncryptionResult; source?: import("./registry-source").RegistrySourcePin }
 
 export async function prepareLocalImage(archive: File, imageKey: string, keyId: string, limits: ImageUploadLimits,
   cache: CipherCache | undefined, progress: (done: number, total: number) => void, attemptId?: string) {
@@ -65,5 +65,72 @@ export async function removeCipherCache(cache: CipherCache | undefined) {
     const root = await navigator.storage.getDirectory();
     try { await root.removeEntry(cache.id, { recursive: true }); }
     catch (error) { if ((error as DOMException).name !== "NotFoundError") throw error; }
+  }
+}
+
+declare const NEBULA_REGISTRY_WORKER: string;
+export interface RegistryImageInput { reference: string; credentials: import("./registry-source").RegistrySourceCredentials; sourceKey?: Uint8Array }
+/** A dedicated worker owns the source credentials/TLS/decryption state. The
+ * main thread authenticates opaque relay requests; terminating the worker also
+ * drops the TLS library's internal pooling timers after completion or failure. */
+export async function prepareRegistryImage(source: RegistryImageInput, wasm: Uint8Array | undefined,
+  imageKey: string, keyId: string, limits: ImageUploadLimits, cache: CipherCache | undefined,
+  send: import("./registry-transport").TunnelRequest, progress: (done: number, total: number) => void, attemptId?: string) {
+  const id = cache?.id ?? attemptId ?? "nebula-cipher-" + crypto.randomUUID();
+  const url = URL.createObjectURL(new Blob([NEBULA_REGISTRY_WORKER], { type: "text/javascript" })), worker = new Worker(url);
+  // At most 256 layers, with a full verification prepass during recovery.
+  const tunnels = new Set<string>(), sourceCaches = new Set<string>(), pending = new Set<Promise<void>>();
+  let stopped = false;
+  try {
+    return await new Promise<{ image: LocalCipherImage; cache: CipherCache }>((resolve, reject) => {
+      worker.onerror = () => reject(new Error("The isolated registry source worker stopped"));
+      worker.onmessage = event => {
+        const message = event.data;
+        if (message.type === "progress") progress(message.done, message.total);
+        else if (message.type === "ready") resolve(message.result);
+        else if (message.type === "error") reject(new Error(message.error));
+        else if (message.type === "source-cache") {
+          if (typeof message.id !== "string" || !message.id.startsWith(id + "/") || !/^nebula-cipher-[a-f0-9-]{36}\/nebula-source-[a-f0-9-]{36}$/.test(message.id) || sourceCaches.size >= 512) reject(new Error("Invalid local source ciphertext cache identity"));
+          else sourceCaches.add(message.id);
+        }
+        else if (message.type === "tunnel") {
+          if (pending.size >= 16) { reject(new Error("The isolated registry request queue exceeded its bound")); return; }
+          const task = (async () => {
+            const path = message.path;
+            const parsed = typeof path === "string" ? /^\/nebula\/v1\/registry-tunnels(?:\/([a-f0-9-]{36})(?:\/(read|write))?)?$/.exec(path) : null;
+            if (!parsed || Object.keys(message.headers ?? {}).some(key => key !== "Content-Type")) throw new Error("Invalid isolated registry relay request");
+            if (!parsed[1]) {
+              if (message.method !== "POST" || typeof message.body !== "string" || message.body.length > 512) throw new Error("Invalid registry relay open");
+              const opened = JSON.parse(message.body), { publicRegistryUrl } = await import("./registry-url");
+              if (Object.keys(opened).length !== 1 || typeof opened.host !== "string" || publicRegistryUrl("https://" + opened.host + "/").hostname !== opened.host) throw new Error("Invalid registry relay destination");
+            } else {
+              if (!tunnels.has(parsed[1]) || (parsed[2] === "read" ? message.method !== "GET" || message.body !== undefined : parsed[2] === "write" ? message.method !== "POST" || !(message.body instanceof ArrayBuffer) || message.body.byteLength < 1 || message.body.byteLength > 1024 * 1024 : message.method !== "DELETE" || message.body !== undefined)) throw new Error("Registry relay session does not belong to this job");
+            }
+            try {
+              const response = await send(path, message.method, message.body, message.headers);
+              const data = await response.arrayBuffer();
+              if (data.byteLength > 6 * 1024 * 1024) throw new Error("Registry relay response exceeds its limit");
+              if (path === "/nebula/v1/registry-tunnels" && message.method === "POST" && response.status === 200) {
+                const opened = JSON.parse(new TextDecoder().decode(data));
+                if (typeof opened.id !== "string" || !/^[a-f0-9-]{36}$/.test(opened.id)) throw new Error("Invalid registry session identity");
+                tunnels.add(opened.id);
+                if (stopped) { await send(`/nebula/v1/registry-tunnels/${opened.id}`, "DELETE").catch(() => {}); tunnels.delete(opened.id); }
+              }
+              if (message.method === "DELETE") tunnels.delete(path.split("/").at(-1)!);
+              if (!stopped) worker.postMessage({ type: "reply", id: message.id, status: response.status, data }, [data]);
+            } catch { if (!stopped) worker.postMessage({ type: "reply", id: message.id, error: "The opaque registry connection stopped" }); }
+          })();
+          pending.add(task); void task.catch(() => reject(new Error("Invalid isolated registry relay request"))).finally(() => pending.delete(task));
+        }
+      };
+      worker.postMessage({ type: "start", source, wasm, imageKey, keyId, limits, cache, attemptId: id });
+    });
+  } finally {
+    stopped = true; worker.terminate(); URL.revokeObjectURL(url);
+    await Promise.allSettled([...tunnels].map(session => send(`/nebula/v1/registry-tunnels/${session}`, "DELETE")));
+    const root = sourceCaches.size ? await navigator.storage.getDirectory() : undefined;
+    await Promise.allSettled([...sourceCaches].map(async name => { try { const [parent, child] = name.split("/"); await (await root!.getDirectoryHandle(parent)).removeEntry(child, { recursive: true }); } catch (error) { if ((error as DOMException).name !== "NotFoundError") throw error; } }));
+    // A create already in flight has its own late-open cleanup above. Do not
+    // leave the UI waiting for a relay long poll merely to terminate WASM.
   }
 }

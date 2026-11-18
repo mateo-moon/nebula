@@ -599,6 +599,37 @@
                     "maxItems": 16,
                     "minItems": 0
                   },
+                  "imageStore": {
+                    "type": "object",
+                    "properties": {
+                      "endpoint": {
+                        "type": "string",
+                        "maxLength": 160,
+                        "pattern": "^http://[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?[.][a-z](?:[a-z0-9-]{0,38}[a-z0-9])?[.]svc:8084$"
+                      },
+                      "writeEndpoint": {
+                        "type": "string",
+                        "maxLength": 160,
+                        "pattern": "^http://[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?[.][a-z](?:[a-z0-9-]{0,38}[a-z0-9])?[.]svc:8085$"
+                      },
+                      "repository": {
+                        "type": "string",
+                        "maxLength": 81,
+                        "pattern": "^[a-z](?:[a-z0-9-]{0,38}[a-z0-9])?/[a-z](?:[a-z0-9-]{0,38}[a-z0-9])?$"
+                      }
+                    },
+                    "required": [
+                      "endpoint",
+                      "writeEndpoint",
+                      "repository"
+                    ],
+                    "x-kubernetes-validations": [
+                      {
+                        "rule": "self.writeEndpoint == self.endpoint.replace(':8084', ':8085')",
+                        "message": "Image store reader and writer must use the same service host"
+                      }
+                    ]
+                  },
                   "runtime": {
                     "type": "object",
                     "properties": {
@@ -647,6 +678,14 @@
                   "resources"
                 ],
                 "x-kubernetes-validations": [
+                  {
+                    "rule": "!has(self.imageStore) || (self.containers.size() == 1 && has(self.containers[0].imageKeyResource) && self.containers[0].image == self.imageStore.endpoint.replace('http://', '') + '/' + self.imageStore.repository + ':release')",
+                    "message": "Image store requires one owner-keyed image at its exact release reference"
+                  },
+                  {
+                    "rule": "!has(self.imageStore) || !has(self.registryMirrors) || self.registryMirrors.all(m, m.prefix != self.imageStore.endpoint.replace('http://', '') && !m.prefix.startsWith(self.imageStore.endpoint.replace('http://', '') + '/') && m.location != self.imageStore.endpoint.replace('http://', '') && !m.location.startsWith(self.imageStore.endpoint.replace('http://', '') + '/'))",
+                    "message": "Registry mirrors cannot override or broaden image store routing"
+                  },
                   {
                     "rule": "self.containers.all(c, self.containers.filter(other, other.name == c.name).size() == 1 && self.containers.filter(other, other.uid == c.uid).size() == 1 && self.containers.filter(other, other.gid == c.gid).size() == 1)",
                     "message": "Container names and application identities must be unique"

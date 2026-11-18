@@ -7,6 +7,7 @@ import type { ConfidentialStorageResource, ConfidentialWorkloadResource, Workloa
 import { CONFIDENTIAL_API } from "./types";
 import { TRUSTEE_CHART, TRUSTEE_CHART_VERSION } from "./chart";
 import { derivedLauncherConfig, derivedWorkloadConfig } from "./derived-config";
+import { imageStoreAuthorityMatches, imageStoreImage, validateImageStore } from "./image-store";
 
 const taggedImage = (image: unknown): image is string => {
   if (typeof image !== "string" || image.length > 384) return false;
@@ -123,9 +124,15 @@ export function validateWorkload(resource: ConfidentialWorkloadResource, storage
   const spec = resource.spec;
   publicConfig("ConfidentialWorkload", spec);
   fields(spec, ["profile", "ownerPublicKeyPem", "ownerClaimSha256", "accessLink", "guest", "nodeSelector", "network", "trustee", "storageImage", "agentImage",
-    "containers", "storage", "resources", "registryMirrors", "runtime", "browserOwner"]);
+    "containers", "storage", "resources", "registryMirrors", "imageStore", "runtime", "browserOwner"]);
   if (resource.apiVersion !== CONFIDENTIAL_API || resource.kind !== "ConfidentialWorkload" ||
       !name(resource.metadata.name) || !name(resource.metadata.namespace) || !name(spec.profile)) fail("invalid workload resource");
+  if (spec.imageStore !== undefined) {
+    try { validateImageStore(spec.imageStore, `${resource.metadata.namespace}/${resource.metadata.name}`); }
+    catch { fail("invalid public image store routing or repository binding"); }
+    if (!Array.isArray(spec.containers) || spec.containers.length !== 1 || !spec.containers[0].imageKeyResource ||
+        spec.containers[0].image !== imageStoreImage(spec.imageStore)) fail("image store requires one owner-keyed release image in its exact repository");
+  }
   if ([spec.ownerPublicKeyPem, spec.ownerClaimSha256, spec.accessLink].filter(value => value !== undefined).length !== 1) {
     fail("supply an owner public key, one-time claim hash or generated access link");
   }
@@ -231,6 +238,11 @@ export function validateWorkload(resource: ConfidentialWorkloadResource, storage
     fields(mirror, ["prefix", "location", "insecure"]);
     if (![mirror.prefix, mirror.location].every(v => /^[a-zA-Z0-9][a-zA-Z0-9.:/_-]*$/.test(v) && !v.includes("..")) ||
         typeof mirror.insecure !== "boolean") fail("invalid public registry mirror");
+    if (spec.imageStore) {
+      if ([mirror.prefix, mirror.location].some(value => imageStoreAuthorityMatches(value, spec.imageStore!))) {
+        fail("image store routing cannot be overridden or broadened by registry mirrors");
+      }
+    }
   }
   if (spec.runtime) {
     fields(spec.runtime, ["memoryMiB", "vcpus", "createContainerTimeoutSeconds", "k8sDistribution", "ociVersion"]);

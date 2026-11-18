@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@mercuryworkshop/epoxy-tls':
+        specifier: 2.1.20-1
+        version: 2.1.20-1
       '@nebula/confidential-client':
         specifier: file:../confidential-client
         version: file:../confidential-client
@@ -189,6 +192,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@mercuryworkshop/epoxy-tls@2.1.20-1':
+    resolution: {integrity: sha512-4xRxm8KGcLdHpVrTC2SG0+7khJFH6J6z6XlUsBJSb6Prj3ejVtsVbiWmGkZQcza+F9JZIKmL+i3KC9hHryZ01Q==}
+
   '@nebula/confidential-agent@file:../confidential-agent':
     resolution: {directory: ../confidential-agent, type: directory}
     engines: {node: '>=24'}
@@ -362,6 +368,8 @@ snapshots:
 
   '@esbuild/win32-x64@0.27.7':
     optional: true
+
+  '@mercuryworkshop/epoxy-tls@2.1.20-1': {}
 
   '@nebula/confidential-agent@file:../confidential-agent':
     dependencies:

@@ -20,7 +20,7 @@ import { App, Chart, ApiObject } from "cdk8s";
 import { isIP } from "node:net";
 import { SealedDisks } from "../src/modules/k8s/confidential-guests/sealed-disks";
 import { ConfidentialBrowser, ConfidentialOperator, ConfidentialStorage, ConfidentialStorageDevices,
-  ConfidentialWelcome, ConfidentialWorkload, type ConfidentialStorageResource } from "../src/modules/k8s/confidential-workloads";
+  ConfidentialWelcome, ConfidentialWorkload, imageStoreImage, type ConfidentialStorageResource } from "../src/modules/k8s/confidential-workloads";
 import { TRUSTEE_CHART } from "../src/modules/k8s/confidential-workloads/chart";
 
 const namespace = "confidential-example";
@@ -43,6 +43,11 @@ if (frontendImage && (!/^[a-f0-9]{96}$/.test(frontendMeasurement ?? "") || !/^[a
   throw new Error("Supply the independently approved frontend SNP measurement and native Init-Data SHA-256");
 }
 const nodeSelector = { "kubernetes.io/hostname": node };
+const imageStore = {
+  endpoint: `http://confidential-operator-images.${namespace}.svc:8084`,
+  writeEndpoint: `http://confidential-operator-images.${namespace}.svc:8085`,
+  repository: `${namespace}/workload`,
+};
 const network = { ipv4AddressPattern: "^10[.]244[.][0-9]{1,3}[.][0-9]{1,3}$", ipv6AddressPattern: "^2001:db8::[0-9a-f:]+$" };
 const images = {
   operator: "ghcr.io/example/confidential-operator@sha256:" + "1".repeat(64),
@@ -57,12 +62,21 @@ new ApiObject(chart, "namespace", { apiVersion: "v1", kind: "Namespace", metadat
   name: namespace, annotations: { "argocd.argoproj.io/sync-wave": "-6",
     "argocd.argoproj.io/sync-options": "Prune=false,Delete=false" },
 } });
+// This ordinary retained filesystem claim stores ciphertext and public OCI
+// metadata. It contains no owner state or usable image/disk keys.
+new ApiObject(chart, "image-store-claim", { apiVersion: "v1", kind: "PersistentVolumeClaim",
+  metadata: { name: "example-images", namespace, annotations: {
+    "argocd.argoproj.io/sync-wave": "-3", "argocd.argoproj.io/sync-options": "Prune=false,Delete=false",
+  } }, spec: { accessModes: ["ReadWriteOnce"], volumeMode: "Filesystem",
+    resources: { requests: { storage: "8Gi" } } } });
 new ConfidentialOperator(chart, "operator", { namespace, image: images.operator, watchNamespaces: [namespace],
+  imageStore: { claimName: "example-images", repository: imageStore.repository, maxBytes: 8 * 1024 ** 3,
+    preparationPodSelector: { "confidential.nebula.dev/browser": "example-preparation" } },
   accessLinkSecrets: [{ namespace, name: "workload-access" }] });
 // Preparation receives ciphertext and runs native policy generation. The
 // separately released first-page verifier pins this preparation's measurements.
 if (browserImage) new ConfidentialBrowser(chart, "preparation", { name: "example-preparation", namespace,
-  agentImage: browserImage, tngImage: images.tng, nodeSelector, network, maxImageSizeMiB });
+  agentImage: browserImage, tngImage: images.tng, nodeSelector, network, maxImageSizeMiB, imageStore });
 if (frontendImage) new ConfidentialBrowser(chart, "browser-ui", { name: "example-browser-ui", namespace,
   agentImage: frontendImage, tngImage: frontendTngImage!, nodeSelector, network,
   manualTls: { preparationEndpoint: endpoints.preparation, stackEndpoint: endpoints.metadata, attestationReady: true } });
@@ -84,7 +98,7 @@ const storages: ConfidentialStorageResource[] = [{ apiVersion: "confidential.neb
 for (const storage of storages) new ConfidentialStorage(chart, storage.metadata.name,
   { name: storage.metadata.name, namespace, spec: storage.spec });
 new ConfidentialWorkload(chart, "workload", { name: "workload", namespace, storages, spec: {
-  profile, browserOwner: true,
+  profile, browserOwner: true, imageStore,
   accessLink: { url: endpoints.metadata, ownerPort: 8443, secretName: "workload-access",
     ...(browserImage ? { browser: {
       invitationEndpoint: `http://example-preparation-invitation.${namespace}.svc:8089/invitation`,
@@ -92,12 +106,12 @@ new ConfidentialWorkload(chart, "workload", { name: "workload", namespace, stora
       loaderUrl: endpoints.frontend, manualTls: true,
     } } : {}) },
   guest: { measurement: "7".repeat(96), chipId: "8".repeat(128),
-    minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 88 } },
+    minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 84 } },
   nodeSelector, network,
   trustee: { chart: TRUSTEE_CHART, version: "0.21.0", kbsImage: images.kbs,
     tngImage: images.tng },
   agentImage: images.agent,
-  containers: [{ name: "app", image: "ghcr.io/example/workload:owner-release-1",
+  containers: [{ name: "app", image: imageStoreImage(imageStore),
     imageKeyResource: ["default", "image", "app"], commandFromImage: true, uid: 11000, gid: 11000,
     mounts: [{ storage: "data", path: "/data" }, { storage: "scratch", path: "/scratch" }],
     ports: [{ name: "app", port: 9080 }] }],
@@ -130,7 +144,7 @@ new ConfidentialWelcome(chart, "welcome", { name: "example-welcome", namespace, 
   portalUrl: endpoints.frontend,
   ...(frontendImage ? { portalService: { name: "example-browser-ui", namespace }, reference: {
     measurement: frontendMeasurement!, initDataSha256: frontendPolicyHash!,
-    minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 88 },
+    minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 84 },
   } } : {}),
   publicOhttpRoutes: [{ port: 8440, upstream: `http://confidential-operator-access.${namespace}.svc:8083/` },
     ...(browserImage ? [{ port: 8441, upstream: `http://example-preparation.${namespace}.svc:8445/` }] : []),

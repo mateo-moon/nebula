@@ -103,6 +103,7 @@ const UPSTREAM_OWNERS = new Set([
   "masterminds", "beorn7", "cespare", "davecgh", "emicklei", "evanphx", "fsnotify", "fxamacker", "go-logr", "go-openapi", "go-task", "google", "json-iterator", "klauspost", "kr", "kylelemons", "modern-go", "munnerz", "onsi", "pkg", "pmezard", "prometheus", "rogpeppe", "stretchr", "x448",
   "int128", // Public kubelogin OIDC exec plugin and its documentation.
   "spf13", // Public pflag argument parser used by kubelogin.
+  "mercuryworkshop", // Public, pinned Epoxy Rustls/WebPKI browser TLS dependency.
 ]);
 if (process.env.GITHUB_REPOSITORY_OWNER) UPSTREAM_OWNERS.add(process.env.GITHUB_REPOSITORY_OWNER.toLowerCase());
 const CODE_HOST_PATHS = new Set([

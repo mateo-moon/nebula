@@ -15,6 +15,7 @@ import { resolvePublishedImage, imageProcess } from "./published-image";
 import type { ConfidentialStorageResource, ConfidentialWorkloadResource, WorkloadRenderOptions } from "./types";
 import { derivedLauncherConfig, derivedWorkloadConfig } from "./derived-config";
 import { withNeutralKubernetesServiceEnv } from "../trustee/runtime-env";
+import { imageStoreRegistry } from "./image-store";
 
 const limits = { requests: { cpu: "50m", memory: "128Mi" }, limits: { memory: "512Mi" } };
 const security = (uid: number, gid = uid, capabilities: string[] = []) => ({
@@ -161,9 +162,9 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
   const containers = spec.containers.map(container => {
     const image = container.imageKeyResource && !container.image.includes("@sha256:")
       ? resolvePublishedImage(container.image, container.imageKeyResource,
-        options.publishedImageDigests?.[container.image]) : container.image;
+        options.publishedImageDigests?.[container.image], spec.imageStore) : container.image;
     const fromImage = container.command === undefined;
-    const process = imageProcess(image, options.publishedImageConfigs?.[container.image], fromImage);
+    const process = imageProcess(image, options.publishedImageConfigs?.[container.image], fromImage, spec.imageStore);
     const command = fromImage ? process.command
       : [...container.command!, ...(container.args ?? [])];
     const blockMounts = (container.mounts ?? []).filter(m => encrypted.some(binding => binding.name === m.storage));
@@ -192,7 +193,10 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
   for (const container of [...initContainers, ...containers]) container.env = withNeutralKubernetesServiceEnv(container.env);
   const pod: GuestPodManifest = { apiVersion: "v1", kind: "Pod", metadata: {
     generateName: `${spec.profile}-`, namespace: metadata.namespace,
-    ...(spec.browserOwner ? { labels: { "confidential.nebula.dev/profile": spec.profile } } : {}),
+    ...(spec.browserOwner || spec.imageStore ? { labels: {
+      ...(spec.browserOwner ? { "confidential.nebula.dev/profile": spec.profile } : {}),
+      ...(spec.imageStore ? { "confidential.nebula.dev/workload": metadata.name } : {}),
+    } } : {}),
     annotations: { ...base.metadata.annotations,
       "io.katacontainers.config.hypervisor.default_memory": String(runtime.memoryMiB ?? 4096),
       "io.katacontainers.config.hypervisor.default_vcpus": String(runtime.vcpus ?? 2),
@@ -215,10 +219,12 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
     container.command = privateStdio(container.command);
   }
   const aa = stringify({ token_configs: { kbs: { url: "http://127.0.0.1:8080" } }, log: { level: "off" } });
+  const registries = [...(spec.registryMirrors ?? []), ...(spec.imageStore ? [imageStoreRegistry(spec.imageStore)] : [])];
   const cdh = stringify({ kbc: { name: "cc_kbc", url: "http://127.0.0.1:8080" }, log: { level: "off" },
     image: { kbc: "cc_kbc", kbs_uri: "http://127.0.0.1:8080", max_concurrent_layer_downloads_per_image: 1,
-      ...(spec.registryMirrors?.length ? { registry_config: { registry: spec.registryMirrors } } : {}) } });
-  const generated = generateConfidentialWorkloadPolicy(pod, { "aa.toml": aa, "cdh.toml": cdh }, config);
+      ...(registries.length ? { registry_config: { registry: registries } } : {}) } });
+  const generated = generateConfidentialWorkloadPolicy(pod, { "aa.toml": aa, "cdh.toml": cdh },
+    spec.imageStore ? { ...config, imageStore: spec.imageStore } : config);
   const identity = snpIdentity({ ...spec.guest, initDataSha256: generated.initDataSha256 });
   const policies = trusteePolicies(spec.resources.map(path => ({ path, recipients: [identity] })));
   // Names and claim routes are intentionally outside the instance credential.

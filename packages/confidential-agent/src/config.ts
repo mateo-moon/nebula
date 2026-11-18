@@ -1,6 +1,7 @@
 import { endpoint } from "@nebula/confidential-client/endpoint";
 import { imageUploadLimits } from "@nebula/confidential-client/image-protocol";
 import { validResource } from "./bootstrap.js";
+import { validateImageStore, type ConfidentialImageStore } from "nebula-cdk8s/confidential-workloads";
 
 export interface AgentVolume {
   version: 1; name: string; sizeBytes: number; keyResource: string;
@@ -18,7 +19,7 @@ export interface OwnerConfig {
 export type AgentConfig = { version: 1 } & (
   { role: "workload"; owner: OwnerConfig; storage: StorageConfig } |
   { role: "owner-gate" } |
-  { role: "preparation"; maxImageSizeMiB?: number } |
+  { role: "preparation"; maxImageSizeMiB?: number; imageStore?: ConfidentialImageStore } |
   { role: "frontend"; entry: { preparationEndpoint: string; stackEndpoint: string } }
 );
 
@@ -36,15 +37,16 @@ const recipient = (value: Record<string, any>) => name(value.name) && value.name
 export function parseAgentConfig(raw: string): AgentConfig {
   if (Buffer.byteLength(raw) > 65536) throw new Error("Measured agent configuration is too large");
   const config: unknown = JSON.parse(raw);
-  fields(config, ["version", "role", "owner", "storage", "entry", "maxImageSizeMiB"], ["version", "role"]);
+  fields(config, ["version", "role", "owner", "storage", "entry", "maxImageSizeMiB", "imageStore"], ["version", "role"]);
   if (config.version !== 1) throw new Error("Unsupported agent configuration");
   if (config.role === "frontend") {
     fields(config, ["version", "role", "entry"]);
     fields(config.entry, ["preparationEndpoint", "stackEndpoint"]);
     endpoint(config.entry.preparationEndpoint); endpoint(config.entry.stackEndpoint);
   } else if (config.role === "preparation") {
-    fields(config, ["version", "role", "maxImageSizeMiB"], ["version", "role"]);
+    fields(config, ["version", "role", "maxImageSizeMiB", "imageStore"], ["version", "role"]);
     imageUploadLimits(config.maxImageSizeMiB);
+    if (config.imageStore !== undefined) validateImageStore(config.imageStore);
   } else if (config.role === "owner-gate") {
     fields(config, ["version", "role"]);
   } else if (config.role === "workload") {

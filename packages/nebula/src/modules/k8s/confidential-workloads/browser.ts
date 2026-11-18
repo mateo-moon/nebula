@@ -8,8 +8,9 @@ import { tngBootstrapScript } from "../trustee/tng-bootstrap";
 import { measuredFragments } from "../envoy/measured-fragments";
 import { INIT_DATA_ANNOTATION, type GuestPodManifest } from "../confidential-guests/measured";
 import { isDigestImage } from "../confidential-guests/types";
-import type { WorkloadRenderOptions, ConfidentialWorkloadSpec } from "./types";
+import type { WorkloadRenderOptions, ConfidentialWorkloadSpec, ConfidentialImageStore } from "./types";
 import { withNeutralKubernetesServiceEnv } from "../trustee/runtime-env";
+import { validateImageStore } from "./image-store";
 
 export interface ConfidentialBrowserConfig {
   name: string; namespace: string; agentImage?: string; image?: string; tngImage: string;
@@ -20,6 +21,8 @@ export interface ConfidentialBrowserConfig {
    * workspace and RAM for native encryption and policy generation. Omission
    * preserves the existing 256 MiB / 4 GiB VM deployment exactly. */
   maxImageSizeMiB?: number;
+  /** Fixed public ciphertext-store routing, measured only in preparation. */
+  imageStore?: ConfidentialImageStore;
   /** Namespace and Pod labels of the operator allowed to fetch an unused
    * invitation. Omission preserves the same-namespace default operator. */
   invitationAccess?: { namespace?: string; podSelector: Readonly<Record<string, string>> };
@@ -53,6 +56,11 @@ export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
   const agent = config.agentImage !== undefined, image = config.agentImage ?? config.image ?? "";
   if ((agent && config.image !== undefined) || ![image, config.tngImage].every(isDigestImage) || !/^[a-z][a-z0-9-]{0,39}$/.test(config.name) ||
       !/^[a-z][a-z0-9-]{0,39}$/.test(config.namespace)) throw new Error("Browser preparation requires pinned images and valid names");
+  if (config.imageStore !== undefined) {
+    if (!agent || config.manualTls) throw new Error("Image store routing requires the unified preparation module");
+    validateImageStore(config.imageStore);
+    if (config.imageStore.repository.split("/")[0] !== config.namespace) throw new Error("Preparation and image store repository must share a namespace");
+  }
   if (config.maxImageSizeMiB !== undefined && (config.manualTls || !Number.isInteger(config.maxImageSizeMiB) ||
       config.maxImageSizeMiB < 1 || config.maxImageSizeMiB > 4096)) throw new Error("Preparation image limit must be between 1 and 4096 MiB");
   const workspaceMiB = Math.max(2048, (config.maxImageSizeMiB ?? 256) * 5);
@@ -109,7 +117,8 @@ export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
         command: privateCommand(["node", ...(agent ? ["--disable-sigusr1"] : []), agent ? "/app/dist/main.mjs" : config.manualTls ? "/app/dist/manual-tls/main.mjs" : "/app/dist/service/main.mjs"]),
         args: agent ? [JSON.stringify({ version: 1, ...(config.manualTls ? { role: "frontend", entry: {
           preparationEndpoint: config.manualTls.preparationEndpoint, stackEndpoint: config.manualTls.stackEndpoint,
-        } } : { role: "preparation", ...(config.maxImageSizeMiB === undefined ? {} : { maxImageSizeMiB: config.maxImageSizeMiB }) }) })] : ["serve"],
+        } } : { role: "preparation", ...(config.maxImageSizeMiB === undefined ? {} : { maxImageSizeMiB: config.maxImageSizeMiB }),
+          ...(config.imageStore ? { imageStore: config.imageStore } : {}) }) })] : ["serve"],
         env: agent ? [{ name: "HOME", value: "/tmp" }] : [{ name: "HOME", value: "/tmp" }, { name: "OCICRYPT_KEYPROVIDER_CONFIG", value: "/etc/ocicrypt.conf" },
           ...(config.maxImageSizeMiB === undefined ? [] : [{ name: "NEBULA_MAX_IMAGE_SIZE_MIB", value: String(config.maxImageSizeMiB) }]),
           ...(config.manualTls ? [{ name: "NEBULA_MANUAL_TLS_ENTRY", value: JSON.stringify({

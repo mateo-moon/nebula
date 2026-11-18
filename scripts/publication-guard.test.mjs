@@ -845,3 +845,37 @@ test("EFI artifact upstreams are exact public owners and neighbouring names rema
     assert.deepEqual(classes(scan(`https://github.com/${owner}-private/private`)), ["repository-owner"]);
   }
 });
+
+test("the browser TLS dependency is an exact public upstream without allowing neighbouring owners", () => {
+  assert.deepEqual(classes(scan("https://github.com/MercuryWorkshop/epoxy-tls/tree/reviewed")), []);
+  assert.deepEqual(classes(scan("https://github.com/mercuryworkshop-private/private")), ["repository-owner"]);
+});
+
+test("confidential verification scans its unchanged source scope before generating ignored bundles", () => {
+  const workflow = readFileSync(join(WORKFLOWS, "verify-confidential-workloads.yml"), "utf8");
+  const expected = ["packages/confidential-operator", "packages/confidential-agent", "packages/confidential-storage",
+    "packages/confidential-storage-devices", "packages/confidential-browser/src", "packages/confidential-browser/test",
+    "packages/confidential-browser/package.json", "packages/confidential-browser/pnpm-lock.yaml", "tools/tng-browser",
+    "packages/nebula/src/modules/k8s/confidential-workloads", "docker/confidential-operator", "docker/confidential-agent",
+    "docker/confidential-storage", "docker/confidential-storage-devices", "docker/confidential-browser"];
+  const check = text => {
+    const job = jobsOf(text).get("operator");
+    assert.ok(job, "The source-verifying job must exist");
+    const marker = "      - name: Check public runtime sources\n";
+    assert.equal(job.split(marker).length, 2, "The source check must run exactly once");
+    const at = job.indexOf(marker), before = job.slice(0, at);
+    assert.match(before, /actions\/checkout@/);
+    assert.match(before, /actions\/setup-node@/);
+    assert.doesNotMatch(before, /\bpnpm\b|make generate|cargo build/,
+      "Scan original source before dependency setup, tests or builds generate ignored artifacts");
+    const command = job.slice(at).split("\n")[1].trim();
+    assert.ok(command.startsWith("run: node scripts/publication-guard.mjs "));
+    assert.deepEqual(command.slice("run: node scripts/publication-guard.mjs ".length).split(/\s+/), expected,
+      "Keep every previous source/build-context argument; change order only");
+  };
+  check(workflow);
+  assert.throws(() => check(workflow.replace("      - name: Check public runtime sources\n",
+    "      - run: pnpm --dir packages/confidential-agent build\n      - name: Check public runtime sources\n")), /original source/);
+  assert.throws(() => check(workflow.replace("packages/confidential-operator packages/confidential-agent packages/confidential-storage",
+    "packages/confidential-operator packages/confidential-storage")), /every previous/);
+});

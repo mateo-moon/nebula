@@ -16,7 +16,7 @@ async function deployment(restored = false, rejectedConnection = false, options:
   pendingCheckpoint?: "running" | "failed";
   missingResource?: boolean; missingDisk?: "audit" | "all" | "resource-names";
   supervisorPhase?: "starting" | "running" | "backoff" | "stopped";
-  manualTls?: Record<string, unknown>; attestationFixtures?: boolean;
+  manualTls?: Record<string, unknown>; attestationFixtures?: boolean; missingImageStore?: boolean; registrySource?: boolean;
 } = {}) {
   const blobs = new Map<string, Blob>(), activeUrls = new Set<string>();
   const anchorClicks: { href: string; download: string; connected: boolean }[] = [];
@@ -58,6 +58,7 @@ async function deployment(restored = false, rejectedConnection = false, options:
   el("inspect").hidden = true; el("reviewed").checked = true;
   el("verification-download-retry").hidden = true;
   el("final-status").textContent = "Final workload pending";
+  if (options.registrySource) { el("image-source").value = "registry"; el("source-reference").value = "registry.example.com/team/private:release"; el("source-password").value = "source-login-sentinel"; el("source-image-key").value = "source-key-sentinel"; }
   el("archive").files = [new Blob(["test-only local image"])];
   el("approved-registry").value = "ghcr.io";
   el("registry-username").value = "test-owner"; el("registry-password").value = "test-token";
@@ -65,8 +66,9 @@ async function deployment(restored = false, rejectedConnection = false, options:
   const resourcePaths = ["default/image/app", "default/volume/data", "default/volume/audit"];
   const connection = { version: 1, browserEndpoint: "https://final.example", endpoint: { host: "final.example", port: 8443 },
     workload: { metadata: { name: "test", namespace: "qualified" }, spec: { profile: "test",
+      ...(!options.missingImageStore ? { imageStore: { endpoint: "http://images.qualified.svc:8084", writeEndpoint: "http://images.qualified.svc:8085", repository: "qualified/test" } } : {}),
       network: { ipv4AddressPattern: "^10[.].+$", ipv6AddressPattern: "^fd42:.+$" },
-      containers: [{ name: "app", uid: 11000, gid: 11000, image: "ghcr.io/example/final:release", imageKeyResource: ["default", "image", "app"],
+      containers: [{ name: "app", uid: 11000, gid: 11000, image: "images.qualified.svc:8084/qualified/test:release", imageKeyResource: ["default", "image", "app"],
         mounts: [{ storage: "data", path: "/data" }, { storage: "audit", path: "/audit" }, { storage: "scratch", path: "/scratch" }] }],
       resources: resourcePaths.map(path => path.split("/")),
       storage: [{ name: "data", resource: "data-store" }, { name: "audit", resource: "audit-store" }, { name: "scratch", resource: "memory-store" }] } },
@@ -99,7 +101,7 @@ async function deployment(restored = false, rejectedConnection = false, options:
     }
     if (path.startsWith("/nebula/v1/image")) { uploadRequests++; return response(init?.method === "POST" ? { version: 2, digest: prepared.digest, layers: [{ digest: "sha256:" + "e".repeat(64), size: 1, received: 0 }] } : {}); }
     if (path === "/nebula/v1/publish") {
-      assert.deepEqual(Object.keys(JSON.parse(init!.body as string)).sort(), ["applicationApproval", "approvedRegistry", "registryPassword", "registryUsername"]);
+      assert.deepEqual(Object.keys(JSON.parse(init!.body as string)).sort(), ["applicationApproval"]);
       publishes++; return response({}, 202);
     }
     if (path === "/nebula/v1/job" && options.pendingCheckpoint) return response({ state: options.pendingCheckpoint, phase: "measuring" });
@@ -140,14 +142,14 @@ async function deployment(restored = false, rejectedConnection = false, options:
     ...(options.manualTls ? { manualTls: options.manualTls } : {}) } },
     document, crypto: webcrypto, TextEncoder, TextDecoder, Blob, Response, atob, btoa, Date: Clock, Worker: LocalWorker,
     navigator: { storage: { getDirectory: async () => ({ removeEntry: async () => {} }) } },
-    URL: {
+    URL: Object.assign(class extends URL {}, {
       createObjectURL: (blob: Blob) => {
         if (failObjectUrl) { failObjectUrl = false; throw new Error("private object URL error sentinel"); }
         const url = "blob:test-" + ++urlSequence; blobs.set(url, blob); activeUrls.add(url); return url;
       },
       revokeObjectURL: (url: string) => { revocations.push({ url, retryHref: el("verification-download-retry").href,
         retryConnected: el("verification-download-retry").isConnected }); activeUrls.delete(url); },
-    },
+    }),
     setTimeout: (resolve: () => void, ms: number) => {
       if (ms >= 10_000) timers.push({ at: now + ms, callback: resolve });
       else { now += ms; queueMicrotask(resolve); }
@@ -440,4 +442,27 @@ test("verification download failure is generic and preserves the previous retry,
   assert.equal(JSON.stringify(ui.owner), ownerBefore); assert.deepEqual(ui.counts(), countsBefore);
   assert.ok(!ui.el("verification-download-status").textContent.includes("private object URL error sentinel"));
   assert.ok(!ui.el("verification-download-status").textContent.includes("private retry click error sentinel"));
+});
+
+
+test("new deployment uses stack-managed image storage without destination credentials", async () => {
+  const ui = await deployment();
+  assert.equal(ui.counts().publishes, 1);
+  assert.equal(ui.el("destination").textContent, "Image storage: managed by this stack");
+  assert.equal(ui.el("stack-name").textContent, "Deployment: test");
+  assert.equal(JSON.stringify(ui.owner).includes("test-token"), false);
+  assert.equal(JSON.stringify(ui.owner).includes("test-owner"), false);
+});
+test("a stack without managed storage refuses a new image before encryption/upload/publication", async () => {
+  const ui = await deployment(false, false, { missingImageStore: true });
+  assert.match(ui.el("notice").textContent, /does not provide managed image storage/);
+  assert.deepEqual(ui.counts(), { publishes: 0, keyWrites: 0, uploadRequests: 0, finalAttempts: 0 });
+  assert.equal(ui.owner.encryptedImage, undefined);
+});
+test("registry source requires independent user approval before credentials, source key or image bytes can be used", async () => {
+  const ui = await deployment(false, false, { registrySource: true });
+  assert.match(ui.el("notice").textContent, /source registry.*hostname first/);
+  assert.equal(JSON.stringify(ui.owner).includes("source-login-sentinel"), false);
+  assert.equal(JSON.stringify(ui.owner).includes("source-key-sentinel"), false);
+  assert.deepEqual(ui.counts(), { publishes: 0, keyWrites: 0, uploadRequests: 0, finalAttempts: 0 });
 });

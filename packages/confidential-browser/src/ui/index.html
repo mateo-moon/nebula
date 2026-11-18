@@ -2,7 +2,7 @@
 <html lang="en"><body>
 <header><div class="brand">nebula<span> / confidential</span></div><span class="local">VERIFIED BROWSER CLIENT</span></header>
 <main>
-  <div class="intro"><p class="eyebrow">YOUR WORKLOAD. YOUR KEYS.</p><h1>Deploy with confidence.</h1><p>Choose an image on your computer, review how it will run, then deploy it to your verified confidential stack. Image layers are encrypted in your browser.</p></div>
+  <div class="intro"><p class="eyebrow">YOUR WORKLOAD. YOUR KEYS.</p><h1>Deploy with confidence.</h1><p>Choose a local image or an optional registry source, review how it will run, then deploy it to your verified confidential stack. Image layers are encrypted in your browser.</p></div>
   <div id="notice" role="alert" hidden></div>
   <div class="columns"><div>
     <section class="card" aria-labelledby="stack-heading">
@@ -19,19 +19,33 @@
     <section class="card" aria-labelledby="deploy-heading">
       <div class="section-title"><span class="number">2</span><h2 id="deploy-heading">Prepare your deployment</h2></div>
       <div id="input-preflight" class="preflight"><h3>What you need</h3><ul id="input-checklist" class="input-checklist" aria-live="polite"></ul></div>
-      <p id="release-saved" class="release-saved" hidden>Your encrypted image is already published. Use <strong>Verify again &amp; refresh status</strong> to continue or check this release. You do not need to upload the image or enter registry credentials again.</p>
+      <p id="release-saved" class="release-saved" hidden>Your encrypted image is already published. Use <strong>Verify again &amp; refresh status</strong> to continue or check this release. You do not need to upload the image again.</p>
       <form id="deploy-form">
         <div id="new-release-inputs">
-        <label for="archive">Image archive on your computer</label><input id="archive" type="file" accept=".tar" required>
+        <label for="image-source">Image source</label><select id="image-source"><option value="local">Local image archive</option><option value="registry">External registry (optional source)</option></select>
+        <div id="local-source-inputs"><label for="archive">Image archive on your computer</label><input id="archive" type="file" accept=".tar" required>
         <p id="archive-hint" class="hint">Choose a Docker save archive. Your browser encrypts its layers before upload; the verified service supplies the size limit.</p>
-        <fieldset class="form-group"><legend>Publish the encrypted image</legend>
-          <p class="hint">Your administrator has reserved the destination shown above. Registry access is used to publish ciphertext there.</p>
-          <label for="approved-registry">Registry host you trust</label><input id="approved-registry" autocomplete="off" placeholder="For example: ghcr.io" required>
-          <p class="hint">Enter this independently. Credentials are limited to this exact host; a destination supplied by the stack cannot choose another host.</p>
-          <label for="registry-username">Registry username</label><input id="registry-username" autocomplete="off" required>
-          <label for="registry-password">Registry access token</label><input id="registry-password" type="password" autocomplete="off" required>
-          <p class="hint">Sent only to the verified preparation VM and that registry. Image layers remain encrypted.</p>
+        </div>
+        <fieldset id="registry-source-inputs" class="form-group" hidden><legend>Registry source — read only</legend>
+          <label for="source-reference">Source image</label><input id="source-reference" type="text" placeholder="registry.example.org/team/image:tag" autocomplete="off" spellcheck="false">
+          <p class="hint">Supports OCI/Docker gzip or uncompressed layers; zstd is currently unsupported. Your browser verifies the registry's HTTPS certificate, selects linux/amd64 and pins its manifest digest. The stack relays opaque encrypted connections; it cannot read source credentials or image layers. Redirects never receive registry login credentials.</p>
+          <details><summary>Optional registry login</summary>
+            <label for="source-username">Registry username</label><input id="source-username" type="text" autocomplete="off">
+            <label for="source-password">Registry password or login token</label><input id="source-password" type="password" autocomplete="off">
+            <label for="source-bearer">Or registry bearer token</label><input id="source-bearer" type="password" autocomplete="off">
+            <label for="source-token-host">Separate token-service hostname, if required</label><input id="source-token-host" type="text" placeholder="auth.example.org" autocomplete="off" spellcheck="false">
+            <p class="hint">Only authorize a token-service hostname you independently trust. Your registry login may be sent there over browser-verified HTTPS.</p>
+          </details>
+          <details><summary>Separate key for an encrypted source image</summary>
+            <label for="source-image-key">Source image decryption key</label><input id="source-image-key" type="password" autocomplete="off" spellcheck="false">
+            <p class="hint">Optional for plaintext sources. Native CoCo encrypted layers need their 32-byte image key as 64 hex characters or standard base64. This key is separate from the registry login and the new destination image key.</p>
+            <label for="source-recovery">Or an old Nebula encrypted recovery file</label><input id="source-recovery" type="file" accept=".json">
+            <label for="source-recovery-password">Password for that source recovery file</label><input id="source-recovery-password" type="password" autocomplete="off">
+            <p class="hint">Only Nebula's PBKDF2-SHA256/AES-GCM recovery format is supported. Its password unlocks the source image key locally; it never replaces this stack's owner. There is no universal image password format.</p>
+          </details>
+          <label class="check"><input id="source-reviewed" type="checkbox"><span>I chose this source registry, image and any token-service hostname. Source secrets stay in this browser and are not saved in the new recovery backup.</span></label>
         </fieldset>
+        <p class="hint">Image storage is managed by this stack. Your browser encrypts the image before sending its encrypted layers and public OCI metadata to that storage. No destination registry account is needed.</p>
         <fieldset id="private-files" class="form-group"><legend>Files needed by this stack</legend>
           <p id="private-files-hint" class="hint">New disk keys are generated in your browser. Only stacks using existing encrypted disks need a disk-key file.</p>
           <div id="volume-keys"></div><div id="resource-files"></div>
@@ -43,7 +57,7 @@
           <details><summary>Exact application settings to approve</summary><p class="hint">These settings include command, arguments, environment, mounts, resources and network. Runtime attestation does not decide whether an application is suitable for your data.</p><pre id="application-contract"></pre></details>
         </div>
         <label id="override-review" class="check" hidden><input id="approve-overrides" type="checkbox"><span>I choose the exact command and environment overrides shown above.</span></label>
-        <label id="application-approval" class="check"><input id="reviewed" type="checkbox" required><span>I approve the application settings, encrypted image destination, storage and measured software shown here.</span></label>
+        <label id="application-approval" class="check"><input id="reviewed" type="checkbox" required><span>I approve the application settings, stack-managed image storage, volumes and measured software shown here.</span></label>
         <button id="deploy" type="submit" class="primary" disabled><span>Encrypt &amp; deploy</span><span aria-hidden="true">→</span></button>
       </form>
       <p class="privacy">Plaintext image layers stay on your computer until the final guest decrypts them. Image and disk keys go directly to that verified guest's Trustee. The application receives its declared files and mounted storage, without the disk keys.</p>
@@ -76,7 +90,7 @@
       <!-- CERTIFICATE_GUIDE -->
       <details><summary>Preparation attestation details</summary><pre id="preparation-attestation"></pre></details>
       <details><summary>Final workload attestation details</summary><pre id="final-attestation">Available after encrypted image publication and final-VM verification.</pre></details>
-      <details><summary>Protection and limits</summary><p id="trust-limits" class="hint">The independent loader release origin, your browser and this reviewed preparation software are trusted. Administrators can deny service or claim first; that is detected before your image is uploaded. An enrolled VM replacement requires explicit recovery. There is no global singleton or disk rollback guarantee.</p></details>
+      <details><summary>Protection and limits</summary><p id="trust-limits" class="hint">Your browser, independently reviewed measurement references and verifier, and the verified guest software are trusted. This page's convenience checker cannot establish its own initial authenticity; compare and verify the browser certificate independently first. Administrators can deny service or claim first; that is detected before your image is uploaded. An enrolled VM replacement requires explicit recovery. There is no global singleton or disk rollback guarantee.</p></details>
       <button id="download-verification" type="button" class="secondary">Download verification record</button>
       <p class="hint">Exports the available certificate and attestation evidence at this moment. This does not run a new verification and is separate from your encrypted owner recovery backup.</p>
       <p id="verification-download-status" role="status" aria-live="polite" aria-atomic="true"></p>

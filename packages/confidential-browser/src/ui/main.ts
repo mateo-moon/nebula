@@ -3,15 +3,23 @@ import { applicationContract, assertApplicationApproval } from "@nebula/confiden
 import { discoveryAudience } from "../loader/owner";
 import { checkedImageUploadLimits, imageUploadLimits, imageSizeLabel } from "@nebula/confidential-client/image-protocol";
 import { checkedSupervisors, storageClientsRunning, checkedStorageRecovery } from "./storage-status";
-import { prepareLocalImage, uploadEncryptedImage, removeCipherCache } from "./upload";
+import { prepareLocalImage, prepareRegistryImage, uploadEncryptedImage, removeCipherCache, type LocalCipherImage, type CipherCache } from "./upload";
 import { summarizeStorage, renderStorageOverview, type StorageSummary } from "@nebula/confidential-client/storage-overview";
 import { readinessSummary, type StatusLabel } from "./readiness";
+import { registryReference, sourceImageKey, sourceKeyFromRecovery } from "./registry-source";
 import { verificationDownload } from "./verification-download";
 import type { SupervisorReport } from "./storage-status";
 const api = window.nebula, owner = api.owner;
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id)! as T;
 const input = (id: string) => el<HTMLInputElement>(id);
 const text = (id: string, value: string) => { el(id).textContent = value; };
+const sourceMode = () => (document.getElementById("image-source") as HTMLSelectElement | null)?.value === "registry" ? "registry" : "local";
+function sourceControls() {
+  const registry = sourceMode() === "registry";
+  const local = document.getElementById("local-source-inputs"), remote = document.getElementById("registry-source-inputs");
+  if (local) local.hidden = registry; if (remote) remote.hidden = !registry;
+  input("archive").required = !registry;
+}
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 let connection: any = owner.connection, final: AttestedChannel | undefined;
 let busy = false;
@@ -84,11 +92,10 @@ function selectionChecklist() {
   const keyFiles = existing.filter(storage => owner.volumeKeys?.[storage.resourceName] || (document.getElementById("key-" + storage.resourceName) as HTMLInputElement | null)?.files?.length).length;
   const files = Array.from(el("resource-files").querySelectorAll<HTMLInputElement>("input"));
   const selected = files.filter(field => field.files?.length || owner.resources?.[field.id.slice("resource-".length)]).length;
-  const registry = input("approved-registry").value.trim();
   const hasOverrides = applicationContract(connection).containers.some(container => container.execution.source === "override" || Object.keys(container.env).length > 0);
   const items = [
-    { label: archive ? `${archive.name} · ${imageSizeLabel(archive.size)} selected` : `Local image archive · up to ${imageSizeLabel(imageLimits.maxBytes)}`, supplied: !!archive || !!owner.prepared },
-    { label: owner.prepared ? "Encrypted image already published" : "Registry host, username and access token", supplied: !!owner.prepared || registry === connection.workload.spec.containers[0].image.split("/")[0] && !!input("registry-username").value.trim() && !!input("registry-password").value },
+    { label: sourceMode() === "registry" ? "Registry source · verified and encrypted locally" : archive ? `${archive.name} · ${imageSizeLabel(archive.size)} selected` : `Local image archive · up to ${imageSizeLabel(imageLimits.maxBytes)}`, supplied: sourceMode() === "registry" ? !!(document.getElementById("source-reference") as HTMLInputElement | null)?.value : !!archive || !!owner.prepared },
+    { label: "Image storage · managed by this stack", supplied: !!connection.workload.spec.imageStore || !!owner.prepared },
     { label: existing.length ? `Existing disk keys · ${keyFiles} of ${existing.length} selected or saved` : "New disk keys · generated automatically in your browser", supplied: keyFiles === existing.length },
     { label: files.length ? `Private application files · ${selected} of ${files.length} selected or saved` : "No private application files requested", supplied: selected === files.length },
     { label: "Recovery backup password · at least 12 characters", supplied: input("recovery-password").value.length >= 12 },
@@ -240,15 +247,14 @@ async function connect() {
   const actual = await (await request(api.channel, "/nebula/v1/connection")).json();
   if (JSON.stringify(actual) !== JSON.stringify(connection)) throw new Error("Stored and attested release settings disagree");
   text("connection-status", "You own this attested preparation instance. Future operations require your browser’s owner signature.");
-  text("stack-name", connection.workload.metadata.name);
-  text("destination", "Encrypted image destination: " + connection.workload.spec.containers[0].image);
+  text("stack-name", "Deployment: " + connection.workload.metadata.name);
+  text("destination", "Image storage: managed by this stack");
   text("configuration", JSON.stringify(connection, null, 2));
   const contract = applicationContract(connection);
   text("application-contract", JSON.stringify(contract, null, 2));
   applicationOverview();
   const hasOverrides = contract.containers.some(container => container.execution.source === "override" || Object.keys(container.env).length > 0);
   el("override-review").hidden = !hasOverrides;
-  if (owner.approvedRegistry) input("approved-registry").value = owner.approvedRegistry;
   const security = el("security-values"); security.replaceChildren();
   for (const [label, value] of [["Verified preparation instance", api.channel.pin], ["Expected final VM measurement", connection.workload.spec.guest?.measurement ?? "Calculated from the approved stack"]]) {
     const row = document.createElement("div"), term = document.createElement("dt"), detail = document.createElement("dd");
@@ -279,7 +285,7 @@ async function connect() {
     hint.textContent = `Select the file this application expects (up to 2 MiB). ${consumers.length ? `Declared application access: ${consumers.join(", ")}.` : "Consumed inside the verified guest according to the approved settings."} Its contents are not displayed here.`;
     el("resource-files").append(label, field, hint);
   }
-  text("private-files-hint", "New disk keys are generated automatically in your browser. Any existing disk keys or application files requested below must be supplied by you; they are separate from your registry token.");
+  text("private-files-hint", "New disk keys are generated automatically in your browser. Any existing disk keys or application files requested below must be supplied by you; they are separate from any source-registry login or source-image decryption key.");
   const currentJob = await (await request(api.channel, "/nebula/v1/job")).json();
   if (currentJob.state === "ready" && !owner.prepared) {
     if (!owner.imageKey) throw new Error("Restore the encrypted backup containing this release image key before resuming");
@@ -333,11 +339,11 @@ async function approveApplication() {
   }
   assertApplicationApproval(connection, owner.applicationApproval);
 }
-function approvedRegistry() {
-  const host = input("approved-registry").value.trim();
-  if (!/^[a-z0-9.-]+(?::[0-9]{1,5})?$/.test(host) || host !== connection.workload.spec.containers[0].image.split("/")[0]) throw new Error("Enter the registry host you independently trust for these credentials; it must match the displayed destination");
-  if (owner.approvedRegistry && owner.approvedRegistry !== host) throw new Error("This owner checkpoint is already bound to another registry host");
-  owner.approvedRegistry = host; return host;
+function requireManagedImageStore() {
+  const store = connection.workload.spec.imageStore;
+  if (!store || typeof store.endpoint !== "string" || typeof store.writeEndpoint !== "string" || typeof store.repository !== "string") {
+    throw new Error("This stack does not provide managed image storage. Ask its administrator for a stack using the built-in image store.");
+  }
 }
 async function finalConnection() {
   progress(owner.finalPin ? "attesting" : "waiting", owner.finalPin ? "Verifying your enrolled confidential workload…" : "Waiting for your confidential workload…");
@@ -444,12 +450,17 @@ async function inspect() {
 el("deploy-form").addEventListener("submit", event => {
   event.preventDefault(); if (busy || !connected) return; busy = true; input("deploy").disabled = true;
   void (async () => {
-    const archive = input("archive").files?.[0];
-    if (!archive || !archive.size || archive.size > imageLimits.maxBytes) {
+    const archive = input("archive").files?.[0], registryMode = sourceMode() === "registry";
+    if (!registryMode && (!archive || !archive.size || archive.size > imageLimits.maxBytes)) {
       throw new Error(`Choose one nonempty local image archive up to ${imageSizeLabel(imageLimits.maxBytes)}`);
     }
+    if (registryMode) {
+      registryReference(input("source-reference").value);
+      if (!input("source-reviewed").checked) throw new Error("Review and approve the source registry and token-service hostname first");
+      if (input("source-image-key").value && input("source-recovery").files?.length) throw new Error("Choose a source image key or its old recovery file, not both");
+    }
     await approveApplication();
-    const registry = approvedRegistry();
+    requireManagedImageStore();
     owner.imageKey ??= hex(crypto.getRandomValues(new Uint8Array(32))); owner.volumeKeys ??= {};
     for (const storage of connection.storages) if (storage.spec.type === "EncryptedBlock" && !owner.volumeKeys[storage.metadata.name]) {
       const selected = (document.getElementById("key-" + storage.metadata.name) as HTMLInputElement | null)?.files?.[0];
@@ -479,8 +490,32 @@ el("deploy-form").addEventListener("submit", event => {
       if (owner.cipherCacheAttempt) await removeCipherCache({ id: owner.cipherCacheAttempt, manifestDigest: "" });
       owner.cipherCacheAttempt = "nebula-cipher-" + crypto.randomUUID(); await api.save();
     }
-    const local = await prepareLocalImage(archive, owner.imageKey, `kbs:///${connection.workload.spec.containers[0].imageKeyResource.join("/")}`,
-      imageLimits, owner.encryptedImage, (done, total) => progress("encrypting", `Encrypting locally: ${imageSizeLabel(done)} / ${imageSizeLabel(total)} (${Math.floor(done * 100 / total)}%)`), owner.cipherCacheAttempt);
+    const keyId = `kbs:///${connection.workload.spec.containers[0].imageKeyResource.join("/")}`;
+    const encryptionProgress = (done: number, total: number) => progress("encrypting", registryMode ? `Verifying and encrypting source locally: ${imageSizeLabel(done)} (limit ${imageSizeLabel(total)})` : `Encrypting locally: ${imageSizeLabel(done)} / ${imageSizeLabel(total)} (${Math.floor(done * 100 / total)}%)`);
+    let local: { image: LocalCipherImage; cache: CipherCache };
+    if (registryMode) {
+      const source = { reference: input("source-reference").value, credentials: {
+          username: input("source-username").value, password: input("source-password").value,
+          token: input("source-bearer").value, tokenServiceHost: input("source-token-host").value,
+        } };
+      let sourceKey: Uint8Array | undefined;
+      try {
+        const oldRecovery = input("source-recovery").files?.[0];
+        if (oldRecovery) {
+          if (oldRecovery.size > 16 * 1024 * 1024) throw new Error("The source recovery file is too large");
+          sourceKey = await sourceKeyFromRecovery(await oldRecovery.text(), input("source-recovery-password").value);
+        } else if (input("source-image-key").value) sourceKey = sourceImageKey(input("source-image-key").value);
+        for (const field of ["source-password", "source-bearer", "source-image-key", "source-recovery-password"]) input(field).value = "";
+        local = await prepareRegistryImage({ ...source, sourceKey }, api.registrySourceWasm, owner.imageKey, keyId, imageLimits, owner.encryptedImage,
+          (path, method, body, headers) => request(api.channel, path, method, body, "nebula-browser", headers), encryptionProgress, owner.cipherCacheAttempt);
+      } finally {
+        sourceKey?.fill(0); source.credentials.password = ""; source.credentials.token = "";
+        for (const field of ["source-password", "source-bearer", "source-image-key", "source-recovery-password"]) input(field).value = "";
+      }
+    } else {
+      if (owner.encryptedImage?.source) throw new Error("Select the original registry source to resume this encrypted release");
+      local = await prepareLocalImage(archive!, owner.imageKey, keyId, imageLimits, owner.encryptedImage, encryptionProgress, owner.cipherCacheAttempt);
+    }
     owner.encryptedImage = local.cache; delete owner.cipherCacheAttempt; await api.save();
     downloadRecovery("nebula-owner-recovery-updated.json", await api.backup(recoveryPassword));
     await uploadEncryptedImage(local.image, imageLimits,
@@ -488,9 +523,7 @@ el("deploy-form").addEventListener("submit", event => {
       (sent, total) => progress("encrypting", `Uploading encrypted layers: ${imageSizeLabel(sent)} / ${imageSizeLabel(total)} (${Math.floor(sent * 100 / total)}%)`));
     progress("encrypting", "Publishing your encrypted image…");
     await request(api.channel, "/nebula/v1/publish", "POST", JSON.stringify({
-      registryUsername: input("registry-username").value, registryPassword: input("registry-password").value,
-      approvedRegistry: registry, applicationApproval: owner.applicationApproval }));
-    input("registry-password").value = "";
+      applicationApproval: owner.applicationApproval }));
     const deadline = Date.now() + imageLimits.jobTimeoutMs;
     while (true) {
       if (Date.now() >= deadline) throw new Error("Preparation is still pending. Your keys and release checkpoint were preserved.");
@@ -557,7 +590,8 @@ el("clear-local-cache").addEventListener("click", () => {
 });
 el("download-verification").addEventListener("click", verificationDownload(el("verification-download-status"), el<HTMLAnchorElement>("verification-download-retry"), evidence));
 el("deploy-form").addEventListener("input", selectionChecklist);
-el("deploy-form").addEventListener("change", selectionChecklist);
+el("deploy-form").addEventListener("change", () => { sourceControls(); selectionChecklist(); });
+sourceControls();
 unconfirmedReadiness();
 input("storage-recovery").disabled = true;
 el("storage-recovery-section").hidden = true;

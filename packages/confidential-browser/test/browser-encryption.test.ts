@@ -1,3 +1,7 @@
+import { build } from "esbuild";
+import { runInNewContext } from "node:vm";
+import { webcrypto } from "node:crypto";
+import { gzipSync } from "node:zlib";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash, createHmac, createDecipheriv, randomBytes } from "node:crypto";
@@ -34,6 +38,14 @@ function fixture(contents: Buffer[]) {
   const configName = sha(config).slice(7) + ".json";
   const manifest = Buffer.from(JSON.stringify([{ Config: configName, Layers: layers.map(([name]) => name), RepoTags: ["local/private:test"] }]));
   return { archive: new Blob([tar([["manifest.json", manifest], [configName, config], ...layers])]), layers };
+}
+function gzipDockerArchive(contents: Buffer[], wrongDigest = false, corrupt = false, configOverride?: Buffer) {
+  const layers = contents.map((data, index) => tar([[`app/real-file-${index}`, data]]));
+  const config = configOverride ?? Buffer.from(JSON.stringify({ architecture: "amd64", os: "linux", config: { Entrypoint: ["/app/start"], User: "11000:11000" }, rootfs: { type: "layers", diff_ids: layers.map((raw, index) => wrongDigest && index === layers.length - 1 ? "sha256:" + "0".repeat(64) : sha(raw)) } }));
+  const blobs = layers.map(raw => gzipSync(raw)); if (corrupt) blobs[blobs.length - 1][blobs[blobs.length - 1].length - 1] ^= 1;
+  const paths = blobs.map(raw => "blobs/sha256/" + sha(raw).slice(7)), configPath = "blobs/sha256/" + sha(config).slice(7);
+  const manifest = Buffer.from(JSON.stringify([{ Config: configPath, Layers: paths, RepoTags: ["local/private:test"] }]));
+  return { archive: new Blob([tar([["manifest.json", manifest], ["oci-layout", Buffer.from('{"imageLayoutVersion":"1.0.0"}')], [configPath, config], ...blobs.map((raw, index) => [paths[index], raw] as [string,Buffer])])]), layers, blobs, config };
 }
 async function encrypted(contents = [Buffer.from("private application: never send this plaintext to preparation\n"), randomBytes(1024 * 1024 + 17)]) {
   const source = fixture(contents), key = randomBytes(32), files = new Map<string, Buffer>(); let maximumWrite = 0;
@@ -96,7 +108,7 @@ test("only encrypted layers cross the upload interface; preparation has no image
     const layer = value.result.layers[0], path = join(upload.directory, layer.digest.slice(7)), changed = readFileSync(path); changed[0] ^= 1; writeFileSync(path, changed);
     await assert.rejects(upload.verified(), /digest differs/);
     for (const extra of [{ imageKey: value.key.toString("hex") }, { sourceImage: "registry/private:plain" }]) {
-      await assert.rejects(publish(directory, {} as any, { registryUsername: "owner", registryPassword: "token", ...extra } as any), /never accepted/);
+      await assert.rejects(publish(directory, { workload: { spec: {} } } as any, { registryUsername: "owner", registryPassword: "token", ...extra } as any), /never accepted/);
     }
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
@@ -153,4 +165,70 @@ test("publication refuses unapproved application settings and a different regist
     await assert.rejects(publish(directory, connection, { ...credentials, approvedRegistry: "another.example", applicationApproval: applicationContract(connection) }), /independent credential approval/);
     assert.equal(existsSync(join(directory, "publish", "config.json")), false);
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+
+test("ordinary gzip-blob Docker save encrypts uncompressed layers and remains native compatible", async () => {
+  const source = gzipDockerArchive([Buffer.from("ordinary Docker29 application file"), randomBytes(1024 * 1024 + 33)]), key = randomBytes(32), files = new Map<string,Buffer>();
+  const result = await encryptDockerArchive(source.archive, key, keyId, async name => {
+    const parts: Buffer[] = []; return { async write(raw) { assert.ok(raw.length <= 1024 * 1024); parts.push(Buffer.from(raw)); }, async close() { files.set(name, Buffer.concat(parts)); } };
+  }, () => {});
+  const manifest = JSON.parse(Buffer.from(result.manifest, "base64").toString());
+  for (let i = 0; i < source.layers.length; i++) {
+    const wrap = JSON.parse(Buffer.from(manifest.layers[i].annotations[KEY_ANNOTATION], "base64").toString()), wrapped = Buffer.from(wrap.wrapped_data, "base64");
+    const aes = createDecipheriv("aes-256-gcm", key, Buffer.from(wrap.iv, "base64")); aes.setAuthTag(wrapped.subarray(-16));
+    const options = JSON.parse(Buffer.concat([aes.update(wrapped.subarray(0, -16)), aes.final()]).toString());
+    const decrypt = createDecipheriv("aes-256-ctr", Buffer.from(options.symkey, "base64"), Buffer.from(options.cipheroptions.nonce, "base64")), ciphertext = files.get(result.layers[i].name)!;
+    assert.deepEqual(Buffer.concat([decrypt.update(ciphertext), decrypt.final()]), source.layers[i]);
+    assert.equal(result.layers[i].size, source.layers[i].length); assert.equal(options.digest, sha(source.layers[i]));
+    assert.equal(manifest.layers[i].digest, sha(ciphertext));
+  }
+  const regenerated = new Map<string,Buffer>();
+  const recovered = await encryptDockerArchive(source.archive, key, keyId, async name => { const parts: Buffer[] = []; return { async write(raw) { parts.push(Buffer.from(raw)); }, async close() { regenerated.set(name, Buffer.concat(parts)); } }; }, () => {}, result);
+  assert.deepEqual(recovered, result); for (const [name, raw] of files) assert.deepEqual(regenerated.get(name), raw);
+});
+test("gzip Docker save rejects wrong uncompressed hashes and corrupt gzip trailers", async () => {
+  const key = randomBytes(32), sink = async () => ({ async write() {}, async close() {} });
+  await assert.rejects(encryptDockerArchive(gzipDockerArchive([Buffer.from("content")], true).archive, key, keyId, sink, () => {}), /differs from its configuration/);
+  await assert.rejects(encryptDockerArchive(gzipDockerArchive([Buffer.from("content")], false, true).archive, key, keyId, sink, () => {}));
+});
+test("gzip expansion and aggregate uncompressed sizes obey the actual stack limit", async () => {
+  const key = randomBytes(32), maximum = 1024 * 1024; let written = 0;
+  const sink = async () => ({ async write(raw: Uint8Array) { written += raw.length; }, async close() {} });
+  const bomb = gzipDockerArchive([Buffer.alloc(4 * maximum, 97)]); assert.ok(bomb.archive.size < maximum);
+  await assert.rejects(encryptDockerArchive(bomb.archive, key, keyId, sink, () => {}, undefined, maximum), /Uncompressed image layers/); assert.ok(written <= maximum);
+  written = 0; const aggregate = gzipDockerArchive([Buffer.alloc(600 * 1024, 97), Buffer.alloc(600 * 1024, 98)]);
+  await assert.rejects(encryptDockerArchive(aggregate.archive, key, keyId, sink, () => {}, undefined, maximum), /Uncompressed image layers/); assert.ok(written <= maximum);
+  written = 0; await assert.rejects(encryptDockerArchive(aggregate.archive, key, keyId, sink, () => {}, undefined, aggregate.archive.size - 1), /archive exceeds/); assert.equal(written, 0);
+});
+test("gzip recovery checks every expanded layer and lower size limit before reusing any nonce", async () => {
+  const key = randomBytes(32), original = gzipDockerArchive([Buffer.alloc(600 * 1024, 97), Buffer.alloc(600 * 1024, 98)]);
+  const result = await encryptDockerArchive(original.archive, key, keyId, async () => ({ async write() {}, async close() {} }), () => {});
+  let sinks = 0; const prohibited = async () => { sinks++; throw new Error("Recovery must verify all plaintext before a cipher sink"); };
+  await assert.rejects(encryptDockerArchive(original.archive, key, keyId, prohibited, () => {}, result, 1024 * 1024), /Recovered image size differs/); assert.equal(sinks, 0);
+  const changed = gzipDockerArchive([Buffer.alloc(600 * 1024, 97), Buffer.alloc(600 * 1024, 99)], false, false, original.config);
+  await assert.rejects(encryptDockerArchive(changed.archive, key, keyId, prohibited, () => {}, result), /unchanged original archive/); assert.equal(sinks, 0);
+  const corrupt = gzipDockerArchive([Buffer.alloc(600 * 1024, 97), Buffer.alloc(600 * 1024, 98)], false, true);
+  await assert.rejects(encryptDockerArchive(corrupt.archive, key, keyId, prohibited, () => {}, result)); assert.equal(sinks, 0);
+});
+
+
+test("the actual local encryption worker passes the stack's expanded-byte limit and removes failed ciphertext", async () => {
+  const bundle = await build({ entryPoints: [new URL("../src/ui/encryption-worker.ts", import.meta.url).pathname], bundle: true, write: false, format: "iife", platform: "browser", target: "es2022" });
+  const files = new Map<string,Uint8Array[]>(), removed: string[] = [], messages: any[] = [];
+  const directory = { async getFileHandle(name: string, options?: { create?: boolean }) {
+    if (!files.has(name)) { if (!options?.create) throw new DOMException("Not found", "NotFoundError"); files.set(name, []); }
+    return { async createWritable() { return { async write(data: Uint8Array | string) { files.get(name)!.push(typeof data === "string" ? new TextEncoder().encode(data) : data.slice()); }, async close() {} }; }, async getFile() { return new Blob(files.get(name)! as BlobPart[]); } };
+  } };
+  const self: any = { postMessage(value: any) { messages.push(value); } };
+  runInNewContext(bundle.outputFiles[0].text, { self, navigator: { storage: { async getDirectory() { return { async getDirectoryHandle() { return directory; }, async removeEntry(name: string) { removed.push(name); } }; } } },
+    crypto: webcrypto, Blob, Uint8Array, ArrayBuffer, DataView, TextEncoder, TextDecoder, ReadableStream, DecompressionStream, DOMException, atob, btoa, setTimeout, clearTimeout });
+  const maximum = 1024 * 1024, cacheId = "nebula-cipher-aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+  self.onmessage({ data: { archive: gzipDockerArchive([Buffer.alloc(4 * maximum, 97)]).archive, imageKey: randomBytes(32).toString("hex"), keyId, cacheId, maxBytes: maximum } });
+  const deadline = Date.now() + 5000;
+  while (!messages.some(message => message.type === "error" || message.type === "ready")) { if (Date.now() >= deadline) assert.fail("The worker did not finish"); await new Promise(resolve => setTimeout(resolve, 5)); }
+  const terminal = messages.find(message => message.type === "error" || message.type === "ready");
+  assert.equal(terminal.type, "error"); assert.match(terminal.error, /Uncompressed image layers/);
+  assert.equal(files.has("receipt.json"), false); assert.deepEqual(removed, [cacheId]);
+  assert.ok([...files.values()].flat().reduce((sum, raw) => sum + raw.length, 0) <= maximum);
 });

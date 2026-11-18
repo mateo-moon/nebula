@@ -72,10 +72,12 @@ test("literal IPv6 welcome addresses retain IP certificate identity and correct 
 });
 
 test("parallel disposable slots can retain existing transport routes within a bounded limit", () => {
-  const routes = Array.from({ length: 16 }, (_, index) => ({ port: 8500 + index, upstream: "http://metadata.qualified.svc:8083/" }));
+  const routes = Array.from({ length: 18 }, (_, index) => ({ port: 8500 + index, upstream: "http://metadata.qualified.svc:8083/" }));
   const value = render({ ...config, publicOhttpRoutes: routes });
-  assert.equal(value.resources.find(resource => resource.kind === "Service")!.spec.ports.length, 18);
-  assert.throws(() => render({ ...config, publicOhttpRoutes: [...routes, { port: 8600, upstream: routes[0].upstream }] }), /routes/);
+  assert.equal(value.resources.find(resource => resource.kind === "Service")!.spec.ports.length, routes.length + 2);
+  const maximum = Array.from({ length: 24 }, (_, index) => ({ port: 8500 + index, upstream: routes[0].upstream }));
+  assert.doesNotThrow(() => render({ ...config, publicOhttpRoutes: maximum }));
+  assert.throws(() => render({ ...config, publicOhttpRoutes: [...maximum, { port: 8600, upstream: routes[0].upstream }] }), /routes/);
 });
 
 test("explicit stack-owned public routes expose only TNG OHTTP and filtered metadata services", () => {
@@ -106,7 +108,7 @@ test("explicit stack-owned public routes expose only TNG OHTTP and filtered meta
     { port: 8441, upstream: "http://owner.qualified.svc:8447" },
     { port: 8441, upstream: "https://preparation.qualified.svc:8445" },
     { port: 8441, upstream: "http://external.example:8445" },
-    { port: 8441, upstream: "http://user:secret@preparation.qualified.svc:8445" },
+    { port: 8441, upstream: Object.assign(new URL("http://preparation.qualified.svc:8445"), { username: "user", password: "secret" }).href },
     { port: 8441, upstream: "http://preparation.qualified.svc:8445/admin" },
     { port: 8441, upstream: "http://preparation.qualified.svc:8445/?token=secret" },
     { port: 8441, upstream: "http://preparation.qualified.svc:8445/#secret" },
@@ -134,7 +136,7 @@ test("same-cluster public-certificate relay uses fixed Service10443 and exact br
 });
 
 test("welcome refuses secret-bearing and ambiguous public configuration", () => {
-  for (const portalUrl of ["http://portal.example.org/", "https://user:secret@portal.example.org/",
+  for (const portalUrl of ["http://portal.example.org/", Object.assign(new URL("https://portal.example.org/"), { username: "user", password: "secret" }).href,
     "https://portal.example.org/#token", "https://portal.example.org/?token=secret", "https://portal.example.org/settings"]) {
     assert.throws(() => render({ ...config, portalUrl }));
   }

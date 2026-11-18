@@ -16,11 +16,43 @@ The guide explains independent verification, displays a current reported certifi
 
 Optional `publicOhttpRoutes: [{ port, upstream }]` listeners let the same stack serve its preparation, final-owner OHTTP and public discovery endpoints on additional ports of that IP using the same certificate. Each upstream is a fixed `http://<service>.<namespace>.svc:<port>` origin: port8445 is reserved for TNG OHTTP; port8083 is the operator's existing `<name>-access` public metadata Service. Routes cannot select raw Trustee/owner ports, paths, credentials or external hosts, and cannot reuse the guide's ports or the configured direct portal port. The owner must ensure the metadata Service exposes only its intended public routes. Network policy permits only the selected namespaces and backend target ports, including8083 for metadata. These proxies carry TNG ciphertext or public metadata; they do not terminate the initial guest RA-TLS connection or supply attestation authority.
 
-DevOps prepares the workload's UID, mounts, ports, storage and reserved encrypted-image tag. Set `commandFromImage: true`, `imageKeyResource`, `browserOwner: true` and `accessLink.browser`; allow the exact access Secret in the operator. With `accessLink.browser.manualTls: true`, the Secret stores the frontend endpoint in `url` and the separately entered credential in `token`. The preparation VM generates the token at runtime; synthesis remains deterministic. Give the endpoint, token and registry push access separately. Keep the token out of the initial URL.
+DevOps prepares the workload's UID, mounts, ports and storage. For direct browser upload, enable the built-in image store described below; no user registry account or destination is needed. Set `commandFromImage: true`, `imageKeyResource`, `browserOwner: true` and `accessLink.browser`; allow the exact access Secret in the operator. With `accessLink.browser.manualTls: true`, the Secret stores the frontend endpoint in `url` and the separately entered credential in `token`. The preparation VM generates the token at runtime; synthesis remains deterministic. Give the endpoint and token separately. Keep the token out of the initial URL.
 
-The user chooses an image and explicitly approves its complete application contract: command/arguments, environment overrides, identity, mounts, resource access, ports, network and registry routes. A reviewed runtime profile approves helper software, not administrator-selected application behavior. Without an explicit command override, execution derives from the owner's digest-bound OCI image. Native policy binds literal process values; application/image environment placeholders cannot introduce host-selected values. Registry credentials must be for the independently approved destination host.
+The user chooses a local image or an optional external registry source and explicitly approves its complete application contract: command/arguments, environment overrides, identity, mounts, resource access, ports and network. A reviewed runtime profile approves helper software, not administrator-selected application behavior. Without an explicit command override, execution derives from the owner's digest-bound OCI image. Native policy binds literal process values; application/image environment placeholders cannot introduce host-selected values.
 
-The browser encrypts local image layers before upload. The preparation VM receives ciphertext and public OCI metadata, publishes the encrypted image and independently computes its final native policy without the image key. When the reserved tag appears, the operator verifies its encrypted layers, freezes the manifest digest and creates the final Pod. The browser verifies the resulting VM/workload measurement, enrolls its unique transport key, claims its unmodified Trustee and provisions image, disk and application keys. Disk keys go directly to the final Trustee. No user-created Kubernetes resources or administrator follow-up is needed.
+The browser encrypts image layers before upload. The preparation VM receives ciphertext and public OCI metadata, commits the encrypted image to the stack's store and independently computes its final native policy without the image key. When the complete release is available, the operator verifies its encrypted layers, freezes the manifest digest and creates the final Pod. The browser verifies the resulting VM/workload measurement, enrolls its unique transport key, claims its unmodified Trustee and provisions image, disk and application keys. Disk keys go directly to the final Trustee. No user-created Kubernetes resources or administrator follow-up is needed.
+
+## Built-in image storage
+
+The image store is an optional module in the existing operator process. Supply a dedicated filesystem PVC to the operator; it holds encrypted image layers and public OCI metadata. Owner state and all usable image/disk keys stay outside that PVC. Use `ConfidentialStorage` for the application's encrypted disks or memory, and an ordinary retained filesystem PVC for these already-encrypted image bytes.
+
+For namespace `example` and workload `application`:
+
+```ts
+const imageStore = {
+  endpoint: "http://confidential-operator-images.example.svc:8084",
+  writeEndpoint: "http://confidential-operator-images.example.svc:8085",
+  repository: "example/application",
+};
+
+new ConfidentialOperator(chart, "operator", {
+  namespace: "example", watchNamespaces: ["example"], image: images.operator,
+  imageStore: {
+    claimName: "application-images", repository: imageStore.repository,
+    maxBytes: 8 * 1024 ** 3,
+    preparationPodSelector: { "confidential.nebula.dev/browser": "preparation" },
+  },
+  accessLinkSecrets: [{ namespace: "example", name: "application-access" }],
+});
+```
+
+Pass the same `imageStore` tuple to the preparation `ConfidentialBrowser` and the `ConfidentialWorkload.spec`. Set the application's image to `imageStoreImage(imageStore)`, imported from `nebula-cdk8s/confidential-workloads`. The diskless frontend does not receive the store configuration. Endpoints must name one internal Service on ports 8084/8085; the repository must equal the workload's namespace/name. The preparation guest compares this tuple with its measured configuration before accepting a connection.
+
+Port 8084 serves immutable OCI image content; port 8085 accepts publication only through the exact preparation Pod's private network route. The preparation API accepts only ciphertext uploads and application approval. Native CoCo pulls the encrypted image through the store's OCI API. HTTP is scoped to that exact internal repository in the publisher/operator and native genpolicy transport; CDH's guest pull routing is separately included in measured Init-Data. External registries keep certificate verification. No image-store service needs a decryption key or an external bootstrap Trustee.
+
+The store publishes its `release` tag only after every referenced object is complete and hash-checked. Repeating the same publication is safe; replacing that tag with different content is refused. Retain the PVC across operator replacement. Administrators may delete or withhold ciphertext, but different bytes cannot satisfy the owner-approved digest and policy. Existing declarations without `imageStore` retain their external-publication path and measured layout.
+
+The optional registry source is downloaded over browser-verified HTTPS through an opaque byte relay. Registry login credentials and source-image decryption keys/passwords remain on the user's computer. Encrypted source layers are authenticated before local decryption, then re-encrypted under a fresh destination key. Large source blobs require exact HTTP Range support; unsupported servers produce a clear local-archive fallback. See the [browser guide](../../../../../confidential-browser/README.md) for supported source-key formats and limits.
 
 For large images, DevOps sets `runtime.createContainerTimeoutSeconds` on the workload and a longer `runtimeRequestTimeout` in the node's native kubelet configuration. Kata downloads and decrypts confidential images during container creation, so its usual 60-second limit can expire before the application starts. Give the application an appropriate `containers[].resources` memory limit as well. Omitting the timeout preserves the runtime default and existing guest definitions.
 
