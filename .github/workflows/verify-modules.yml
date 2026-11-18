@@ -72,7 +72,12 @@ jobs:
             done
           done < "$RUNNER_TEMP/ecr-reader-test-images"
       - name: Fetch the pinned Envoy Gateway chart for offline synthesis tests
-        run: helm pull oci://docker.io/envoyproxy/gateway-helm@sha256:dcb82a14c04b426615a71d97222c7edf9f5ff58b800d241e71ac5784ae6dc7b7 --destination "$RUNNER_TEMP"
+        run: |
+          chart_dir=$(mktemp -d "$RUNNER_TEMP/envoy-gateway-chart.XXXXXX")
+          helm pull oci://docker.io/envoyproxy/gateway-helm@sha256:dcb82a14c04b426615a71d97222c7edf9f5ff58b800d241e71ac5784ae6dc7b7 --destination "$chart_dir"
+          chart=("$chart_dir"/*.tgz)
+          test "${#chart[@]}" -eq 1 && test -f "${chart[0]}"
+          mv -- "${chart[0]}" "$RUNNER_TEMP/gateway-helm-v1.10.0.tgz"
       - name: Tests (including the packed-tarball import test)
         env:
           ENVOY_GATEWAY_CHART: ${{ runner.temp }}/gateway-helm-v1.10.0.tgz
