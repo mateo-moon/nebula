@@ -50,7 +50,10 @@ export class ConfidentialPublicAddress extends BaseConstruct<ConfidentialPublicA
           annotations: { "checksum/runtime": createHash("sha256").update(runtimeSource).digest("hex") } }, spec: {
           nodeName: config.nodeName, hostNetwork: true, dnsPolicy: "ClusterFirstWithHostNet", serviceAccountName: config.name,
           automountServiceAccountToken: false, enableServiceLinks: false, terminationGracePeriodSeconds: 20,
-          containers: [{ name: "routing", image: config.image, command: ["node", "--disable-sigusr1", "/app/public-address/runtime.ts"], args: [JSON.stringify(runtime)],
+          // Kata's host image metadata may exist without ordinary containerd
+          // layer content. Force the host runtime to fetch and unpack it.
+          containers: [{ name: "routing", image: config.image, imagePullPolicy: "Always",
+            command: ["node", "--disable-sigusr1", "/app/public-address/runtime.ts"], args: [JSON.stringify(runtime)],
             securityContext: { runAsUser: 0, runAsGroup: 0, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true,
               capabilities: { drop: ["ALL"], add: ["NET_ADMIN"] } },
             resources: { requests: { cpu: "10m", memory: "32Mi" }, limits: { memory: "128Mi" } },

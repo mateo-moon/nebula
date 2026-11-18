@@ -78,6 +78,7 @@ test("host routing has namespace-only Pod credentials, no host mounts and no gue
   assert.equal(spec.nodeName, config.nodeName);
   assert.equal(spec.hostNetwork, true);
   assert.equal(spec.automountServiceAccountToken, false);
+  assert.equal(container.imagePullPolicy, "Always", "A Kata metadata-only image cache must not skip the ordinary host image pull/unpack");
   assert.equal(spec.volumes.some((volume: any) => volume.hostPath), false);
   assert.deepEqual(container.securityContext.capabilities, { drop: ["ALL"], add: ["NET_ADMIN"] });
   assert.equal(container.securityContext.privileged, undefined);
