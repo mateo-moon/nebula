@@ -2,6 +2,40 @@
   "version": 1,
   "profiles": [
     {
+      "id": "nebula-snp-agent-preparation-runtime-capacity-2026-11-18",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:13838563ee267fadd8d845c09dc433dff4e7f436acdf9d6377175ca7b044dc83",
+      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+      "identity": {
+        "measurement": "e17cb86d23c57635b2fa4540bc44c411c2ef7b1836ad9fb05906f57d3692292c32645a61e913e80b618abc1d40f54149",
+        "initDataSha256": "87a8328030ca9405ac542d39dfd41a439408b189ebf736dfd6faeca37cd074a1",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 84
+        }
+      },
+      "sourceRevision": "fbb4ed7b418ab8ffba92f9119e81377868f2b87e",
+      "tngSourceRevision": "cc494fd65fe22817e20a39c04b173efa14bc316a"
+    },
+    {
+      "id": "nebula-snp-agent-preparation-dev-capacity-2026-11-18",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:13838563ee267fadd8d845c09dc433dff4e7f436acdf9d6377175ca7b044dc83",
+      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+      "identity": {
+        "measurement": "e17cb86d23c57635b2fa4540bc44c411c2ef7b1836ad9fb05906f57d3692292c32645a61e913e80b618abc1d40f54149",
+        "initDataSha256": "b31d56164aafa5ae41ffe2a246ad5365f2f03865ac82e692ede88ac06b115e20",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 84
+        }
+      },
+      "sourceRevision": "fbb4ed7b418ab8ffba92f9119e81377868f2b87e",
+      "tngSourceRevision": "cc494fd65fe22817e20a39c04b173efa14bc316a"
+    },
+    {
       "id": "nebula-snp-agent-preparation-dev-setup-2026-11-18",
       "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:ee929cd39fd2966311a80f20e1085b8c4f509a4c9e3a9bc488d49dd69ee841b2",
       "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
