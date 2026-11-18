@@ -1,6 +1,5 @@
 import { Construct } from "constructs";
-import { KubeDaemonSet } from "cdk8s-plus-33/lib/imports/k8s";
-import { type HostReconcilerConfig, validateHostReconciler } from "./shared";
+import { createHostReconcilerDaemonSet, type HostReconcilerConfig, validateHostReconciler } from "./shared";
 import { kernelPinScript, type HostKernelPinScriptOptions } from "./scripts";
 
 export interface HostKernelPinConfig extends HostReconcilerConfig, HostKernelPinScriptOptions {
@@ -22,53 +21,28 @@ export class HostKernelPin extends Construct {
       { name: "GRUB_ENTRY", value: config.grubEntry },
     ];
     const confined = { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } };
-    new KubeDaemonSet(this, "daemonset", {
-      metadata: { name: config.name, namespace: config.namespace },
-      spec: {
-        selector: { matchLabels: { app: config.name } },
-        template: {
-          metadata: { labels: { app: config.name } },
-          spec: {
-            nodeSelector: config.nodeSelector,
-            tolerations: config.tolerations ?? [{ operator: "Exists" }],
-            automountServiceAccountToken: false,
-            initContainers: [
-              {
-                name: "pin",
-                image: config.image,
-                command: ["nsenter", "--mount=/host/proc/1/ns/mnt", "--", "/bin/sh", "-c", pinScript, "kernel-pin", "apply"],
-                env: pinEnv,
-                securityContext: { privileged: true, runAsUser: 0 },
-                volumeMounts: [{ name: "host-proc", mountPath: "/host/proc", readOnly: true }],
-              },
-            ],
-            containers: [
-              {
-                name: "verify",
-                image: config.image,
-                command: ["sleep", "infinity"],
-                env: [...pinEnv, { name: "HOST_ROOT", value: "/host" }],
-                securityContext: { ...confined, runAsUser: 0 },
-                volumeMounts: [
-                  { name: "grub", mountPath: "/host/boot/grub", readOnly: true },
-                  { name: "grub-defaults", mountPath: "/host/etc/default", readOnly: true },
-                ],
-                readinessProbe: {
-                  exec: { command: ["/bin/sh", "-c", pinScript, "kernel-pin", "check"] },
-                  periodSeconds: 300,
-                  timeoutSeconds: 60,
-                  failureThreshold: 1,
-                },
-              },
-            ],
-            volumes: [
-              { name: "host-proc", hostPath: { path: "/proc", type: "Directory" } },
-              { name: "grub", hostPath: { path: "/boot/grub", type: "Directory" } },
-              { name: "grub-defaults", hostPath: { path: "/etc/default", type: "Directory" } },
-            ],
-          },
-        },
+    createHostReconcilerDaemonSet(this, config, {
+      apply: {
+        name: "pin",
+        command: ["nsenter", "--mount=/host/proc/1/ns/mnt", "--", "/bin/sh", "-c", pinScript, "kernel-pin", "apply"],
+        env: pinEnv,
+        securityContext: { privileged: true, runAsUser: 0 },
+        volumeMounts: [{ name: "host-proc", mountPath: "/host/proc", readOnly: true }],
       },
+      verify: {
+        checkCommand: ["/bin/sh", "-c", pinScript, "kernel-pin", "check"],
+        env: [...pinEnv, { name: "HOST_ROOT", value: "/host" }],
+        securityContext: { ...confined, runAsUser: 0 },
+        volumeMounts: [
+          { name: "grub", mountPath: "/host/boot/grub", readOnly: true },
+          { name: "grub-defaults", mountPath: "/host/etc/default", readOnly: true },
+        ],
+      },
+      volumes: [
+        { name: "host-proc", hostPath: { path: "/proc", type: "Directory" } },
+        { name: "grub", hostPath: { path: "/boot/grub", type: "Directory" } },
+        { name: "grub-defaults", hostPath: { path: "/etc/default", type: "Directory" } },
+      ],
     });
   }
 }

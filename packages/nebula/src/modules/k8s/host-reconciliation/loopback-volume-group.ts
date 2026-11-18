@@ -1,6 +1,5 @@
 import { Construct } from "constructs";
-import { KubeDaemonSet } from "cdk8s-plus-33/lib/imports/k8s";
-import { type HostReconcilerConfig, validateHostReconciler } from "./shared";
+import { createHostReconcilerDaemonSet, type HostReconcilerConfig, validateHostReconciler } from "./shared";
 import { loopbackVolumeGroupScript } from "./scripts";
 
 export interface LoopbackVolumeGroupConfig extends HostReconcilerConfig {
@@ -40,39 +39,10 @@ export class LoopbackVolumeGroup extends Construct {
     const securityContext = { privileged: true, runAsUser: 0 };
     const volumeMounts = [{ name: "host-proc", mountPath: "/host/proc", readOnly: true }];
 
-    new KubeDaemonSet(this, "daemonset", {
-      metadata: { name: config.name, namespace: config.namespace },
-      spec: {
-        selector: { matchLabels: { app: config.name } },
-        template: {
-          metadata: { labels: { app: config.name } },
-          spec: {
-            nodeSelector: config.nodeSelector,
-            tolerations: config.tolerations ?? [{ operator: "Exists" }],
-            automountServiceAccountToken: false,
-            initContainers: [
-              { name: "apply", image: config.image, command: [...onHost, "apply"], env, securityContext, volumeMounts },
-            ],
-            containers: [
-              {
-                name: "verify",
-                image: config.image,
-                command: ["sleep", "infinity"],
-                env,
-                securityContext,
-                volumeMounts,
-                readinessProbe: {
-                  exec: { command: [...onHost, "check"] },
-                  periodSeconds: 300,
-                  timeoutSeconds: 60,
-                  failureThreshold: 1,
-                },
-              },
-            ],
-            volumes: [{ name: "host-proc", hostPath: { path: "/proc", type: "Directory" } }],
-          },
-        },
-      },
+    createHostReconcilerDaemonSet(this, config, {
+      apply: { name: "apply", command: [...onHost, "apply"], env, securityContext, volumeMounts },
+      verify: { checkCommand: [...onHost, "check"], env, securityContext, volumeMounts },
+      volumes: [{ name: "host-proc", hostPath: { path: "/proc", type: "Directory" } }],
     });
   }
 }
