@@ -129,6 +129,12 @@ If preparation restarts before ownership or final-guest creation, the operator r
 
 Ordinary proxies may carry the preparation/final OHTTP endpoints: their contents remain encrypted to the separately attested VM. Their DNS/HTTPS authority does not authenticate the initial page. The generic [full-stack example](../nebula/example/confidential-workload-stack.ts) includes a TCP route for the frontend; the DevOps testcase uses the existing SNP host and preserves earlier guests and disks.
 
+## When deployment stops
+
+The progress card marks the failed step and shows a reason, the key-delivery checkpoint, and the next action. A definite attestation-policy rejection stops enrollment immediately. Temporary connection or AMD certificate-service failures remain retryable; they never bypass verification. Unknown internal errors are not shown as raw dumps.
+
+Keep the latest encrypted recovery backup. Retrying the same approved release does not require another image upload. Changing the measured configuration requires a fresh explicitly approved release. If delivery started but did not finish, some keys may already be in the verified enrolled VM; the page does not report that as zero delivery or completed startup.
+
 ## Private application resources
 
 `default/config/agent` is a **Resource ID in Trustee**, not a filename or a path inside the container. Selecting a local file uploads its bytes under that ID. The stack does not automatically create a configuration file or environment variable.

@@ -19,6 +19,7 @@ async function deployment(restored = false, rejectedConnection = false, options:
   manualTls?: Record<string, unknown>; attestationFixtures?: boolean; missingImageStore?: boolean; registrySource?: boolean;
   autoSubmit?: boolean; privateFile?: boolean; approvalSave?: Promise<void>;
   configureApplication?: (containers: any[]) => void;
+  finalVerificationError?: string; transientFinalErrors?: string[]; transientFinalStatuses?: number[]; finalInstanceStatus?: number; keyWriteFailureAfter?: number;
 } = {}) {
   const blobs = new Map<string, Blob>(), activeUrls = new Set<string>();
   const anchorClicks: { href: string; download: string; connected: boolean }[] = [];
@@ -111,6 +112,8 @@ async function deployment(restored = false, rejectedConnection = false, options:
   let now = 0, available = false, storageReady = true, publishes = options.provisionedCheckpoint ? 1 : 0, keyWrites = 0, uploadRequests = 0, finalAttempts = 0;
   let missingResource = options.missingResource, missingDisk = options.missingDisk;
   let supervisorPhase = options.supervisorPhase ?? "running";
+  const transientFinalErrors = [...(options.transientFinalErrors ?? [])];
+  const transientFinalStatuses = [...(options.transientFinalStatuses ?? [])];
   const phases = ["encrypting", "measuring", "waiting", "attesting", "provisioning", "ready"];
   const steps = phases.map(phase => { const step = el("step-" + phase); step.dataset.phase = phase; return step; });
   const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
@@ -137,8 +140,14 @@ async function deployment(restored = false, rejectedConnection = false, options:
     request: async (path: string, init: RequestInit = {}) => {
     finalAttempts++;
     if (!available) { now += 900_001; throw new Error("Test control plane is offline"); }
+    if (path === "/nebula/v1/instance") {
+      if (transientFinalErrors.length) throw new Error(transientFinalErrors.shift());
+      if (options.finalVerificationError) throw new Error(options.finalVerificationError);
+      if (transientFinalStatuses.length) return response({}, transientFinalStatuses.shift());
+      if (options.finalInstanceStatus) return response({}, options.finalInstanceStatus);
+    }
     if (path.startsWith("/kbs/v0/resource/") && init.method === "POST") {
-      keyWrites++; if (options.keyWriteFailure) return response({}, 403);
+      keyWrites++; if (options.keyWriteFailure || options.keyWriteFailureAfter && keyWrites > options.keyWriteFailureAfter) return response({}, 403);
     }
     if (path === "/nebula/v1/supervisors") return response({ version: 1, storage: Object.fromEntries(["data", "audit"].map(name => [name, { available: true, clients: { app: { phase: supervisorPhase, restartCount: 0, applicationReady: null } } }])) });
     if (path === "/nebula/v1/bootstrap") {
@@ -333,7 +342,10 @@ test("file names are readable and removals clear the specific local selection", 
 
 test("a post-publication timeout offers retry and resumes without republishing or changing the owner", async () => {
   const ui = await deployment();
-  assert.match(ui.el("notice").textContent, /release checkpoint are saved/);
+  assert.match(ui.el("job-description").textContent, /release checkpoint are saved/);
+  assert.match(ui.el("notice").textContent, /unreachable or has not provided approved attestation/);
+  assert.match(ui.el("notice").textContent, /No image or disk keys were sent during this attempt/);
+  assert.equal(ui.steps[2].classes.has("failed"), true);
   assert.equal(ui.el("inspect").hidden, false);
   assert.equal(ui.el("deploy").disabled, true);
   assert.equal(ui.counts().keyWrites, 0);
@@ -346,6 +358,7 @@ test("a post-publication timeout offers retry and resumes without republishing o
   await ui.wait(() => ui.owner.provisioned === true && ui.el("job-title").textContent === "Keys delivered; encrypted storage unlocked");
   assert.equal(ui.el("final-status").textContent, "Final workload verified");
   assert.equal(ui.el("notice").hidden, true);
+  assert.equal(ui.steps[2].classes.has("failed"), false);
   assert.equal(ui.owner.imageKey, imageKey);
   assert.equal(ui.owner.finalPin, "b".repeat(64));
   assert.equal(ui.owner.provisioned, true);
@@ -461,6 +474,85 @@ for (const phase of ["publishing", "measuring"] as const) test(`a ${phase} failu
   assert.deepEqual(ui.completed(), phase === "measuring" ? ["encrypting"] : []);
   assert.deepEqual(ui.active(), []);
   assert.equal(ui.counts().keyWrites, 0);
+});
+
+for (const rejection of [
+  'CreateOHttpClientFailed(EvidenceVerifyError(EarStatusNotAffirming { status: "contraindicated" }))',
+  'CreateOHttpClientFailed(EvidenceVerifyError(PolicyEvaluationFailed { policy_id: "default" }))',
+  'Failed to create ohttp client\n\nCaused by:\n  0: Failed to verify attestation evidence\n  1: EAR status is not affirming: got contraindicated for snp',
+  'Failed to verify attestation evidence\n\nCaused by:\n  Policy evaluation failed for policy_id `default`',
+]) test("definitive SDK policy rejection stops immediately and presents only safe stage and key information: " + rejection.split("\n")[0], async () => {
+  const secret = "private-sentinel-token-never-display";
+  const ui = await deployment(false, false, { autoSubmit: false,
+    finalVerificationError: rejection + "\n" + secret });
+  ui.restoreConnectivity(); ui.submit();
+  await ui.wait(() => !ui.el("notice").hidden && !!ui.el("notice").textContent);
+  assert.equal(ui.counts().finalAttempts, 1);
+  assert.equal(ui.counts().keyWrites, 0); assert.equal(ui.owner.finalClaimed, undefined);
+  assert.deepEqual(ui.completed(), ["encrypting", "measuring"]);
+  assert.equal(ui.steps[2].classes.has("failed"), true);
+  assert.match(ui.steps[2].attributes.get("aria-label")!, /approved attestation: Failed/);
+  assert.match(ui.el("notice").textContent, /attestation was rejected by the approved policy/);
+  assert.match(ui.el("notice").textContent, /No image or disk keys were sent during this attempt/);
+  assert.match(ui.el("notice").textContent, /Keep the approved policy and existing instance pins/);
+  assert.match(ui.el("job-description").textContent, /Retrying this same approved release needs no image re-upload/);
+  assert.match(ui.el("notice").textContent, /measured configuration change requires a fresh explicitly approved release/);
+  assert.doesNotMatch(ui.el("notice").textContent, new RegExp(secret + "|EarStatusNotAffirming|EvidenceVerifyError"));
+});
+
+test("temporary transport and KDS errors keep retrying rather than masquerading as a policy rejection", async () => {
+  const ui = await deployment(false, false, { autoSubmit: false, transientFinalErrors: [
+    "TypeError: network fetch failed while contacting attestation endpoint",
+    "CreateOHttpClientFailed(EvidenceVerifyError(AttestationServiceVerifyFailed(KDS download timed out)))",
+    "Failed to create ohttp client\n\nCaused by:\n  0: Failed to verify attestation evidence\n  1: KDS download timed out",
+    "Network fetch failed with body: EAR status is not affirming: got contraindicated for snp",
+  ] });
+  ui.restoreConnectivity(); ui.submit();
+  await ui.wait(() => ui.owner.provisioned === true);
+  assert.ok(ui.counts().finalAttempts > 2);
+  assert.equal(ui.el("notice").hidden, true);
+  assert.equal(ui.steps[2].classes.has("failed"), false);
+});
+
+test("temporary verified service failures retry without being reported as owner refusal", async () => {
+  const ui = await deployment(false, false, { autoSubmit: false, transientFinalStatuses: [503, 502] });
+  ui.restoreConnectivity(); ui.submit();
+  await ui.wait(() => ui.owner.provisioned === true);
+  assert.ok(ui.counts().finalAttempts > 2);
+  assert.equal(ui.el("notice").hidden, true);
+});
+
+test("a verified HTTP owner refusal stops without claiming the instance or delivering keys", async () => {
+  const ui = await deployment(false, false, { autoSubmit: false, finalInstanceStatus: 403 });
+  ui.restoreConnectivity(); ui.submit();
+  await ui.wait(() => !ui.el("notice").hidden && !!ui.el("notice").textContent);
+  assert.equal(ui.counts().finalAttempts, 1);
+  assert.equal(ui.counts().keyWrites, 0); assert.equal(ui.owner.finalClaimed, undefined);
+  assert.match(ui.el("notice").textContent, /verified final VM refused the owner instance check \(HTTP 403\)/);
+  assert.match(ui.el("notice").textContent, /Restore the owner recovery backup for this release/);
+});
+
+test("reviewed registry-source validation stays actionable without exposing the submitted key", async () => {
+  const ui = await deployment(false, false, { autoSubmit: false, registrySource: true });
+  ui.el("source-reviewed").checked = true;
+  ui.el("source-image-key").value = "AA==";
+  ui.restoreConnectivity(); ui.submit();
+  await ui.wait(() => !ui.el("notice").hidden && !!ui.el("notice").textContent);
+  assert.match(ui.el("notice").textContent, /source image key must be exactly 32 bytes/);
+  assert.doesNotMatch(ui.el("notice").textContent, /AA==|source-login-sentinel/);
+  assert.equal(ui.counts().keyWrites, 0);
+});
+
+test("partial key delivery reports uncertainty while preserving the enrolled instance and saved image", async () => {
+  const ui = await deployment(false, false, { autoSubmit: false, keyWriteFailureAfter: 2 });
+  ui.restoreConnectivity(); ui.submit();
+  await ui.wait(() => !ui.el("notice").hidden && ui.el("notice").textContent.includes("(403)"));
+  assert.equal(ui.counts().keyWrites, 3);
+  assert.equal(ui.owner.finalClaimed, true); assert.equal(ui.owner.provisioned, undefined);
+  assert.equal(ui.steps[4].classes.has("failed"), true);
+  assert.match(ui.el("notice").textContent, /Some keys may already have reached the verified enrolled VM/);
+  assert.doesNotMatch(ui.el("notice").textContent, /No image or disk keys were sent/);
+  assert.match(ui.el("job-description").textContent, /Retrying this same approved release needs no image re-upload/);
 });
 
 test("refused key delivery does not finish provisioning or startup", async () => {

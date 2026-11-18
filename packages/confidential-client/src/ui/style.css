@@ -214,6 +214,8 @@ h4 {
 }
 .file-selection button { flex-shrink: 0; }
 #job-title { scroll-margin-block-start: 24px; }
+.progress-card li.failed { color: #8b2633; }
+.progress-card li.failed span { background: #fff4f5; border-color: #edc5cb; }
 .recovery-backup {
   margin-block: 14px;
   padding: 10px 12px;

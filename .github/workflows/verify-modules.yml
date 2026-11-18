@@ -61,6 +61,16 @@ jobs:
           curl --fail --location --retry 3 https://github.com/kyverno/kyverno/releases/download/v1.19.1/kyverno-cli_v1.19.1_linux_x86_64.tar.gz --output "$RUNNER_TEMP/kyverno-cli.tar.gz"
           printf 'b38228f367fc0fdc2b08f4c83ea50ac5f16c60ff8d62d76a66157c33c47b70ae  %s\n' "$RUNNER_TEMP/kyverno-cli.tar.gz" | sha256sum --check
           tar -xzf "$RUNNER_TEMP/kyverno-cli.tar.gz" -C "$RUNNER_TEMP" kyverno
+      - name: Pull pinned credential-test tools
+        run: |
+          pnpm exec tsx --eval 'import { ECR_READER_AWS_CLI_IMAGE, ECR_READER_TOOLS_IMAGE } from "./src/modules/infra/aws/ecr-scaled-job-reader/index.ts"; console.log(ECR_READER_AWS_CLI_IMAGE + "\n" + ECR_READER_TOOLS_IMAGE)' > "$RUNNER_TEMP/ecr-reader-test-images"
+          while IFS= read -r image; do
+            for attempt in 1 2 3; do
+              if timeout 180s docker pull "$image"; then break; fi
+              if [ "$attempt" -eq 3 ]; then exit 1; fi
+              sleep "$((attempt * 15))"
+            done
+          done < "$RUNNER_TEMP/ecr-reader-test-images"
       - name: Tests (including the packed-tarball import test)
         env:
           ECR_READER_CONTAINER_TEST: "1"

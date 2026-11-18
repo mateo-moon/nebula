@@ -6,7 +6,7 @@ import { checkedSupervisors, storageClientsRunning, checkedStorageRecovery } fro
 import { prepareLocalImage, prepareRegistryImage, uploadEncryptedImage, removeCipherCache, type LocalCipherImage, type CipherCache } from "./upload";
 import { summarizeStorage, renderStorageOverview, type StorageSummary } from "@nebula/confidential-client/storage-overview";
 import { readinessSummary, type StatusLabel } from "./readiness";
-import { registryReference, sourceImageKey, sourceKeyFromRecovery } from "./registry-source";
+import { registryReference, sourceImageKey, sourceKeyFromRecovery, RegistrySourceError } from "./registry-source";
 import { verificationDownload } from "./verification-download";
 import { resourceReadExample } from "./resource-help";
 import type { SupervisorReport } from "./storage-status";
@@ -36,11 +36,33 @@ const phases = ["encrypting", "measuring", "waiting", "attesting", "provisioning
 type Phase = typeof phases[number];
 const phaseLabels: Record<Phase, string> = {
   encrypting: "Encrypt locally and publish ciphertext", measuring: "Prepare the approved workload policy",
-  waiting: "Wait for the final confidential VM", attesting: "Verify and enroll that VM",
+  waiting: "Wait for the final VM and approved attestation", attesting: "Verify and enroll that VM",
   provisioning: "Deliver keys to its Trustee", ready: "Unlock disks and authorize app startup",
 };
 const completed = new Set<Phase>();
 let activePhase: Phase | undefined;
+let failedPhase: Phase | undefined;
+let keyDeliveryStarted = false;
+const stepFailures = new WeakMap<HTMLElement, HTMLElement>();
+class UserFacingError extends Error {
+  constructor(message: string, readonly kind?: "attestation" | "owner-auth" | "instance" | "final-timeout") { super(message); }
+}
+function errorMessage(error: unknown): string {
+  try {
+    const message = error && typeof error === "object" ? Object.getOwnPropertyDescriptor(error, "message")?.value : undefined;
+    return typeof message === "string" ? message.slice(0, 32768) : "";
+  } catch { return ""; }
+}
+/** Pinned TNG cc494 exports Rust Debug chains as JsError, without a JS error
+ * code. Only these reviewed verifier rejection leaves are definitive. The
+ * EvidenceVerifyError wrapper alone may also contain a temporary KDS failure. */
+function attestationRejected(error: unknown): boolean {
+  const message = errorMessage(error);
+  const wrapper = /\bEvidenceVerifyError\s*\(/.test(message) ||
+    /(?:^|\n)\s*(?:\d+:\s*)?Failed to verify attestation evidence\s*(?:\n|$)/.test(message);
+  return wrapper &&
+    /\b(?:EarStatusNotAffirming|PolicyEvaluationFailed)\s*\{|EAR status is not affirming:|Policy evaluation failed for policy_id/.test(message);
+}
 function statusRows(rows: { name: string; status: StatusLabel }[]) {
   const parent = el("readiness-checks"); parent.replaceChildren();
   for (const { name, status } of rows) {
@@ -182,9 +204,13 @@ function applicationOverview() {
 }
 function renderSteps() {
   for (const item of document.querySelectorAll<HTMLElement>("[data-phase]")) {
-    const phase = item.dataset.phase as Phase, active = phase === activePhase, done = completed.has(phase) && !active;
+    const phase = item.dataset.phase as Phase, active = phase === activePhase, failed = phase === failedPhase, done = completed.has(phase) && !active && !failed;
     item.classList.toggle("active", active); item.classList.toggle("done", done);
-    item.setAttribute("aria-label", `${phaseLabels[phase]}: ${done ? "Completed" : active ? "In progress" : "Pending"}`);
+    item.classList.toggle("failed", failed);
+    let result = stepFailures.get(item);
+    if (!result) { result = document.createElement("strong"); result.textContent = "Failed"; item.append(result); stepFailures.set(item, result); }
+    result.hidden = !failed;
+    item.setAttribute("aria-label", `${phaseLabels[phase]}: ${failed ? "Failed" : done ? "Completed" : active ? "In progress" : "Pending"}`);
     if (active) item.setAttribute("aria-current", "step"); else item.removeAttribute("aria-current");
   }
 }
@@ -227,12 +253,30 @@ function offerRecoveryBackup(value: unknown) {
 }
 function failure(error: unknown) {
   const notice = el("notice"); notice.hidden = false;
-  notice.textContent = error instanceof Error ? error.message : "Verification or deployment stopped. No unverified fallback was used.";
+  const step = activePhase ? phaseLabels[activePhase] : "Check deployment inputs and stack access";
+  const reason = error instanceof UserFacingError || error instanceof RegistrySourceError ? error.message.slice(0, 600) : attestationRejected(error) ?
+    "The requested confidential VM's attestation was rejected by the approved policy." :
+    "This operation could not be confirmed. A network, verification or local browser operation failed.";
+  // finalClaimed is durably saved before the first resource write. It is a
+  // conservative recovery boundary; provisioned=false never proves zero writes.
+  const keys = owner.provisioned ? "Saved checkpoint: keys were delivered to your enrolled VM. Current startup still needs verification." :
+    keyDeliveryStarted || owner.finalClaimed || owner.restored ? "Some keys may already have reached the verified enrolled VM. Key delivery is not fully confirmed." :
+    "No image or disk keys were sent during this attempt.";
+  const saved = owner.prepared || completed.has("encrypting") ? "Your encrypted image and release checkpoint are saved. Retrying this same approved release needs no image re-upload. " : "";
+  const retry = error instanceof UserFacingError && error.kind === "attestation" ?
+    "Have the administrator compare the launch configuration with the approved measurements. Retry only if the original approved configuration is restored. A measured configuration change requires a fresh explicitly approved release. Keep the approved policy and existing instance pins." :
+    error instanceof UserFacingError && error.kind === "owner-auth" ? "Restore the owner recovery backup for this release, then use Verify again & refresh status." :
+    error instanceof UserFacingError && error.kind === "instance" ? "Reconnect to the original enrolled VM and use its matching owner recovery backup. A replacement requires a fresh explicitly approved release and enrollment; do not adopt a new instance pin." :
+    owner.prepared ? "Use Verify again & refresh status to retry this saved release; existing enrollment is preserved." :
+    "Check the selected inputs and connection, then retry Encrypt & deploy.";
+  notice.textContent = `Failed step: ${step}\nReason: ${reason}\nKeys: ${keys}\nNext: ${retry}`;
+  notice.setAttribute("style", "white-space: pre-line");
+  text("job-description", saved + "Review the failed step, key status and next action below before retrying.");
   const deploymentInputs = el<HTMLFieldSetElement>("deployment-inputs");
-  if (deploymentInputs.disabled && !completed.has("ready")) text("job-title", "Deployment paused");
+  text("job-title", activePhase ? `${phaseLabels[activePhase]} — stopped` : "Deployment checks stopped");
   busy = false; input("deploy").disabled = !connected || !!owner.prepared;
   deploymentInputs.disabled = false;
-  activePhase = undefined; renderSteps();
+  failedPhase = activePhase; activePhase = undefined; renderSteps();
   if (currentReadiness) staleReadiness();
   else if (readinessChecking) {
     text("readiness-title", "Readiness check stopped");
@@ -247,7 +291,7 @@ function failure(error: unknown) {
 async function request(channel: AttestedChannel, path: string, method = "GET", body?: BodyInit, audience = "nebula-browser", headers: Record<string, string> = {}) {
   const response = await channel.request(path, { method, headers: { "Content-Type": "application/json", ...headers,
     Authorization: `Bearer ${await api.jwt(audience)}` }, ...(body !== undefined ? { body } : {}) });
-  if (response.status < 200 || response.status >= 300) throw new Error(`The attested service refused ${path} (${response.status}). Existing enrollment was preserved.`);
+  if (response.status < 200 || response.status >= 300) throw new UserFacingError(`The attested service refused ${path} (${response.status}). Existing enrollment was preserved.`);
   return response;
 }
 async function metadata(method = "GET", claim = false, ownerOnly = false) {
@@ -258,14 +302,14 @@ async function metadata(method = "GET", claim = false, ownerOnly = false) {
     ...(claim ? { body: JSON.stringify({ ownerPublicKeyPem: owner.publicKeyPem, proof: await api.jwt(audience, true) }) } : {}),
   });
   if (response.status === 403 && !ownerOnly) return metadata(method, claim, true);
-  if (response.status !== 200) throw new Error("The stack metadata could not be authenticated");
+  if (response.status !== 200) throw new UserFacingError("The stack metadata could not be authenticated");
   return claim ? undefined : await response.json();
 }
 async function connect() {
   evidence();
   const bootstrap = await (await api.channel.request("/nebula/v1/browser")).json();
-  if (bootstrap.imageEncryption?.protocol !== "oci-encrypted-v2" || bootstrap.imageEncryption.location !== "owner-browser" || bootstrap.imageEncryption.preparationReceivesImageKey !== false) throw new Error("This preparation service does not support browser-only image encryption");
-  if (bootstrap.finalEnrollmentJournal !== 1) throw new Error("This preparation release does not support safe resumable final-instance enrollment");
+  if (bootstrap.imageEncryption?.protocol !== "oci-encrypted-v2" || bootstrap.imageEncryption.location !== "owner-browser" || bootstrap.imageEncryption.preparationReceivesImageKey !== false) throw new UserFacingError("This preparation service does not support browser-only image encryption");
+  if (bootstrap.finalEnrollmentJournal !== 1) throw new UserFacingError("This preparation release does not support safe resumable final-instance enrollment");
   imageLimits = checkedImageUploadLimits(bootstrap.imageUpload);
   evidence();
   text("archive-hint", `Choose a local linux/amd64 Docker save archive, up to ${imageSizeLabel(imageLimits.maxBytes)}. Your browser encrypts its layers before upload. Only ciphertext leaves your computer; standard OCI configuration metadata remains readable.`);
@@ -273,23 +317,23 @@ async function connect() {
     if (bootstrap.claimed) {
       await request(api.channel, "/nebula/v1/job"); // proves the persisted owner, or fails closed
     }
-    if (!bootstrap.claimed && await hash(Uint8Array.from((owner.token ?? "").match(/../g) ?? [], (h: any) => parseInt(h, 16))) !== bootstrap.claimSha256) throw new Error("The invitation does not match the attested VM");
+    if (!bootstrap.claimed && await hash(Uint8Array.from((owner.token ?? "").match(/../g) ?? [], (h: any) => parseInt(h, 16))) !== bootstrap.claimSha256) throw new UserFacingError("The invitation does not match the attested VM");
     // Persist the exact instance and owner before claiming, so a reload cannot
     // silently generate another owner or adopt a replacement instance.
     await api.save();
     if (!bootstrap.claimed) await request(api.channel, "/nebula/v1/claim", "POST", JSON.stringify({ token: owner.token, ownerPublicKeyPem: owner.publicKeyPem }));
     const found = await metadata();
     connection = found.connection;
-    if (!connection) throw new Error("Stack settings are unavailable");
+    if (!connection) throw new UserFacingError("Stack settings are unavailable");
     const savedConnection = await api.channel.request("/nebula/v1/connection", { headers: { Authorization: `Bearer ${await api.jwt("nebula-browser")}` } });
     if (savedConnection.status === 404) await request(api.channel, "/nebula/v1/connection", "POST", JSON.stringify(connection));
-    else if (savedConnection.status !== 200 || JSON.stringify(await savedConnection.json()) !== JSON.stringify(connection)) throw new Error("The preparation release differs from discovery");
+    else if (savedConnection.status !== 200 || JSON.stringify(await savedConnection.json()) !== JSON.stringify(connection)) throw new UserFacingError("The preparation release differs from discovery");
     await metadata("POST", true);
     owner.connection = connection; await api.save();
   }
   connection = owner.connection;
   const actual = await (await request(api.channel, "/nebula/v1/connection")).json();
-  if (JSON.stringify(actual) !== JSON.stringify(connection)) throw new Error("Stored and attested release settings disagree");
+  if (JSON.stringify(actual) !== JSON.stringify(connection)) throw new UserFacingError("Stored and attested release settings disagree");
   text("connection-status", "You own this attested preparation instance. Future operations require your browser’s owner signature.");
   text("stack-name", "Deployment: " + connection.workload.metadata.name);
   text("destination", "Image storage: managed by this stack");
@@ -346,13 +390,13 @@ async function connect() {
   text("private-files-hint", "New disk keys are generated automatically in your browser. Supply any requested existing disk keys and private application resources separately. Resource IDs identify Trustee entries; granted containers read them through a private socket, not an automatically mounted file. Source-registry credentials and source-image decryption keys are separate.");
   const currentJob = await (await request(api.channel, "/nebula/v1/job")).json();
   if (currentJob.state === "ready" && !owner.prepared) {
-    if (!owner.imageKey) throw new Error("Restore the encrypted backup containing this release image key before resuming");
+    if (!owner.imageKey) throw new UserFacingError("Restore the encrypted backup containing this release image key before resuming");
     if (!owner.encryptedImage) {
       const recovery = await (await request(api.channel, "/nebula/v1/image")).json();
-      if (recovery.manifestDigest !== currentJob.result.digest) throw new Error("The encrypted recovery metadata differs from the prepared release");
+      if (recovery.manifestDigest !== currentJob.result.digest) throw new UserFacingError("The encrypted recovery metadata differs from the prepared release");
       owner.encryptedImage = { id: "nebula-cipher-" + crypto.randomUUID(), manifestDigest: recovery.manifestDigest, recovery };
     }
-    if (currentJob.result.digest !== owner.encryptedImage.manifestDigest) throw new Error("The prepared image does not match your saved browser-encrypted release");
+    if (currentJob.result.digest !== owner.encryptedImage.manifestDigest) throw new UserFacingError("The prepared image does not match your saved browser-encrypted release");
     owner.prepared = currentJob.result; await api.save();
   }
   connected = true;
@@ -384,14 +428,14 @@ async function connect() {
 }
 function progress(phase: Phase, title: string) {
   text("job-title", title);
-  activePhase = phase; completed.delete(phase); renderSteps();
+  failedPhase = undefined; activePhase = phase; completed.delete(phase); renderSteps();
 }
 async function approveApplication() {
   if (!owner.applicationApproval) {
-    if (!input("reviewed").checked) throw new Error("Review and approve the full application command, arguments, environment and storage contract first");
+    if (!input("reviewed").checked) throw new UserFacingError("Review and approve the full application command, arguments, environment and storage contract first");
     const contract = applicationContract(connection);
     if (contract.containers.some(container => container.execution.source === "override" || Object.keys(container.env).length > 0) && !input("approve-overrides").checked) {
-      throw new Error("This stack requests explicit command or environment overrides. Approve those exact displayed values separately, or use a stack with image defaults.");
+      throw new UserFacingError("This stack requests explicit command or environment overrides. Approve those exact displayed values separately, or use a stack with image defaults.");
     }
     owner.applicationApproval = contract; await api.save();
   }
@@ -400,19 +444,20 @@ async function approveApplication() {
 function requireManagedImageStore() {
   const store = connection.workload.spec.imageStore;
   if (!store || typeof store.endpoint !== "string" || typeof store.writeEndpoint !== "string" || typeof store.repository !== "string") {
-    throw new Error("This stack does not provide managed image storage. Ask its administrator for a stack using the built-in image store.");
+    throw new UserFacingError("This stack does not provide managed image storage. Ask its administrator for a stack using the built-in image store.");
   }
 }
 async function finalConnection() {
-  progress(owner.finalPin ? "attesting" : "waiting", owner.finalPin ? "Verifying your enrolled confidential workload…" : "Waiting for your confidential workload…");
+  progress(owner.finalPin ? "attesting" : "waiting", owner.finalPin ? "Verifying your enrolled confidential workload…" : "Waiting for the final VM and approved attestation…");
+  text("job-description", "The final VM must respond and pass the approved attestation policy before enrollment or key delivery. A running VM alone does not finish this step.");
   await approveApplication();
   const prepared = owner.prepared;
   const enrollmentResponse = await api.channel.request("/nebula/v1/enrollment", { headers: { Authorization: `Bearer ${await api.jwt("nebula-browser")}` } });
-  if (enrollmentResponse.status !== 200 && enrollmentResponse.status !== 404) throw new Error("The attested preparation enrollment journal is unavailable");
+  if (enrollmentResponse.status !== 200 && enrollmentResponse.status !== 404) throw new UserFacingError("The attested preparation enrollment journal is unavailable");
   const enrollment = enrollmentResponse.status === 404 ? undefined : await enrollmentResponse.json();
-  if (enrollment && (enrollment.version !== 1 || enrollment.manifestDigest !== prepared.digest || !/^[a-f0-9]{64}$/.test(enrollment.transportPublicKey))) throw new Error("The preparation enrollment checkpoint differs from this release");
-  if (owner.finalPin && enrollment && owner.finalPin !== enrollment.transportPublicKey) throw new Error("The saved final pin differs from the attested preparation journal");
-  if (!enrollment && !owner.finalPin && owner.restored && owner.enrollmentJournalVersion !== 1) throw new Error("This older recovery file predates final instance enrollment. Restore the updated backup; no replacement instance was adopted.");
+  if (enrollment && (enrollment.version !== 1 || enrollment.manifestDigest !== prepared.digest || !/^[a-f0-9]{64}$/.test(enrollment.transportPublicKey))) throw new UserFacingError("The preparation enrollment checkpoint differs from this release");
+  if (owner.finalPin && enrollment && owner.finalPin !== enrollment.transportPublicKey) throw new UserFacingError("The saved final pin differs from the attested preparation journal", "instance");
+  if (!enrollment && !owner.finalPin && owner.restored && owner.enrollmentJournalVersion !== 1) throw new UserFacingError("This older recovery file predates final instance enrollment. Restore the updated backup; no replacement instance was adopted.");
   const expectedPin = owner.finalPin ?? enrollment?.transportPublicKey;
   const origin = connection.browserEndpoint ?? `${api.target.startsWith("https:") ? "https:" : "http:"}//${connection.endpoint.host}:${connection.endpoint.port}`;
   final = api.finalChannel(origin, prepared.identity, expectedPin);
@@ -420,11 +465,14 @@ async function finalConnection() {
   while (true) {
     try {
       const response = await final!.request("/nebula/v1/instance", { headers: { Authorization: `Bearer ${await api.jwt(prepared.audience)}` } });
-      if (response.status !== 200) throw new Error("Owner authentication failed");
+      if (response.status === 401 || response.status === 403) throw new UserFacingError(`The verified final VM refused the owner instance check (HTTP ${response.status}).`, "owner-auth");
+      if (response.status !== 200) throw new Error("Final instance response is temporarily unavailable");
       break;
     } catch (error) {
-      if (expectedPin) throw error;
-      if (Date.now() >= deadline) throw new Error("Your encrypted image and release checkpoint are saved. The final confidential workload is not reachable yet; use Verify again & check status to retry. No keys were sent to an unverified instance.");
+      if (error instanceof UserFacingError && error.kind === "owner-auth") throw error;
+      if (attestationRejected(error)) throw new UserFacingError("The final VM responded, but its attestation was rejected by the approved policy. Enrollment and key delivery were stopped.", "attestation");
+      if (expectedPin || errorMessage(error) === "Verified instance key is missing or changed") throw new UserFacingError("The saved final instance could not be verified. Its approved identity and enrolled key must match; no replacement instance was adopted.", "instance");
+      if (Date.now() >= deadline) throw new UserFacingError("The final VM is unreachable or has not provided approved attestation before the timeout. Enrollment and key delivery could not continue.", "final-timeout");
       await sleep(4000);
     }
   }
@@ -433,13 +481,13 @@ async function finalConnection() {
   if (!enrollment) {
     const committed = await (await request(api.channel, "/nebula/v1/enrollment", "POST", JSON.stringify({
       version: 1, manifestDigest: prepared.digest, transportPublicKey: final!.pin }))).json();
-    if (committed.manifestDigest !== prepared.digest || committed.transportPublicKey !== final!.pin) throw new Error("Final instance enrollment was not committed by the pinned preparation VM");
+    if (committed.manifestDigest !== prepared.digest || committed.transportPublicKey !== final!.pin) throw new UserFacingError("Final instance enrollment was not committed by the pinned preparation VM");
   }
   if (!owner.finalPin) { owner.finalPin = final!.pin; await api.save(); }
   if (!owner.finalClaimed) {
     const claimed = await final!.request("/nebula/v1/claim", { method: "POST", headers: { Authorization: `Bearer ${await api.jwt(prepared.audience)}` },
       body: JSON.stringify({ token: owner.token, ownerPublicKeyPem: owner.publicKeyPem }) });
-    if (claimed.status !== 200 && claimed.status !== 409) throw new Error("Final instance claim was refused; no keys were sent");
+    if (claimed.status !== 200 && claimed.status !== 409) throw new UserFacingError("Final instance claim was refused; no keys were sent");
     await request(final!, "/kbs/v0/resource-policy", "GET", undefined, prepared.audience);
     owner.finalClaimed = true; delete owner.token; await api.save();
   }
@@ -457,6 +505,7 @@ async function provision() {
   await request(channel, "/kbs/v0/resource-policy", "POST", JSON.stringify({ policy: encode(prepared.policies.resourcePolicy) }), prepared.audience);
   const put = async (path: string[], key: string) => {
     const raw = Uint8Array.from(key.match(/../g)!, h => parseInt(h, 16));
+    keyDeliveryStarted = true;
     try { await request(channel, "/kbs/v0/resource/" + path.join("/"), "POST", raw as BodyInit, prepared.audience); }
     finally { raw.fill(0); }
   };
@@ -493,10 +542,10 @@ async function inspect() {
       text("supervisor-status", "This release has no supervisor report. Bootstrap readiness does not prove application health.");
       clientsRunning = true;
     } else if (helperResponse.status === 503) text("supervisor-status", "Supervisor status is temporarily unavailable; startup cannot be reported complete.");
-    else throw new Error("Owner-authenticated supervisor status is unavailable");
+    else throw new UserFacingError("Owner-authenticated supervisor status is unavailable");
     const summary = showReadiness(status, report, source);
     if (clientsRunning && summary.data.ready) break;
-    if (Date.now() >= deadline) throw new Error("Keys reached the verified VM. Startup is still pending; use Verify again for status.");
+    if (Date.now() >= deadline) throw new UserFacingError("Keys reached the verified VM. Startup is still pending; use Verify again for status.");
     await sleep(4000);
   }
   complete("ready");
@@ -515,12 +564,12 @@ el("deploy-form").addEventListener("submit", event => {
   void (async () => {
     const archive = input("archive").files?.[0], registryMode = sourceMode() === "registry";
     if (!registryMode && (!archive || !archive.size || archive.size > imageLimits.maxBytes)) {
-      throw new Error(`Choose one nonempty local image archive up to ${imageSizeLabel(imageLimits.maxBytes)}`);
+      throw new UserFacingError(`Choose one nonempty local image archive up to ${imageSizeLabel(imageLimits.maxBytes)}`);
     }
     if (registryMode) {
       registryReference(input("source-reference").value);
-      if (!input("source-reviewed").checked) throw new Error("Review and approve the source registry and token-service hostname first");
-      if (input("source-image-key").value && input("source-recovery").files?.length) throw new Error("Choose a source image key or its old recovery file, not both");
+      if (!input("source-reviewed").checked) throw new UserFacingError("Review and approve the source registry and token-service hostname first");
+      if (input("source-image-key").value && input("source-recovery").files?.length) throw new UserFacingError("Choose a source image key or its old recovery file, not both");
     }
     await approveApplication();
     requireManagedImageStore();
@@ -528,17 +577,17 @@ el("deploy-form").addEventListener("submit", event => {
     for (const storage of connection.storages) if (storage.spec.type === "EncryptedBlock") {
       const selected = (document.getElementById("key-" + storage.metadata.name) as HTMLInputElement | null)?.files?.[0];
       if (!selected && owner.volumeKeys[storage.metadata.name]) continue;
-      if (storage.spec.initialization === "Never" && !selected) throw new Error("Provide the existing encrypted disk key");
+      if (storage.spec.initialization === "Never" && !selected) throw new UserFacingError("Provide the existing encrypted disk key");
       const raw = selected ? new Uint8Array(await selected.arrayBuffer()) : crypto.getRandomValues(new Uint8Array(32));
-      if (raw.length !== 32) throw new Error("Disk keys must contain exactly 32 bytes");
+      if (raw.length !== 32) throw new UserFacingError("Disk keys must contain exactly 32 bytes");
       owner.volumeKeys[storage.metadata.name] = hex(raw); raw.fill(0);
     }
     owner.resources ??= {};
     for (const field of el("resource-files").querySelectorAll<HTMLInputElement>("input")) {
       const path = field.id.slice("resource-".length), selected = field.files?.[0];
-      if (!selected && !owner.resources[path]) throw new Error(`Provide the private application resource ${path}`);
+      if (!selected && !owner.resources[path]) throw new UserFacingError(`Provide the private application resource ${path}`);
       if (selected) {
-        if (selected.size < 1 || selected.size > 2 * 1024 * 1024) throw new Error("Application resources must be at most 2 MiB");
+        if (selected.size < 1 || selected.size > 2 * 1024 * 1024) throw new UserFacingError("Application resources must be at most 2 MiB");
         const raw = new Uint8Array(await selected.arrayBuffer());
         owner.resources[path] = b64(raw); raw.fill(0);
       }
@@ -566,7 +615,7 @@ el("deploy-form").addEventListener("submit", event => {
       try {
         const oldRecovery = input("source-recovery").files?.[0];
         if (oldRecovery) {
-          if (oldRecovery.size > 16 * 1024 * 1024) throw new Error("The source recovery file is too large");
+          if (oldRecovery.size > 16 * 1024 * 1024) throw new UserFacingError("The source recovery file is too large");
           sourceKey = await sourceKeyFromRecovery(await oldRecovery.text(), input("source-recovery-password").value);
         } else if (input("source-image-key").value) sourceKey = sourceImageKey(input("source-image-key").value);
         for (const field of ["source-password", "source-bearer", "source-image-key", "source-recovery-password"]) input(field).value = "";
@@ -577,7 +626,7 @@ el("deploy-form").addEventListener("submit", event => {
         for (const field of ["source-password", "source-bearer", "source-image-key", "source-recovery-password"]) input(field).value = "";
       }
     } else {
-      if (owner.encryptedImage?.source) throw new Error("Select the original registry source to resume this encrypted release");
+      if (owner.encryptedImage?.source) throw new UserFacingError("Select the original registry source to resume this encrypted release");
       local = await prepareLocalImage(archive!, owner.imageKey, keyId, imageLimits, owner.encryptedImage, encryptionProgress, owner.cipherCacheAttempt);
     }
     owner.encryptedImage = local.cache; delete owner.cipherCacheAttempt; await api.save();
@@ -590,15 +639,15 @@ el("deploy-form").addEventListener("submit", event => {
       applicationApproval: owner.applicationApproval }));
     const deadline = Date.now() + imageLimits.jobTimeoutMs;
     while (true) {
-      if (Date.now() >= deadline) throw new Error("Preparation is still pending. Your keys and release checkpoint were preserved.");
+      if (Date.now() >= deadline) throw new UserFacingError("Preparation is still pending. Your keys and release checkpoint were preserved.");
       await sleep(3000);
       const job = await (await request(api.channel, "/nebula/v1/job")).json();
       if (job.phase === "measuring" && job.state !== "ready") {
         complete("encrypting"); progress("measuring", "Compiling native genpolicy independently…");
       }
-      if (job.state === "failed") throw new Error(`Preparation stopped during ${job.phase ?? "publication"}: ${job.error ?? "native publication or policy generation failed"}`);
+      if (job.state === "failed") throw new UserFacingError(job.phase === "measuring" ? "Native preparation failure: the approved workload policy could not be prepared." : "Native preparation failure: encrypted publication did not finish.");
       if (job.state === "ready") {
-        if (job.result.digest !== local.image.manifestDigest) throw new Error("Published image differs from your browser-encrypted release");
+        if (job.result.digest !== local.image.manifestDigest) throw new UserFacingError("Published image differs from your browser-encrypted release");
         owner.prepared = job.result; await api.save();
         releaseControls();
         complete("encrypting", "measuring");
