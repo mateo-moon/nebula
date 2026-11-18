@@ -33,6 +33,8 @@ export class ConfidentialPublicAddress extends BaseConstruct<ConfidentialPublicA
     const runtime = { namespace: config.namespace, nodeName: config.nodeName, workloadName: config.workloadName,
       profile: config.profile, ipAddress: config.ipAddress, podCidr: config.podCidr, table: this.tableName };
     validatePublicAddressConfig(runtime);
+    const runtimeSource = readFileSync(new URL("./public-address-runtime.ts", import.meta.url), "utf8") +
+      '\nrunPublicAddress(JSON.parse(process.argv[2] ?? "null")).catch(() => { console.error("Confidential public address routing stopped"); process.exitCode = 1; });\n';
     const metadata = { name: config.name, namespace: config.namespace };
     new ApiObject(this, "service-account", { apiVersion: "v1", kind: "ServiceAccount", metadata, automountServiceAccountToken: false });
     new ApiObject(this, "role", { apiVersion: "rbac.authorization.k8s.io/v1", kind: "Role", metadata,
@@ -41,11 +43,11 @@ export class ConfidentialPublicAddress extends BaseConstruct<ConfidentialPublicA
       subjects: [{ kind: "ServiceAccount", name: config.name, namespace: config.namespace }],
       roleRef: { apiGroup: "rbac.authorization.k8s.io", kind: "Role", name: config.name } });
     new ApiObject(this, "runtime", { apiVersion: "v1", kind: "ConfigMap", metadata,
-      data: { "runtime.ts": readFileSync(new URL("./public-address-runtime.ts", import.meta.url), "utf8") +
-        '\nrunPublicAddress(JSON.parse(process.argv[2] ?? "null")).catch(() => { console.error("Confidential public address routing stopped"); process.exitCode = 1; });\n' } });
+      data: { "runtime.ts": runtimeSource } });
     new ApiObject(this, "deployment", { apiVersion: "apps/v1", kind: "Deployment", metadata,
       spec: { replicas: 1, strategy: { type: "Recreate" }, selector: { matchLabels: { app: config.name } },
-        template: { metadata: { labels: { app: config.name } }, spec: {
+        template: { metadata: { labels: { app: config.name },
+          annotations: { "checksum/runtime": createHash("sha256").update(runtimeSource).digest("hex") } }, spec: {
           nodeName: config.nodeName, hostNetwork: true, dnsPolicy: "ClusterFirstWithHostNet", serviceAccountName: config.name,
           automountServiceAccountToken: false, enableServiceLinks: false, terminationGracePeriodSeconds: 20,
           containers: [{ name: "routing", image: config.image, command: ["node", "--disable-sigusr1", "/app/public-address/runtime.ts"], args: [JSON.stringify(runtime)],

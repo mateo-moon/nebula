@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { EventEmitter } from "node:events";
+import { readFileSync } from "node:fs";
+import { isIPv4 } from "node:net";
+import { runInNewContext } from "node:vm";
 import { test } from "node:test";
+import ts from "typescript";
 import { Testing } from "cdk8s";
 import { ConfidentialPublicAddress } from "../src/modules/k8s/confidential-workloads/public-address";
 import { inPodCidr, publicAddressRules, selectPublicAddressTarget, validatePublicAddressConfig,
@@ -79,10 +85,50 @@ test("host routing has namespace-only Pod credentials, no host mounts and no gue
     [{ apiGroups: [""], resources: ["pods"], verbs: ["get", "list"] }]);
   assert.equal(objects.some(object => object.kind.startsWith("ClusterRole")), false);
   const runtime = JSON.parse(container.args[0]); assert.equal(runtime.table, address.tableName);
+  const source = objects.find(object => object.kind === "ConfigMap")!.data["runtime.ts"];
+  assert.equal(deployment.spec.template.metadata.annotations["checksum/runtime"], createHash("sha256").update(source).digest("hex"),
+    "Changing the mounted runtime must change the Pod template so Argo rolls out the new process");
   const policy = objects.find(object => object.kind === "NetworkPolicy")!;
   assert.deepEqual(policy.spec.podSelector.matchLabels, { "confidential.nebula.dev/workload": config.workloadName,
     "confidential.nebula.dev/profile": config.profile });
   assert.deepEqual(policy.spec.ingress, [{}]); assert.deepEqual(policy.spec.egress, [{}]);
+});
+
+test("a slow-drip API response reaches an absolute deadline and successful replies clear it", async () => {
+  const source = readFileSync(new URL("../src/modules/k8s/confidential-workloads/public-address-runtime.ts", import.meta.url), "utf8");
+  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const timers = new Map<number, { callback: () => void; delay: number }>(); let sequence = 0;
+  let response!: EventEmitter & { statusCode: number }, request!: EventEmitter & { end(): void; destroy(error: Error): void };
+  const exports: any = {};
+  runInNewContext(compiled + "\nexports.queryPods = listPods;", {
+    exports, Buffer, URL, encodeURIComponent,
+    setTimeout(callback: () => void, delay: number) { const id = ++sequence; timers.set(id, { callback, delay }); return id; },
+    clearTimeout(id: number) { timers.delete(id); },
+    require(name: string) {
+      if (name === "node:fs") return { readFileSync: (_path: string, encoding?: string) => encoding ? "test-only API fixture" : Buffer.from("test-only public API fixture") };
+      if (name === "node:net") return { isIPv4 };
+      if (name === "node:child_process" || name === "node:os") return {};
+      assert.equal(name, "node:https");
+      return { request(_options: unknown, onResponse: (response: EventEmitter) => void) {
+        response = Object.assign(new EventEmitter(), { statusCode: 200 });
+        request = Object.assign(new EventEmitter(), { end: () => onResponse(response), destroy: (error: Error) => { request.emit("error", error); } });
+        return request;
+      } };
+    },
+  });
+  const pending = exports.queryPods(config);
+  assert.equal(timers.size, 1);
+  for (let count = 0; count < 100; count++) response.emit("data", Buffer.from(" "));
+  assert.equal(timers.size, 1, "Continuous body data must not reset the absolute deadline");
+  const timer = [...timers.values()][0]; assert.equal(timer.delay, 10_000);
+  timer.callback();
+  await assert.rejects(pending, /exceeded its deadline/);
+  assert.equal(timers.size, 0);
+
+  const complete = exports.queryPods(config);
+  response.emit("data", Buffer.from('{"items":[]}')); response.emit("end");
+  assert.equal((await complete).length, 0);
+  assert.equal(timers.size, 0, "A completed response must not leave an abort timer behind");
 });
 
 // An isolated Docker network namespace exercises Linux's actual nft parser and

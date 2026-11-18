@@ -92,23 +92,29 @@ async function listPods(config: PublicAddressRuntimeConfig): Promise<Pod[]> {
   const selector = `confidential.nebula.dev/workload=${config.workloadName},confidential.nebula.dev/profile=${config.profile}`;
   const path = `/api/v1/namespaces/${config.namespace}/pods?labelSelector=${encodeURIComponent(selector)}&fieldSelector=${encodeURIComponent(`spec.nodeName=${config.nodeName}`)}`;
   return new Promise((resolve, reject) => {
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    const fail = (error: unknown) => { clearTimeout(deadline); reject(error); };
     const req = request({ hostname: "kubernetes.default.svc", port: 443, path,
       ca: readFileSync("/run/kubernetes/ca.crt"), headers: { Authorization: `Bearer ${readFileSync("/run/kubernetes/token", "utf8").trim()}` },
       timeout: 10_000 }, response => {
       const data: Buffer[] = []; let length = 0;
       response.on("data", chunk => { length += chunk.length; if (length > 2 * 1024 * 1024) req.destroy(new Error("Pod list exceeds its limit")); else data.push(chunk); });
-      response.on("error", reject);
+      response.on("error", fail);
       response.on("end", () => {
         try {
           if (response.statusCode !== 200) throw new Error("Pod list is unavailable");
           const value = JSON.parse(Buffer.concat(data).toString("utf8"));
           if (!Array.isArray(value.items) || value.items.length > 128) throw new Error("Invalid Pod list");
+          clearTimeout(deadline);
           resolve(value.items);
-        } catch (error) { reject(error); }
+        } catch (error) { fail(error); }
       });
     });
+    // A socket idle timeout alone can be kept alive by a slow response. Bound
+    // the entire request so uncertainty cannot retain an old route indefinitely.
+    deadline = setTimeout(() => req.destroy(new Error("Pod list exceeded its deadline")), 10_000);
     req.on("timeout", () => req.destroy(new Error("Pod list timed out")));
-    req.on("error", reject); req.end();
+    req.on("error", fail); req.end();
   });
 }
 
