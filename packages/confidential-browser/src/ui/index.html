@@ -53,8 +53,8 @@
         <label for="recovery-password">Password for your recovery backup</label><input id="recovery-password" type="password" minlength="12" autocomplete="new-password" required>
         <p class="hint">Use at least 12 characters. The encrypted backup contains your owner and encryption keys, not disk contents or your image archive. Keep the retained disks, original archive, latest backup and its password.</p>
         </div>
-        <div class="application-review"><h3 id="application-review-title">Review how your application will run</h3>
-          <p class="hint">These are the settings configured by the stack. A container's identifier does not identify its software. Your selected image supplies the application; live startup and data readiness are checked after deployment.</p>
+        <div class="application-review"><h3 id="application-review-title">Stack runtime settings</h3>
+          <p class="hint">Settings applied by this stack, including any explicit command or environment overrides.</p>
           <div id="application-summary"></div>
           <details><summary>Exact application settings to approve</summary><p class="hint">These settings include command, arguments, environment, mounts, resources and network. Runtime attestation does not decide whether an application is suitable for your data.</p><pre id="application-contract"></pre></details>
         </div>

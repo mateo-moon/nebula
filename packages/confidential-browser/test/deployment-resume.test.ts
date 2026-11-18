@@ -18,6 +18,7 @@ async function deployment(restored = false, rejectedConnection = false, options:
   supervisorPhase?: "starting" | "running" | "backoff" | "stopped";
   manualTls?: Record<string, unknown>; attestationFixtures?: boolean; missingImageStore?: boolean; registrySource?: boolean;
   autoSubmit?: boolean; privateFile?: boolean; approvalSave?: Promise<void>;
+  configureApplication?: (containers: any[]) => void;
 } = {}) {
   const blobs = new Map<string, Blob>(), activeUrls = new Set<string>();
   const anchorClicks: { href: string; download: string; connected: boolean }[] = [];
@@ -99,6 +100,7 @@ async function deployment(restored = false, rejectedConnection = false, options:
         spec: { type: "EncryptedBlock", sizeBytes: 67108864, retention: "Retain", initialization: "IfEmpty", keyResource: ["default", "volume", name] } })),
       { metadata: { name: "memory-store", namespace: "qualified" }, spec: { type: "Memory", sizeLimit: "32Mi" } },
     ] };
+  options.configureApplication?.(connection.workload.spec.containers);
   const prepared = { digest: "sha256:" + "d".repeat(64), identity: {}, audience: "final-test", imageKeyResource: ["default", "image", "app"],
     policies: { attestationPolicy: "test attestation policy", resourcePolicy: "test resource policy" } };
   const owner: any = { connection, imageKey: "9".repeat(64), token: "8".repeat(64), restored,
@@ -218,14 +220,14 @@ test("rejected stack settings keep image encryption and publication disabled", a
   assert.deepEqual(ui.active(), []);
 });
 
-test("application review explains the image, container identity and configured access before approval", async () => {
+test("runtime review shows configured access without unknown application identity or startup placeholders", async () => {
   const ui = await deployment(false, false, { autoSubmit: false });
   const summary = () => ui.el("application-summary").textContent;
-  assert.match(summary(), /Your application container/);
-  assert.match(summary(), /Container identifier: app\..*not the name of the software/);
-  assert.match(summary(), /test-image\.tar \(local archive; not inspected yet\)/);
+  assert.equal(ui.el("application-review-title").textContent, "Stack runtime settings");
+  assert.equal(ui.el("application-summary").querySelectorAll("h4").length, 0);
+  assert.doesNotMatch(summary(), /Container identifier|Your application container|Image to run|ENTRYPOINT|CMD|Startup command|Command override|Argument override/);
+  assert.doesNotMatch(summary(), /test-image\.tar/);
   assert.doesNotMatch(summary(), /images\.qualified\.svc/);
-  assert.match(summary(), /ENTRYPOINT and CMD.*No command override/);
   assert.match(summary(), /\/data — encrypted disk “data” \(64 MiB\)/);
   assert.match(summary(), /\/scratch — temporary memory “scratch” \(32 MiB\)/);
   assert.match(summary(), /No private application files granted/);
@@ -233,30 +235,17 @@ test("application review explains the image, container identity and configured a
   assert.match(summary(), /Linux user 11000, group 11000 \(non-root user\)/);
   assert.equal(ui.counts().publishes, 0);
   assert.equal(ui.counts().keyWrites, 0);
-
-  ui.el("archive-selection").children[1].click();
-  assert.match(summary(), /Choose a local image archive above/);
-  assert.doesNotMatch(summary(), /test-image\.tar/);
-  ui.el("image-source").value = "registry";
-  ui.el("source-reference").value = "registry.example.test/user/software:v2";
-  ui.el("deploy-form").listeners.get("change")!({ preventDefault() {} });
-  assert.match(summary(), /Registry source: registry\.example\.test\/user\/software:v2 \(not inspected yet\)/);
-  ui.el("source-reference").value = "registry.example.test/user/software:v3";
-  ui.el("source-reference").listeners.get("input")!({ preventDefault() {} });
-  assert.match(summary(), /software:v3/);
-  assert.doesNotMatch(summary(), /software:v2/);
 });
 
 test("application review exposes exact overrides and private access without confusing additional containers", async () => {
-  const ui = await deployment(false, false, { autoSubmit: false, privateFile: true });
-  const containers = ui.owner.connection.workload.spec.containers;
-  Object.assign(containers[0], {
-    command: ["/bin/server"], args: ["--message", "<img src=x onerror=alert(1)>"], env: { MODE: "private" },
-    applicationResources: [["default", "config", "app"]], ports: [{ name: "http", port: 8080 }],
-    resources: { requests: { cpu: "1", memory: "512Mi" }, limits: { cpu: "2", memory: "1Gi" } },
-  });
-  containers.push({ name: "helper", image: "helper.example.test/pinned@sha256:" + "f".repeat(64), uid: 0, gid: 0 });
-  ui.el("deploy-form").listeners.get("change")!({ preventDefault() {} });
+  const ui = await deployment(false, false, { autoSubmit: false, privateFile: true, configureApplication: containers => {
+    Object.assign(containers[0], {
+      command: ["/bin/server"], args: ["--message", "<img src=x onerror=alert(1)>"], env: { MODE: "private" },
+      applicationResources: [["default", "config", "app"]], ports: [{ name: "http", port: 8080 }],
+      resources: { requests: { cpu: "1", memory: "512Mi" }, limits: { cpu: "2", memory: "1Gi" } },
+    });
+    containers.push({ name: "helper", image: "helper.example.test/pinned@sha256:" + "f".repeat(64), uid: 0, gid: 0 });
+  } });
   const [application, helper] = ui.el("application-summary").children;
   assert.match(application.textContent, /Command override\["\/bin\/server"\]Argument override\["--message","<img src=x onerror=alert\(1\)>"\]/);
   assert.match(application.textContent, /Added to or replaces values from the image: \{"MODE":"private"\}/);
@@ -264,9 +253,8 @@ test("application review exposes exact overrides and private access without conf
   assert.match(application.textContent, /http: 8080/);
   assert.match(application.textContent, /Requests: \{"cpu":"1","memory":"512Mi"\}; limits: \{"cpu":"2","memory":"1Gi"\}/);
   assert.equal(application.querySelectorAll("img").length, 0);
-  assert.match(helper.textContent, /Additional container/);
-  assert.match(helper.textContent, /Container identifier: helper/);
-  assert.match(helper.textContent, /helper\.example\.test\/pinned@sha256:/);
+  assert.match(application.textContent, /Container: app/);
+  assert.match(helper.textContent, /Container: helper/);
   assert.match(helper.textContent, /Linux user 0, group 0 \(root user\)/);
   assert.doesNotMatch(helper.textContent, /test-image\.tar/);
 });
