@@ -1,4 +1,10 @@
-# Envoy TCP mutual TLS
+# Envoy
+
+## Kubernetes Gateway API
+
+`new EnvoyGateway(chart, "edge", { className: "edge" })` renders Envoy Gateway v1.10.0, its CRDs, and a GatewayClass using a ClusterIP data plane. Bind your Gateway to `gateway.gatewayClass.name` on the returned construct. Callers own their routes, certificates, network policies and external traffic publication. The default chart uses the official OCI manifest digest. For offline rendering, pass the official Helm archive as `chartArchive`. The module verifies its SHA-256 before rendering. Use server-side apply for the CRDs.
+
+## TCP mutual TLS
 
 `EnvoyTcpProxy` builds a sidecar container and inline bootstrap for a paired
 TCP channel. Add its `container` to the application Pod, provide certificate

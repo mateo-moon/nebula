@@ -2,6 +2,7 @@
  * Kubernetes modules for deploying common infrastructure components.
  */
 
+export { EnvoyGateway, type EnvoyGatewayConfig } from "./envoy/gateway";
 export { EnvoyTcpProxy, measuredFragments, measuredProxy } from "./envoy";
 export type { EnvoyTcpProxyConfig, EnvoyTcpRoute, EnvoyTlsFiles } from "./envoy";
 
