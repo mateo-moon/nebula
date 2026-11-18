@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -60,6 +61,31 @@ test("a failed render fails the comparison unless it already failed at base and 
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("goldens use the original stream even when a volatile rule masks the difference", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "nebula-render-golden-"));
+  try {
+    const baseYaml = configMap("a", { token: "base" });
+    const headYaml = configMap("a", { token: "head" });
+    const base = output(directory, "base", { one: { yaml: baseYaml } });
+    const head = output(directory, "head", { one: { yaml: headYaml } });
+    const volatile = path.join(directory, "volatile");
+    fs.writeFileSync(volatile, "one v1 ConfigMap default/a /data/token\n");
+    const sha = (s: string) => createHash("sha256").update(s).digest("hex");
+    const want = { stream_sha256: sha(headYaml), canonical_sha256: sha(JSON.stringify([
+      { apiVersion: "v1", data: { token: "head" }, kind: "ConfigMap", metadata: { name: "a", namespace: "default" } },
+    ])) };
+    const goldens = path.join(directory, "goldens.json");
+    fs.writeFileSync(goldens, JSON.stringify({ one: want }));
+    const result = renderDiff({ base, head, volatile, goldens });
+    assert.equal(result.pass, true);
+    assert.match(result.report, /base one: .* != golden/);
+    assert.match(result.report, /head one: .* == golden/);
+    assert.match(result.report, /2 masked/);
+    fs.writeFileSync(goldens, JSON.stringify({ one: { ...want, stream_sha256: sha(baseYaml) } }));
+    assert.equal(renderDiff({ base, head, volatile, goldens }).pass, false);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("the render environment carries tool locations and stated extras, not the caller's credentials", () => {
   const env = renderEnvironment({ PATH: "/usr/bin", HOME: "/home/r", AWS_SECRET_ACCESS_KEY: "leak", KUBECONFIG: "/k" },
     { bin: "/opt/bin", env: ["FIXTURE=a=b"] });
@@ -71,10 +97,14 @@ test("the library entry point runs when invoked through its node_modules link", 
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "nebula-render-entry-"));
   try {
     const entries = { "apps/one": { yaml: configMap("a", { x: "1" }) } };
-    const base = output(directory, "base", entries), head = output(directory, "head", entries);
+    const base = output(directory, "base", entries);
+    const head = output(directory, "head", { "apps/one": { yaml: configMap("a", { x: "2" }) } });
     const tool = path.join(__dirname, "..", "node_modules", "nebula-cdk8s", "src", "tools", "render.ts");
-    const report = execFileSync(process.execPath, ["--import", "tsx", tool, "diff", "--base", base, "--head", head], { encoding: "utf8" });
-    assert.match(report, /== differences \(0\)/);
+    const report = execFileSync(process.execPath, ["--import", "tsx", tool, "diff", "--base", base, "--head", head], {
+      encoding: "utf8", env: { ...process.env, TMPDIR: directory, TEMP: directory, TMP: directory },
+    });
+    assert.match(report, /== differences \(1\)/);
+    assert.deepEqual(fs.readdirSync(directory).filter(name => name.startsWith("render-diff-")), []);
     assert.match(report, /PASS/);
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
