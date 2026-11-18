@@ -65,8 +65,12 @@ for (const dryRun of [true, false]) {
         ...(dryRun ? ['--dry-run=client'] : [])]);
       assert.equal(existsSync(file!), false);
     }
-    assert.deepEqual(calls.filter(call => !call.file).map(call => call.args.slice(0, 2)), [
-      ['cluster-info'], ...(dryRun ? [] : [['get', 'crd'], ['get', 'deployments'], ['get', 'crd'], ['get', 'providers']]),
+    const trace = calls.map(call => call.file ? basename(call.file) : call.args.slice(0, 2).join(' '));
+    assert.deepEqual(trace, [
+      'cluster-info', 'phase1.yaml', ...(dryRun ? [] : ['get crd']),
+      'phase2.yaml', ...(dryRun ? [] : ['get deployments', 'get crd']),
+      'runtimeconfigs.yaml', 'providers.yaml', ...(dryRun ? [] : ['get providers']),
+      'providerconfigs.yaml', 'phase3.yaml', ...(dryRun ? [] : ['phase3.yaml']),
     ]);
   });
 }
