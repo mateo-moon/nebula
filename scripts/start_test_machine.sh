@@ -5,55 +5,39 @@ set -o errtrace     # Allow trap on ERR within functions and subshells
 set -o nounset      # Exit for any uninitialised variables
 
 error_handler() {
-  # Retrieve the last executed command and its exit status
-  local last_command="${BASH_COMMAND}"
-  local exit_code="$?"
+  local exit_code="$1" last_command="$2" line="$3"
+  printf "Command '%s' failed at line %s with exit code %s.\n" "${last_command}" "${line}" "${exit_code}" >&2
+  exit "${exit_code}"
+}
 
-    # Define red color start and reset end
-    red='\033[0;31m'
-    reset='\033[0m'
-    # Output the error details using values stored within temporary file.
-    echo -e "${red}Error in script at line $(caller)${reset}"
-    echo -e "${red}The command '${last_command}' failed with exit code ${exit_code}.${reset}"
-
-    if [ -n "${MOUNT_DIR:-}" ]; then
-      umount "$MOUNT_DIR" || true
-    fi
-    exit "${exit_code}"
-  }
-
-trap error_handler ERR
-
-# Directory to search in
-directory="/qemu"
+trap 'error_handler "$?" "$BASH_COMMAND" "$LINENO"' ERR
 
 # check if qemu-system-x86_64 is installed
-QEMU_BIN=$(which qemu-system-x86_64)
-if [ -z $QEMU_BIN ]; then
-  echo "qemu-system-x86_64 not found"
+if ! QEMU_BIN=$(command -v qemu-system-x86_64); then
+  echo "qemu-system-x86_64 not found" >&2
   exit 1
 fi
 
 TMP_DIR="$(pwd)/qemu"
-mkdir -p $TMP_DIR
+mkdir -p "$TMP_DIR"
 
 # get the path to the edk2 image for later use in UEFI boot
 QEMU_EDK2_PATH="/usr/share/qemu/OVMF.fd"
 QEMU_EDK2_CODE="${TMP_DIR}/OVMF_CODE.fd"
-if [ ! -f $QEMU_EDK2_CODE ]; then
-  cp $QEMU_EDK2_PATH $QEMU_EDK2_CODE
+if [ ! -f "$QEMU_EDK2_CODE" ]; then
+  cp "$QEMU_EDK2_PATH" "$QEMU_EDK2_CODE"
 fi
 
 # Create UEFI variables file
 QEMU_UEFI_VARS="${TMP_DIR}/x86_uefi_vars.raw"
-if [ ! -f $QEMU_UEFI_VARS ]; then
-  dd if=/dev/zero of=$QEMU_UEFI_VARS bs=1M count=4
+if [ ! -f "$QEMU_UEFI_VARS" ]; then
+  dd if=/dev/zero of="$QEMU_UEFI_VARS" bs=1M count=4
 fi
 
 #Create a disk image
 QEMU_DISK_IMAGE="${TMP_DIR}/disk.raw"
-if [ ! -f $QEMU_DISK_IMAGE ]; then
-  fallocate -l 5g $QEMU_DISK_IMAGE
+if [ ! -f "$QEMU_DISK_IMAGE" ]; then
+  fallocate -l 5g "$QEMU_DISK_IMAGE"
 fi
 
 # Create bootable USB via helper script
@@ -69,25 +53,25 @@ AUTOEXEC_SOURCE="/qemu/autoexec.ipxe"
 
 args=(
   # create flash hardware with UEFI image and flash with UEFI variables
-  -drive if=pflash,format=raw,unit=0,file="$QEMU_EDK2_CODE" -drive if=pflash,format=raw,unit=1,file="$QEMU_UEFI_VARS"
+  -drive "if=pflash,format=raw,unit=0,file=$QEMU_EDK2_CODE" -drive "if=pflash,format=raw,unit=1,file=$QEMU_UEFI_VARS"
 
-  # create network device with user mode network stack and open port 2222 on host machine to point to ssh of a guest
-  -device rtl8139,netdev=mynet0 -netdev user,id=mynet0,hostfwd=tcp::22-:22,hostname="${HOSTNAME:=qemu}"
+  # create network device with user mode network stack and open port 22 on host machine to point to ssh of a guest
+  -device "rtl8139,netdev=mynet0" -netdev "user,id=mynet0,hostfwd=tcp::22-:22,hostname=${HOSTNAME:=qemu}"
   # create hardware random number generator and connect it to the guest(required for some OSes to boot)
-  -smbios type=0,uefi=on -object rng-random,filename=/dev/urandom,id=rng0 -device virtio-rng-pci,rng=rng0
+  -smbios "type=0,uefi=on" -object "rng-random,filename=/dev/urandom,id=rng0" -device "virtio-rng-pci,rng=rng0"
 
   # bootload IPXE with autoexec.ipxe script
-  -drive if=none,id=usbstick,format=raw,file="${TMP_DIR}/boot.usb" \
-  -usb                                                             \
-  -device usb-ehci,id=ehci                                         \
-  -device usb-tablet,bus=usb-bus.0                                 \
-  -device usb-storage,bus=ehci.0,drive=usbstick
+  -drive "if=none,id=usbstick,format=raw,file=${TMP_DIR}/boot.usb"
+  -usb
+  -device "usb-ehci,id=ehci"
+  -device "usb-tablet,bus=usb-bus.0"
+  -device "usb-storage,bus=ehci.0,drive=usbstick"
 
   # attach a disk image to the guest
-  -drive format=raw,file=$QEMU_DISK_IMAGE
+  -drive "format=raw,file=$QEMU_DISK_IMAGE"
 
   # ATTENTION `nographic` mode requires 'console=ttyS0,115200n8' in the kernel command line
   -nographic
 )
 
-exec $QEMU_BIN -name test -machine pc -cpu max -smp 4 -m 8G "${args[@]}"
+exec "$QEMU_BIN" -name test -machine pc -cpu max -smp 4 -m 8G "${args[@]}"

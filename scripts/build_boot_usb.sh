@@ -5,22 +5,18 @@ set -o errtrace
 set -o nounset
 set -o pipefail
 
-cleanup_mount() {
-  local mount_dir="${1:-}"
-  if [ -n "${mount_dir}" ] && mount | grep -q " on ${mount_dir} "; then
-    umount "${mount_dir}" || true
-  fi
-}
+mounted=false
 
 error_handler() {
-  local last_command="${BASH_COMMAND}"
-  local exit_code="$?"
-  echo -e "\033[0;31mUSB build failed. Command '${last_command}' exited with ${exit_code}.\033[0m"
-  cleanup_mount "${MOUNT_DIR:-}"
+  local exit_code="$1" last_command="$2"
+  printf "USB build failed. Command '%s' exited with %s.\n" "${last_command}" "${exit_code}" >&2
+  if [ "${mounted}" = true ]; then
+    umount "${MOUNT_DIR}" || true
+  fi
   exit "${exit_code}"
 }
 
-trap error_handler ERR
+trap 'error_handler "$?" "$BASH_COMMAND"' ERR
 
 usage() {
   cat <<EOF
@@ -121,6 +117,7 @@ mkdir -p "${MOUNT_DIR}"
 
 # Mount loopback (Linux); macOS loop mounts are not supported by this script
 mount -m -o loop "${OUTPUT}" "${MOUNT_DIR}"
+mounted=true
 
 # Prepare EFI structure and copy files
 mkdir -p "${MOUNT_DIR}/EFI/BOOT"
@@ -129,6 +126,7 @@ cp "${AUTOEXEC}" "${MOUNT_DIR}/EFI/BOOT/autoexec.ipxe"
 
 sync
 umount "${MOUNT_DIR}"
+mounted=false
 
 echo "Bootable iPXE USB image created at: ${OUTPUT}"
 
