@@ -146,7 +146,11 @@ export class IngressNginx extends HelmModule<IngressNginxConfig> {
     const baseValues: Record<string, unknown> = {
       controller: {
         ...(this.config.controller?.replicaCount != null ? { replicaCount: this.config.controller.replicaCount } : {}),
-        ...(this.config.controller?.extraArgs ? { extraArgs: this.config.controller.extraArgs } : {}),
+        extraArgs: {
+          // Keep published addresses during restarts so DNS controllers retain their records.
+          'update-status-on-shutdown': 'false',
+          ...this.config.controller?.extraArgs,
+        },
         ...(this.config.controller?.resources ? { resources: this.config.controller.resources } : {}),
         tolerations: controllerTolerations,
         service: {
