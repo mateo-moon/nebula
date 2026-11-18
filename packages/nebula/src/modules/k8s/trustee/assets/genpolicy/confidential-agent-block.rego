@@ -24,9 +24,12 @@ confidential_linux_devices(p, i) if {
         d.Major >= 0
         is_number(d.Minor)
         d.Minor >= 0
-        d.FileMode == 432
-        d.UID == 0
-        d.GID == 6
+        # Loop devices use root:disk 0660; native CSI raw block devices use
+        # root:root 0600. Keep each complete permission tuple correlated.
+        {"mode": d.FileMode, "uid": d.UID, "gid": d.GID} in {
+            {"mode": 432, "uid": 0, "gid": 6},
+            {"mode": 384, "uid": 0, "gid": 0}
+        }
     }
     controls := [d | d := i[_]; not d.Path in paths]
     count(controls) == 2

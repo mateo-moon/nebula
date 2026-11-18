@@ -37,6 +37,33 @@ const agentDevices = [...agentExpected.map((device, index) => ({ ...block, Path:
 const agentCheck = (name: string, actual: unknown, allowed: boolean) =>
   check(name, "confidential_linux_devices(data.expected, input)", actual, allowed, agentPolicy, agentExpected);
 agentCheck("agent receives only its two declared blocks and fixed controls", agentDevices, true);
+// Independent backend contracts, not a captured Pod: loop devices use
+// root:disk 0660, while native CSI raw block devices use root:root 0600.
+const csiDevices = structuredClone(agentDevices);
+for (const device of csiDevices.slice(0, agentExpected.length)) {
+  Object.assign(device, { Major: 254, FileMode: 0o600, UID: 0, GID: 0 });
+}
+agentCheck("agent accepts native CSI root-only raw block devices", csiDevices, true);
+const mixedBackends = structuredClone(agentDevices); mixedBackends[1] = csiDevices[1];
+agentCheck("each declared block independently keeps its complete backend permission tuple", mixedBackends, true);
+for (const FileMode of [0o400, 0o440, 0o600, 0o640, 0o660, 0o666, 0o777]) {
+  for (const UID of [0, 11000]) for (const GID of [0, 6, 11000]) {
+    const changed = structuredClone(csiDevices);
+    Object.assign(changed[0], { FileMode, UID, GID });
+    const allowed = UID === 0 && (FileMode === 0o600 && GID === 0 || FileMode === 0o660 && GID === 6);
+    agentCheck(`complete block permission tuple ${FileMode.toString(8)}/${UID}/${GID}`, changed, allowed);
+  }
+}
+for (const [field, value] of [["Type", "c"], ["Major", -1], ["Minor", -1], ["Path", "/dev/other"], ["extra", true]] as const) {
+  const changed = structuredClone(csiDevices); (changed[0] as any)[field] = value;
+  agentCheck(`CSI rejects substituted ${field}`, changed, false);
+}
+agentCheck("CSI cannot receive an extra device", [...csiDevices, control("/dev/kvm", 232)], false);
+agentCheck("CSI cannot omit a control", csiDevices.slice(0, -1), false);
+for (const field of ["FileMode", "UID", "GID", "Major", "Minor"] as const) {
+  const changed = structuredClone(csiDevices); changed[2][field]++;
+  agentCheck(`CSI cannot change fixed mapper control ${field}`, changed, false);
+}
 agentCheck("agent cannot receive an extra device", [...agentDevices, control("/dev/kvm", 232)], false);
 agentCheck("agent cannot omit a control", agentDevices.slice(0, -1), false);
 const duplicate = structuredClone(agentDevices); duplicate[1] = { ...duplicate[0] };
