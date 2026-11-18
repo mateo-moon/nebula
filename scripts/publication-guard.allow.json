@@ -40,6 +40,114 @@
       "class": "opaque-blob",
       "sha256": "421be3037544def5f33750966d92bdca6e9e821cd0649e421e95289beff474db",
       "reason": "HOST_DATA test vector trailing-text: the example init-data gzip followed by 'xyz'"
+    },
+    {
+      "type": "public-source-reference",
+      "class": "rfc1918-ip",
+      "source": "packages/nebula/src/modules/k8s/confidential-workloads/public-address-runtime.ts",
+      "value": "172.16.0.0",
+      "lineSha256": "017f9cdbd58db0ba01b4a881a13bf3cda463f90606d5e3b78ab6604845e7a933",
+      "reference": "https://www.rfc-editor.org/rfc/rfc1918#section-3",
+      "reason": "Reviewed RFC 1918 interval endpoint used for range validation, SNAT exclusion or the generic public documentation example; the exact source line is bound and individual host addresses remain prohibited."
+    },
+    {
+      "type": "public-source-reference",
+      "class": "public-ip",
+      "source": "packages/nebula/src/modules/k8s/confidential-workloads/public-address-runtime.ts",
+      "value": "172.32.0.0",
+      "lineSha256": "017f9cdbd58db0ba01b4a881a13bf3cda463f90606d5e3b78ab6604845e7a933",
+      "reference": "https://www.rfc-editor.org/rfc/rfc1918#section-3",
+      "reason": "Reviewed RFC 1918 interval endpoint used for range validation, SNAT exclusion or the generic public documentation example; the exact source line is bound and individual host addresses remain prohibited."
+    },
+    {
+      "type": "public-source-reference",
+      "class": "rfc1918-ip",
+      "source": "packages/nebula/src/modules/k8s/confidential-workloads/public-address-runtime.ts",
+      "value": "10.0.0.0",
+      "lineSha256": "2ca6e1232c2913b15753b295166cecf0629103469cf7c49d015201b4322dc57f",
+      "reference": "https://www.rfc-editor.org/rfc/rfc1918#section-3",
+      "reason": "Reviewed RFC 1918 interval endpoint used for range validation, SNAT exclusion or the generic public documentation example; the exact source line is bound and individual host addresses remain prohibited."
+    },
+    {
+      "type": "public-source-reference",
+      "class": "rfc1918-ip",
+      "source": "packages/nebula/src/modules/k8s/confidential-workloads/public-address-runtime.ts",
+      "value": "10.255.255.255",
+      "lineSha256": "2ca6e1232c2913b15753b295166cecf0629103469cf7c49d015201b4322dc57f",
+      "reference": "https://www.rfc-editor.org/rfc/rfc1918#section-3",
+      "reason": "Reviewed RFC 1918 interval endpoint used for range validation, SNAT exclusion or the generic public documentation example; the exact source line is bound and individual host addresses remain prohibited."
+    },
+    {
+      "type": "public-source-reference",
+      "class": "rfc1918-ip",
+      "source": "packages/nebula/src/modules/k8s/confidential-workloads/public-address-runtime.ts",
+      "value": "172.16.0.0",
+      "lineSha256": "2ca6e1232c2913b15753b295166cecf0629103469cf7c49d015201b4322dc57f",
+      "reference": "https://www.rfc-editor.org/rfc/rfc1918#section-3",
+      "reason": "Reviewed RFC 1918 interval endpoint used for range validation, SNAT exclusion or the generic public documentation example; the exact source line is bound and individual host addresses remain prohibited."
+    },
+    {
+      "type": "public-source-reference",
+      "class": "rfc1918-ip",
+      "source": "packages/nebula/src/modules/k8s/confidential-workloads/public-address-runtime.ts",
+      "value": "172.31.255.255",
+      "lineSha256": "2ca6e1232c2913b15753b295166cecf0629103469cf7c49d015201b4322dc57f",
+      "reference": "https://www.rfc-editor.org/rfc/rfc1918#section-3",
+      "reason": "Reviewed RFC 1918 interval endpoint used for range validation, SNAT exclusion or the generic public documentation example; the exact source line is bound and individual host addresses remain prohibited."
+    },
+    {
+      "type": "public-source-reference",
+      "class": "rfc1918-ip",
+      "source": "packages/nebula/src/modules/k8s/confidential-workloads/public-address-runtime.ts",
+      "value": "192.168.0.0",
+      "lineSha256": "2ca6e1232c2913b15753b295166cecf0629103469cf7c49d015201b4322dc57f",
+      "reference": "https://www.rfc-editor.org/rfc/rfc1918#section-3",
+      "reason": "Reviewed RFC 1918 interval endpoint used for range validation, SNAT exclusion or the generic public documentation example; the exact source line is bound and individual host addresses remain prohibited."
+    },
+    {
+      "type": "public-source-reference",
+      "class": "rfc1918-ip",
+      "source": "packages/nebula/src/modules/k8s/confidential-workloads/public-address-runtime.ts",
+      "value": "192.168.255.255",
+      "lineSha256": "2ca6e1232c2913b15753b295166cecf0629103469cf7c49d015201b4322dc57f",
+      "reference": "https://www.rfc-editor.org/rfc/rfc1918#section-3",
+      "reason": "Reviewed RFC 1918 interval endpoint used for range validation, SNAT exclusion or the generic public documentation example; the exact source line is bound and individual host addresses remain prohibited."
+    },
+    {
+      "type": "public-source-reference",
+      "class": "rfc1918-ip",
+      "source": "packages/nebula/src/modules/k8s/confidential-workloads/public-address-runtime.ts",
+      "value": "10.0.0.0",
+      "lineSha256": "6525cf9560a0891365574f90c1fc7409d818d7fb4c3ac7b29155a4401d92bfee",
+      "reference": "https://www.rfc-editor.org/rfc/rfc1918#section-3",
+      "reason": "Reviewed RFC 1918 interval endpoint used for range validation, SNAT exclusion or the generic public documentation example; the exact source line is bound and individual host addresses remain prohibited."
+    },
+    {
+      "type": "public-source-reference",
+      "class": "rfc1918-ip",
+      "source": "packages/nebula/src/modules/k8s/confidential-workloads/public-address-runtime.ts",
+      "value": "172.16.0.0",
+      "lineSha256": "6525cf9560a0891365574f90c1fc7409d818d7fb4c3ac7b29155a4401d92bfee",
+      "reference": "https://www.rfc-editor.org/rfc/rfc1918#section-3",
+      "reason": "Reviewed RFC 1918 interval endpoint used for range validation, SNAT exclusion or the generic public documentation example; the exact source line is bound and individual host addresses remain prohibited."
+    },
+    {
+      "type": "public-source-reference",
+      "class": "rfc1918-ip",
+      "source": "packages/nebula/src/modules/k8s/confidential-workloads/public-address-runtime.ts",
+      "value": "192.168.0.0",
+      "lineSha256": "6525cf9560a0891365574f90c1fc7409d818d7fb4c3ac7b29155a4401d92bfee",
+      "reference": "https://www.rfc-editor.org/rfc/rfc1918#section-3",
+      "reason": "Reviewed RFC 1918 interval endpoint used for range validation, SNAT exclusion or the generic public documentation example; the exact source line is bound and individual host addresses remain prohibited."
+    },
+    {
+      "type": "public-source-reference",
+      "class": "rfc1918-ip",
+      "source": "packages/nebula/src/modules/k8s/confidential-workloads/public-address.ts",
+      "value": "10.0.0.0",
+      "lineSha256": "e8ae819e9f377a20d3d01a3f96aa0adcccfde28be2a0c0a0f471d6ca0ec5d373",
+      "reference": "https://www.rfc-editor.org/rfc/rfc1918#section-3",
+      "reason": "Reviewed RFC 1918 interval endpoint used for range validation, SNAT exclusion or the generic public documentation example; the exact source line is bound and individual host addresses remain prohibited."
     }
   ]
 }

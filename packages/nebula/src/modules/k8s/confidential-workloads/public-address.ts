@@ -12,7 +12,7 @@ export interface ConfidentialPublicAddressConfig {
   /** Existing host-owned IPv4, exclusively allocated to this workload. */
   ipAddress: string;
   workloadName: string; profile: string;
-  /** Allowed private IPv4 range of the final Pod, e.g. 10.244.0.0/16. */
+  /** Allowed private IPv4 range of the final Pod, e.g. the RFC 1918 range 10.0.0.0/8. */
   podCidr: string;
   /** Pinned host utility image with Node >=24 and nft. The workload agent
    * image already supplies these; this process is ordinary host plumbing. */

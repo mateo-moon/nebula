@@ -12,7 +12,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
-import { DEFAULT_SCOPE, scanBuffer, scanText } from "./publication-guard.mjs";
+import { DEFAULT_SCOPE, loadAllowlist, scanBuffer, scanText } from "./publication-guard.mjs";
 
 const GUARD = join(dirname(fileURLToPath(import.meta.url)), "publication-guard.mjs");
 const sha256 = (s) => createHash("sha256").update(s).digest("hex");
@@ -304,11 +304,52 @@ test("CLI: default scope, redacted output and exit codes", (t) => {
 });
 
 test("the checked-in allowlist is well formed", async () => {
-  const { loadAllowlist } = await import("./publication-guard.mjs");
   const entries = loadAllowlist(join(dirname(GUARD), "publication-guard.allow.json"));
   for (const e of entries) {
-    assert.match(e.sha256, /^[0-9a-f]{64}$/);
+    assert.match(e.type === "public-source-reference" ? e.lineSha256 : e.sha256, /^[0-9a-f]{64}$/);
     assert.ok(e.class && e.reason, "entries need a class and a reason");
+  }
+});
+
+test("public protocol references bind the address, rule, source path and complete unencoded line", () => {
+  const source = "packages/protocol/ranges.ts", value = [10, 0, 0, 0].join(".");
+  const text = `const network = "${value}"; // RFC 1918 range boundary`;
+  const entry = { type: "public-source-reference", class: "rfc1918-ip", source, value,
+    lineSha256: sha256(text), reference: "https://www.rfc-editor.org/rfc/rfc1918#section-3", reason: "Public protocol constant" };
+  const checked = (text, overrides = {}) => scanText(text, { source, allow: [entry], ...overrides });
+  assert.deepEqual(checked(text), []);
+  assert.deepEqual(scanBuffer(Buffer.from(text), { source, allow: [entry] }), []);
+  assert.deepEqual(classes(checked(text + " // changed")), ["rfc1918-ip"]);
+  assert.deepEqual(classes(checked(text, { source: "packages/protocol/another.ts" })), ["rfc1918-ip"]);
+  for (const delta of [{ class: "public-ip" }, { value: [10, 0, 0, 1].join(".") }, { reference: "https://www.rfc-editor.org/rfc/rfc1918" }]) {
+    assert.deepEqual(classes(checked(text, { allow: [{ ...entry, ...delta }] })), ["rfc1918-ip"]);
+  }
+  const other = text.replace(value, [10, 0, 0, 1].join("."));
+  assert.deepEqual(classes(checked(other, { allow: [{ ...entry, lineSha256: sha256(other) }] })), ["rfc1918-ip"]);
+  assert.deepEqual(classes(scanBuffer(gzipSync(text), { source, allow: [entry] })), ["rfc1918-ip"]);
+  assert.deepEqual(classes(checked(text, { via: "base64" })), ["rfc1918-ip"]);
+  assert.deepEqual(classes(checked(text, { line: 1 })), ["rfc1918-ip"]);
+});
+
+test("protocol references never exempt credentials, chip-like values or other addresses", () => {
+  const source = "packages/protocol/ranges.ts", value = [10, 0, 0, 0].join(".");
+  const text = `const range = "${value}"; // ${account} ${hex128()}`;
+  const entry = { type: "public-source-reference", class: "rfc1918-ip", source, value,
+    lineSha256: sha256(text), reference: "https://www.rfc-editor.org/rfc/rfc1918#section-3", reason: "Public protocol constant" };
+  const findings = scanText(text + "\n" + privatePem() + "\n" + [10, 23, 45, 67].join("."), { source, allow: [entry] });
+  assert.deepEqual(classes(findings), ["aws-account-id", "hex-64-bytes", "private-key", "rfc1918-ip"]);
+  assert.ok(findings.every(f => !Object.hasOwn(f, "value") && !Object.hasOwn(f, "lineSha256")), "Findings must not expose values or reversible address hashes");
+});
+
+test("protocol-reference allowlists reject arbitrary host addresses, paths and secret classes", t => {
+  const root = tempDir(t), file = join(root, "allow.json"), value = [10, 0, 0, 0].join(".");
+  const entry = { type: "public-source-reference", class: "rfc1918-ip", source: "packages/protocol/ranges.ts", value,
+    lineSha256: sha256(`const range = "${value}";`), reference: "https://www.rfc-editor.org/rfc/rfc1918#section-3", reason: "Public protocol constant" };
+  const read = delta => { writeFileSync(file, JSON.stringify({ version: 1, entries: [{ ...entry, ...delta }] })); return () => loadAllowlist(file); };
+  assert.deepEqual(read({})(), [entry]);
+  for (const delta of [{ value: [10, 0, 0, 1].join(".") }, { source: "/absolute/file.ts" }, { source: "../file.ts" },
+    { class: "private-key" }, { class: "public-ip" }, { reference: "https://example.com/" }, { lineSha256: "" }, { reason: "" }]) {
+    assert.throws(read(delta), /reviewed protocol address/);
   }
 });
 

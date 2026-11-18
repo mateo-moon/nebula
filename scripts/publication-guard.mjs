@@ -23,8 +23,8 @@
 // sha256 of the match so a reviewed item can be allowlisted by content hash;
 // low-entropy classes (a 12-digit id, an address, a domain or owner name)
 // carry no hash, because such a hash can be reversed by enumeration, and they
-// cannot be allowlisted: a public upstream name that has to appear is added to
-// the upstream lists below in a reviewed change instead.
+// cannot be allowlisted by hash. Public protocol address constants require
+// a reviewed source path, exact literal and full source-line hash instead.
 import { execFileSync } from "node:child_process";
 import { createHash, createPrivateKey, createPublicKey, X509Certificate } from "node:crypto";
 import { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync } from "node:fs";
@@ -382,6 +382,22 @@ function isAllowed(f, allow) {
   return f.sha256 !== undefined && allow.some((e) => e.class === f.class && e.sha256 === f.sha256);
 }
 
+const PUBLIC_PROTOCOL_REFERENCE = "https://www.rfc-editor.org/rfc/rfc1918#section-3";
+// RFC 1918 interval endpoints, including the exclusive upper endpoint of
+// its second range. Individual host addresses are never eligible here.
+const PUBLIC_PROTOCOL_ADDRESSES = new Set([
+  "10.0.0.0", "10.255.255.255", "172.16.0.0", "172.31.255.255",
+  "172.32.0.0", "192.168.0.0", "192.168.255.255",
+]);
+function isPublicSourceReference(cls, raw, text, offset, context, depth, allow) {
+  if (depth !== 0 || context.via !== undefined || context.line !== undefined ||
+      !["rfc1918-ip", "public-ip"].includes(cls) || !PUBLIC_PROTOCOL_ADDRESSES.has(raw)) return false;
+  const start = text.lastIndexOf("\n", offset - 1) + 1, end = text.indexOf("\n", offset);
+  const lineSha256 = sha256(text.slice(start, end < 0 ? text.length : end).replace(/\r$/, ""));
+  return allow.some(e => e.type === "public-source-reference" && e.class === cls &&
+    e.source === context.source && e.value === raw && e.lineSha256 === lineSha256 && e.reference === PUBLIC_PROTOCOL_REFERENCE);
+}
+
 function isText(buf) {
   if (buf.includes(0)) return false;
   let text;
@@ -547,6 +563,7 @@ export function scanText(text, { source = "<text>", allow = [], depth = 0, via, 
     for (const m of d.find ? d.find(text) : text.matchAll(d.re)) {
       if (d.keep && !d.keep(m)) continue;
       const cls = d.classify ? d.classify(m) : d.class;
+      if (isPublicSourceReference(cls, m[0], text, m.index, context, depth, allow)) continue;
       direct.push({ priority: d.priority, start: m.index, end: m.end ?? m.index + m[0].length, finding: finding(cls, m[0], context, at(m.index)) });
     }
   }
@@ -578,7 +595,7 @@ export function scanText(text, { source = "<text>", allow = [], depth = 0, via, 
 export function scanBuffer(buf, { source = "<buffer>", allow = [], depth = 0, via, line } = {}) {
   const payload = unwrap(buf, via, depth);
   const findings = payload
-    ? scanText(payload.text, { source, depth: payload.depth, via: payload.via, line })
+    ? scanText(payload.text, { source, allow, depth: payload.depth, via: payload.via, line })
     : [finding("binary-file", buf, { source, via, line }, 1)];
   return findings.filter((f) => !isAllowed(f, allow));
 }
@@ -588,6 +605,18 @@ export function loadAllowlist(path) {
   const doc = JSON.parse(readFileSync(path, "utf8"));
   if (doc?.version !== 1 || !Array.isArray(doc.entries)) throw new Error(`${path}: expected {"version": 1, "entries": [...]}`);
   return doc.entries.map((e, i) => {
+    if (e?.type === "public-source-reference") {
+      const match = typeof e.value === "string" && /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(e.value);
+      if (!match || !PUBLIC_PROTOCOL_ADDRESSES.has(e.value) || !["rfc1918-ip", "public-ip"].includes(e.class) ||
+          ipv4Class(match) !== e.class || typeof e.source !== "string" ||
+          !/^(?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+$/.test(e.source) || e.source.split("/").includes("..") ||
+          !/^[0-9a-f]{64}$/.test(e.lineSha256 ?? "") || e.reference !== PUBLIC_PROTOCOL_REFERENCE ||
+          typeof e.reason !== "string" || !e.reason.trim()) {
+        throw new Error(`${path}: entry ${i} needs a reviewed protocol address, source path, full-line hash and reference`);
+      }
+      return { type: e.type, class: e.class, source: e.source, value: e.value,
+        lineSha256: e.lineSha256, reference: e.reference, reason: e.reason };
+    }
     if (!ALLOWLISTABLE.has(e?.class)) {
       throw new Error(`${path}: entry ${i} class ${JSON.stringify(e?.class)} cannot be allowlisted (allowed: ${[...ALLOWLISTABLE].join(", ")})`);
     }
