@@ -202,18 +202,17 @@ h4 {
   border: 1px solid #e2e6ed;
   border-radius: 6px;
   background: #f6f8fa;
+  font-size: 11px;
   overflow-wrap: anywhere;
 }
 .file-selection strong {
   display: block;
-  font-size: 14px;
 }
 .file-selection span {
   display: block;
   color: #546174;
-  font-size: 12px;
 }
-.file-selection button { flex-shrink: 0; font-size: 12px; }
+.file-selection button { flex-shrink: 0; }
 #job-title { scroll-margin-block-start: 24px; }
 .recovery-backup {
   margin-block: 14px;
