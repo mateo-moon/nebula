@@ -1,6 +1,7 @@
 set -efu
 export LC_ALL=C
 root=${HOST_ROOT:-}
+if [ -n "$root" ]; then root=$(CDPATH= cd -P "$root" && pwd -P); fi
 loaded=${SYS_MODULES:-$root/sys/module}
 modprobe=${MODPROBE:-/usr/sbin/modprobe}
 modinfo=${MODINFO:-/usr/sbin/modinfo}
@@ -49,13 +50,22 @@ module_file() {
     *) fail 'unreviewed module dependency' ;;
   esac
   [ -f "$root$path" ] && [ ! -L "$root$path" ] || fail 'module file missing or linked'
-  magic=$("$modinfo" -F vermagic "$path")
+  # Debian usrmerge exposes /lib through /usr/lib, while dpkg owns the physical
+  # installed path. Resolve parent directories only; final module links remain
+  # forbidden. Both paths must name the same device/inode in this kernel tree.
+  physical_directory=$(CDPATH= cd -P "$root${path%/*}" && pwd -P)
+  canonical_file=$physical_directory/$base
+  package_path=${canonical_file#"$root"}
+  case "$package_path" in /lib/modules/"$kernel"/kernel/*|/usr/lib/modules/"$kernel"/kernel/*) ;; *) fail 'canonical module outside running kernel tree' ;; esac
+  [ -f "$canonical_file" ] && [ ! -L "$canonical_file" ] && [ "$root$path" -ef "$canonical_file" ] || fail 'module path identity changed'
+  magic=$("$modinfo" -F vermagic "$package_path")
   [ "${magic%% *}" = "$kernel" ] || fail 'module belongs to another kernel'
-  [ "$("$modinfo" -F intree "$path")" = Y ] || fail 'module is not in-tree'
-  [ "$("$modinfo" -F sig_id "$path")" = 'PKCS#7' ] || fail 'module is unsigned'
-  [ -n "$("$modinfo" -F signer "$path")" ] && [ -n "$("$modinfo" -F sig_key "$path")" ] || fail 'module signature metadata missing'
-  owner=$("$dpkg" -S "$path")
+  [ "$("$modinfo" -F intree "$package_path")" = Y ] || fail 'module is not in-tree'
+  [ "$("$modinfo" -F sig_id "$package_path")" = 'PKCS#7' ] || fail 'module is unsigned'
+  [ -n "$("$modinfo" -F signer "$package_path")" ] && [ -n "$("$modinfo" -F sig_key "$package_path")" ] || fail 'module signature metadata missing'
+  owner=$("$dpkg" -S "$package_path")
   case "$owner" in "linux-image-$kernel: "*) ;; *) fail 'module is not owned by the installed kernel package' ;; esac
+  [ ! -L "$root$path" ] && [ "$root$path" -ef "$canonical_file" ] || fail 'module path identity changed'
 }
 preflight() {
   kernel=$(uname -r)

@@ -45,7 +45,7 @@ export class HostKernelModules extends Construct {
             // Enter the host's mount namespace AND root explicitly: kmod must
             // use that running kernel's installed modules and package database.
             command: ["timeout", "60s", "nsenter", "--mount=/host/proc/1/ns/mnt",
-              "--root=/host/proc/1/root", "--wd=/", "--", "/bin/sh", "-c", script, "host-modules", "apply"],
+              "--root=/host/proc/1/root", "--wdns=/", "--", "/bin/sh", "-c", script, "host-modules", "apply"],
             env, securityContext: { privileged: true, runAsUser: 0, readOnlyRootFilesystem: true },
             volumeMounts: [{ name: "host-proc", mountPath: "/host/proc", readOnly: true }],
             resources: { requests: { cpu: Quantity.fromString("5m"), memory: Quantity.fromString("16Mi") },
