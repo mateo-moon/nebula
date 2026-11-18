@@ -121,7 +121,7 @@ const UPSTREAM_DOMAINS = [
   "gcr.io", "pkg.dev", "k8s.io", "kubernetes.io", "x-k8s.io", "json-schema.org", "w3.org", "ietf.org",
   "rfc-editor.org", "iana.org", "spdx.org", "apache.org", "opencontainers.org", "confidentialcontainers.org",
   "katacontainers.io", "amd.com", "intel.com", "asus.com", "trustedcomputinggroup.org", "crossplane.io", "upbound.io",
-  "cert-manager.io", "cncf.io", "argoproj.io", "coreos.com", "cilium.io", "projectcalico.org", "k0sproject.io",
+  "gateway.envoyproxy.io", "cert-manager.io", "cncf.io", "argoproj.io", "coreos.com", "cilium.io", "projectcalico.org", "k0sproject.io",
   "grafana.com", "prometheus.io", "opentelemetry.io", "sigstore.dev", "npmjs.com", "npmjs.org", "nodejs.org",
   "typescriptlang.org", "rust-lang.org", "crates.io", "docs.rs", "golang.org", "go.dev", "python.org", "debian.org",
   "ubuntu.com", "kernel.org", "anthropic.com", "claude.com", "letsencrypt.org", "nebula.io", "matrix.org",

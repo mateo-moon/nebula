@@ -71,8 +71,11 @@ jobs:
               sleep "$((attempt * 15))"
             done
           done < "$RUNNER_TEMP/ecr-reader-test-images"
+      - name: Fetch the pinned Envoy Gateway chart for offline synthesis tests
+        run: helm pull oci://docker.io/envoyproxy/gateway-helm@sha256:dcb82a14c04b426615a71d97222c7edf9f5ff58b800d241e71ac5784ae6dc7b7 --destination "$RUNNER_TEMP"
       - name: Tests (including the packed-tarball import test)
         env:
+          ENVOY_GATEWAY_CHART: ${{ runner.temp }}/gateway-helm-v1.10.0.tgz
           ECR_READER_CONTAINER_TEST: "1"
           WELCOME_CADDY_INTEGRATION: "1"
           BAREMETAL_CROSSPLANE_CLI: ${{ runner.temp }}/crossplane
