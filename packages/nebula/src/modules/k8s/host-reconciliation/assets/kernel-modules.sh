@@ -57,6 +57,7 @@ module_file() {
   canonical_file=$physical_directory/$base
   package_path=${canonical_file#"$root"}
   case "$package_path" in /lib/modules/"$kernel"/kernel/*|/usr/lib/modules/"$kernel"/kernel/*) ;; *) fail 'canonical module outside running kernel tree' ;; esac
+  case "$package_path" in *[!A-Za-z0-9_./+-]*|*/../*|*/./*|*//*) fail 'unsafe canonical module path' ;; esac
   [ -f "$canonical_file" ] && [ ! -L "$canonical_file" ] && [ "$root$path" -ef "$canonical_file" ] || fail 'module path identity changed'
   magic=$("$modinfo" -F vermagic "$package_path")
   [ "${magic%% *}" = "$kernel" ] || fail 'module belongs to another kernel'

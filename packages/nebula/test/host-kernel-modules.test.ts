@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, statSync, existsSync, symlinkSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, statSync, existsSync, symlinkSync, renameSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { App, Chart } from "cdk8s";
@@ -157,6 +157,18 @@ test("usrmerge aliases cannot escape the installed kernel tree or change inode w
       assert.ok(!f.calls().some(call => call.includes("--ignore-install")));
     } finally { f.done(); }
   }
+});
+
+test("canonical module paths cannot turn package ownership queries into glob patterns", () => {
+  const f = fixture(true);
+  try {
+    const directory = join(f.root, "usr/lib/modules/6.12.115-test/kernel/drivers/md");
+    renameSync(directory, directory + "*"); symlinkSync("md*", directory);
+    const result = f.run("apply");
+    assert.notEqual(result.status, 0); assert.match(result.stderr, /unsafe canonical module path/);
+    assert.deepEqual(f.packageQueries(), []);
+    assert.equal(existsSync(f.target), false); assert.equal(existsSync(f.loaded), false);
+  } finally { f.done(); }
 });
 
 test("readiness is read-only and never loads modules or repairs a drifted declaration", () => {
