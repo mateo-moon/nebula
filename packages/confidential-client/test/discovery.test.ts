@@ -69,7 +69,8 @@ test("the current browser workload binds its exact runtime and four resource pat
   const workload = connection.workload;
   // Independent deployment fixture: do not derive the published runtime from
   // TRUSTED_STACKS, or an outdated client profile would also change the test.
-  workload.spec.agentImage = "ghcr.io/mateo-moon/nebula-coco-canary@sha256:7c7ee926c95c559487c5dd9dcb0a4324a53b93130c0ac41d09ad3c3e373b2e53";
+  // Qualified capacity runtime, signed source cbe179fa01cbba70cddafaf3742f0493e6092d8f.
+  workload.spec.agentImage = "ghcr.io/mateo-moon/nebula-coco-canary@sha256:8c2483249791db91d5e383c34c0161f609bbb4017555257b1ef6de3e9ab5ef38";
   workload.spec.guest = {
     measurement: "8c33e7ed240da6571f04802dd97050d4a8ce029473931dce869ee458b1dfd7025745ed62e7391fea520db139332c0c8e",
     chipId: "1".repeat(128), minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 84 },
@@ -91,10 +92,13 @@ test("the current browser workload binds its exact runtime and four resource pat
     metadata: { name, namespace: workload.metadata.namespace }, spec: { type: "Memory", sizeLimit: "64Mi" } }));
   connection.browserEndpoint = "https://127.0.0.1:8445/";
   const accepted = readConnection(JSON.stringify(connection));
-  assert.equal(trustedStack(accepted), "nebula-snp-agent-resource-limit-2026-11-18");
-  const previousRuntime = structuredClone(accepted);
-  previousRuntime.workload.spec.agentImage = "ghcr.io/mateo-moon/nebula-coco-canary@sha256:239be4ae002450b577e03bc3abd8cd827c04ed1d3653eb3dfc64fbfba8e87de5";
-  assert.throws(() => trustedStack(readConnection(JSON.stringify(previousRuntime))), /reviewed profile/);
+  assert.equal(trustedStack(accepted), "nebula-snp-agent-capacity-2026-11-18");
+  for (const previous of ["7c7ee926c95c559487c5dd9dcb0a4324a53b93130c0ac41d09ad3c3e373b2e53",
+    "239be4ae002450b577e03bc3abd8cd827c04ed1d3653eb3dfc64fbfba8e87de5"]) {
+    const previousRuntime = structuredClone(accepted);
+    previousRuntime.workload.spec.agentImage = "ghcr.io/mateo-moon/nebula-coco-canary@sha256:" + previous;
+    assert.throws(() => trustedStack(readConnection(JSON.stringify(previousRuntime))), /reviewed profile/);
+  }
   for (const field of ["bootloader", "snp", "microcode"] as const) {
     const lower = structuredClone(accepted);
     lower.workload.spec.guest = { ...lower.workload.spec.guest, minimumReportedTcb: {
