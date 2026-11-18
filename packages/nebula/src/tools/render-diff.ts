@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseAllDocuments, stringify } from "yaml";
@@ -16,8 +16,9 @@ export interface RenderDiffOptions {
   unrendered?: string;
 }
 
-interface Loaded { status: string; file: string; bytes: Buffer; log: string }
-type Index = Record<string, Loaded>;
+interface Entry { status: string; file: string }
+interface Loaded extends Entry { bytes: Buffer; log: string }
+type Index = Record<string, Entry>;
 
 const MAX_OBJECT_LINES = 200, MAX_TOTAL_LINES = 4000;
 const sha256 = (data: string | Buffer) => createHash("sha256").update(data).digest("hex");
@@ -45,16 +46,33 @@ function mask(value: any, pointer: string[]): number {
   return count;
 }
 
-function load(dir: string): Index {
-  const index: Index = JSON.parse(readFileSync(join(dir, "index.json"), "utf8"));
-  for (const entry of Object.values(index)) {
-    entry.bytes = readFileSync(join(dir, "renders", entry.file));
-    entry.log = readFileSync(join(dir, "renders", entry.file.replace(/\.yaml$/, ".log")), "utf8");
-  }
-  return index;
+function loadIndex(dir: string): Index {
+  return JSON.parse(readFileSync(join(dir, "index.json"), "utf8"));
 }
 
-const parse = (entry: Loaded): any[] => parseAllDocuments(entry.bytes.toString("utf8")).map(d => d.toJS()).filter(d => d && typeof d === "object");
+function readEntry(dir: string, entry: Entry | undefined): Loaded | undefined {
+  if (!entry) return undefined;
+  const file = join(dir, "renders", entry.file);
+  return {
+    ...entry,
+    bytes: readFileSync(file),
+    log: readFileSync(join(dir, "renders", entry.file.replace(/\.yaml$/, ".log")), "utf8"),
+  };
+}
+
+const parse = (bytes: Buffer): any[] => parseAllDocuments(bytes.toString("utf8")).map(d => d.toJS()).filter(d => d && typeof d === "object");
+
+interface Golden { stream_sha256: string; canonical_sha256: string }
+function goldenDigests(entry: Loaded | undefined) {
+  if (!entry || entry.status !== "ok") return undefined;
+  const bytes = entry.bytes;
+  const docs = parse(bytes).filter(doc => doc.kind !== "Secret");
+  return {
+    stream_sha256: sha256(bytes),
+    canonical_sha256: sha256(canonicalJson(docs)),
+    file: bytes.subarray(0, 4).toString() === "---\n" ? sha256(bytes.subarray(4)) : "-",
+  };
+}
 
 // Printed diffs show Secret values by digest only.
 function printable(doc: any): string {
@@ -81,7 +99,7 @@ export function renderDiff(options: RenderDiffOptions): { pass: boolean; report:
   function objects(key: string, entry: Loaded) {
     const byId = new Map<string, any>();
     let masked = 0;
-    const docs = parse(entry);
+    const docs = parse(entry.bytes);
     for (const doc of docs) {
       const base = `${key} ${doc.apiVersion} ${doc.kind} ${doc.metadata?.namespace ?? "_"}/${doc.metadata?.name}`;
       for (const rule of volatile.filter(r => r.object.test(base))) {
@@ -96,7 +114,10 @@ export function renderDiff(options: RenderDiffOptions): { pass: boolean; report:
     return { docs, byId, masked };
   }
 
-  const base = load(options.base), head = load(options.head);
+  const goldens: Record<string, Golden> = options.goldens ? JSON.parse(readFileSync(options.goldens, "utf8")) : {};
+  type Digests = ReturnType<typeof goldenDigests>;
+  const observed = new Map<string, { base: Digests; head: Digests }>();
+  const base = loadIndex(options.base), head = loadIndex(options.head);
   const diffs: string[] = [], failures: string[] = [], warnings: string[] = [];
   const details: [string, string, string][] = [];
   const unrendered = new Set(options.unrendered ? lines(options.unrendered) : []);
@@ -104,7 +125,10 @@ export function renderDiff(options: RenderDiffOptions): { pass: boolean; report:
   const empty = { docs: [] as any[], byId: new Map<string, any>(), masked: 0 };
 
   for (const key of [...new Set([...Object.keys(base), ...Object.keys(head)])].sort()) {
-    const b = base[key], h = head[key];
+    const b = readEntry(options.base, base[key]), h = readEntry(options.head, head[key]);
+    if (Object.hasOwn(goldens, key)) {
+      observed.set(key, { base: goldenDigests(b), head: goldenDigests(h) });
+    }
     const bad = ([["base", b], ["head", h]] as const).filter(([, entry]) => entry && entry.status !== "ok");
     if (unrendered.has(key)) {
       unrendered.delete(key);
@@ -136,22 +160,17 @@ export function renderDiff(options: RenderDiffOptions): { pass: boolean; report:
 
   for (const key of unrendered) failures.push(`${key}: listed in ${options.unrendered} but rendered at neither side; remove it`);
 
-  const goldens: Record<string, { stream_sha256: string; canonical_sha256: string }> =
-    options.goldens ? JSON.parse(readFileSync(options.goldens, "utf8")) : {};
   const goldenReport: string[] = [];
   for (const [key, want] of Object.entries(goldens)) {
-    for (const [side, index] of [["base", base], ["head", head]] as const) {
-      const entry = index[key];
-      if (!entry || entry.status !== "ok") {
+    for (const side of ["base", "head"] as const) {
+      const got = observed.get(key)?.[side];
+      if (!got) {
         goldenReport.push(`${side} ${key}: not rendered`);
         if (side === "head") failures.push(`golden ${key}: not rendered at head`);
         continue;
       }
-      const docs = parse(entry).filter(d => d.kind !== "Secret");
-      const got = { stream_sha256: sha256(entry.bytes), canonical_sha256: sha256(canonicalJson(docs)) };
       const ok = got.stream_sha256 === want.stream_sha256 && got.canonical_sha256 === want.canonical_sha256;
-      const file = entry.bytes.subarray(0, 4).toString() === "---\n" ? sha256(entry.bytes.subarray(4)) : "-";
-      goldenReport.push(`${side} ${key}: stream ${got.stream_sha256} (file ${file}) canonical ${got.canonical_sha256} ${ok ? "== golden" : "!= golden"}`);
+      goldenReport.push(`${side} ${key}: stream ${got.stream_sha256} (file ${got.file}) canonical ${got.canonical_sha256} ${ok ? "== golden" : "!= golden"}`);
       if (!ok && side === "head") failures.push(`golden ${key}: head render differs from ${options.goldens}`);
     }
   }
@@ -170,14 +189,18 @@ export function renderDiff(options: RenderDiffOptions): { pass: boolean; report:
   if (details.length) {
     const work = mkdtempSync(join(tmpdir(), "render-diff-"));
     report.push("", "== object diffs");
-    for (const [id, before, after] of details) {
-      if (budget <= 0) { report.push("(diff output truncated)"); break; }
-      writeFileSync(join(work, "a"), before);
-      writeFileSync(join(work, "b"), after);
-      const out = spawnSync("diff", ["-u", join(work, "a"), join(work, "b")], { encoding: "utf8" }).stdout.split("\n").slice(2);
-      const shown = out.slice(0, Math.min(MAX_OBJECT_LINES, budget));
-      budget -= shown.length;
-      report.push(`--- ${id}`, ...shown, ...(out.length > shown.length ? [`(${out.length - shown.length} more lines)`] : []));
+    try {
+      for (const [id, before, after] of details) {
+        if (budget <= 0) { report.push("(diff output truncated)"); break; }
+        writeFileSync(join(work, "a"), before);
+        writeFileSync(join(work, "b"), after);
+        const out = spawnSync("diff", ["-u", join(work, "a"), join(work, "b")], { encoding: "utf8" }).stdout.split("\n").slice(2);
+        const shown = out.slice(0, Math.min(MAX_OBJECT_LINES, budget));
+        budget -= shown.length;
+        report.push(`--- ${id}`, ...shown, ...(out.length > shown.length ? [`(${out.length - shown.length} more lines)`] : []));
+      }
+    } finally {
+      rmSync(work, { recursive: true, force: true });
     }
   }
 

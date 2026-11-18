@@ -37,10 +37,14 @@ import { ApiObject } from "cdk8s";
 import { Worker } from "../k0s/worker";
 import { defaultAwsImage, awsHostPreK0sCommands, awsHostSshKeySetup, validateAwsHostProfile, type AwsHostProfile } from "./host-profile";
 import { NODE_IP_DISCOVERY_COMMANDS } from "../k0s/cluster";
-import { AwsWorkerNetwork } from "./worker-network";
+import {
+  AwsWorkerNetwork,
+  type AwsWorkerNetworkCni,
+  type AwsWorkerNetworkPort,
+  type AwsWorkerNetworkRegion,
+} from "./worker-network";
 import { AwsWorkerIdentity } from "./worker-identity";
 import { AwsWorkerLaunchTemplate, WORKER_EIP_PLACEHOLDER, WORKER_VOLUME_PLACEHOLDER } from "./worker-launch-template";
-import type { AwsWorkerFleetIngressRule } from "./worker-ingress";
 import { resolveSecrets } from "../../../utils/secrets";
 import { syncWave } from "../../../core";
 import {
@@ -63,18 +67,8 @@ export const AWS_METADATA_NODE_IP_DISCOVERY_COMMANDS: readonly string[] = [
   "sh -c 'IFACE=$(ip route show default | awk \"{print \\$5}\" | head -1); for i in $(seq 1 30); do IP6=$(ip -6 addr show dev \"$IFACE\" scope global 2>/dev/null | awk \"/inet6/{print \\$2; exit}\" | cut -d/ -f1); [ -n \"$IP6\" ] && break; sleep 2; done; echo \"$IP6\" > /run/node-ip6'"
 ];
 
-export interface AwsWorkerFleetPort {
-  port: number;
-  protocol: string;
-  description: string;
-  /** Emit only the ::/0 rule — for listeners that bind a single family, such
-   *  as Calico's separate v6 WireGuard socket. */
-  v6Only?: boolean;
-  /** Protocol for the ::/0 rule when it differs from the v4 one. ICMPv6 is
-   *  AWS protocol 58, NOT a v6 flavour of "icmp" (1) — an icmp rule does not
-   *  cover it, and the result is exactly half a working probe. */
-  protocolV6?: string;
-}
+/** Port accepted by the fleet's regional network. */
+export interface AwsWorkerFleetPort extends AwsWorkerNetworkPort {}
 
 export interface AwsWorkerFleetEipOptions {
   /** One-time adoption; omit when the existing MR already owns its binding. */
@@ -167,21 +161,10 @@ export interface AwsWorkerFleetOptions {
   imdsHopLimit?: number;
 }
 
-export type AwsWorkerFleetCni = "calico" | "cilium";
+export type AwsWorkerFleetCni = AwsWorkerNetworkCni;
 
-export interface AwsWorkerFleetRegion {
-  /** Short geo tag, e.g. "eu" — used in resource names and node labels. */
-  geo: string;
-  region: string;
-  az: string;
-  vpcCidr: string;
-  subnetCidr: string;
-  /** Extra publicly open ports (e.g. P2P ports on nodes that need them). */
+export interface AwsWorkerFleetRegion extends AwsWorkerNetworkRegion {
   extraOpenPorts?: AwsWorkerFleetPort[];
-  /** Complete native ingress policy. When supplied (including []), replaces
-   * automatic public/CNI ports. Include the CNI mesh ports explicitly. Omit to
-   * preserve legacy defaults. Stable rule names support staged adoption. */
-  ingressRules?: AwsWorkerFleetIngressRule[];
 }
 
 export interface AwsWorkerFleetNode {
@@ -583,7 +566,6 @@ retry aws ec2 modify-instance-attribute --region ${r} --instance-id "$IID" --blo
       );
     }
     const o = this.options;
-    const p = this.prefix(region);
     const dv = node.dataVolume;
     validateAwsHostProfile(node.hostProfile);
     if (node.launchTemplateHandoff && !this.usesObservedIdentity(node))

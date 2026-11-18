@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Testing } from "cdk8s";
 import { K0smotronCluster } from "../src/modules/infra/k0s/k0smotron-cluster";
-import { autoscalerAnnotations, type K0sInfraProvider, type K0sWorkerPool } from "../src/modules/infra/k0s/cluster";
+import { K0sCluster, autoscalerAnnotations, type K0sInfraProvider, type K0sWorkerPool } from "../src/modules/infra/k0s/cluster";
 import { ClusterAutoscaler, clusterAutoscalerValues } from "../src/modules/k8s/cluster-autoscaler";
 
 const provider: K0sInfraProvider<{ size: string }> = {
@@ -27,6 +27,25 @@ test("a static pool keeps its replicas and carries no autoscaler annotations", (
   assert.equal(md.spec.replicas, 3);
   assert.equal(md.metadata.annotations, undefined);
   assert.equal(autoscalerAnnotations({ machine: { size: "m" } }), undefined);
+});
+
+test("hosted and standalone pools preserve their worker version and drain policies", () => {
+  const machine = { size: "m" };
+  const common = { name: "c", k8sVersion: "v1.35.0", provider, workerPools: { worker: { machine } } };
+  const hosted = Testing.chart();
+  new K0smotronCluster(hosted, "cluster", { ...common, workerK8sVersion: "v1.34.1" });
+  const standalone = Testing.chart();
+  new K0sCluster(standalone, "cluster", { ...common, controlPlane: { machine } });
+
+  for (const [chart, version, drain] of [[hosted, "v1.34.1", "5m0s"], [standalone, "v1.35.0", undefined]] as const) {
+    const resources = Testing.synth(chart);
+    const machineSpec = resources.find(r => r.kind === "MachineDeployment")!.spec.template.spec;
+    const bootstrap = resources.find(r => r.kind === "K0sWorkerConfigTemplate")!;
+    assert.equal(machineSpec.version, version);
+    assert.equal(machineSpec.nodeDrainTimeout, drain);
+    assert.equal(machineSpec.bootstrap.configRef.name, bootstrap.metadata.name);
+    assert.equal(bootstrap.spec.template.spec.version, `${version}+k0s.0`);
+  }
 });
 
 test("an autoscaled pool has min/max, its labels and taints, and no replicas of its own", () => {

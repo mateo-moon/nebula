@@ -1,6 +1,5 @@
 import { Construct } from "constructs";
-import { KubeDaemonSet } from "cdk8s-plus-33/lib/imports/k8s";
-import { type HostReconcilerConfig, validateHostReconciler } from "./shared";
+import { createHostReconcilerDaemonSet, type HostReconcilerConfig, validateHostReconciler } from "./shared";
 import { hostConfigurationPolicyScript } from "./scripts";
 
 export interface DebianHostPolicyConfig extends HostReconcilerConfig {
@@ -46,46 +45,21 @@ export class DebianHostPolicy extends Construct {
       { name: "sysctl-conf", path: "/etc/sysctl.d", type: "Directory" },
     ];
     const confined = { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } };
-    new KubeDaemonSet(this, "daemonset", {
-      metadata: { name: config.name, namespace: config.namespace },
-      spec: {
-        selector: { matchLabels: { app: config.name } },
-        template: {
-          metadata: { labels: { app: config.name } },
-          spec: {
-            nodeSelector: config.nodeSelector,
-            tolerations: config.tolerations ?? [{ operator: "Exists" }],
-            automountServiceAccountToken: false,
-            initContainers: [
-              {
-                name: "write",
-                image: config.image,
-                command: ["/bin/sh", "-c", policyScript, "host-policy", "apply"],
-                env: policyEnv,
-                securityContext: { ...confined, runAsUser: 0 },
-                volumeMounts: policyDirs.map(d => ({ name: d.name, mountPath: `/host${d.path}` })),
-              },
-            ],
-            containers: [
-              {
-                name: "verify",
-                image: config.image,
-                command: ["sleep", "infinity"],
-                env: policyEnv,
-                securityContext: { ...confined, runAsUser: 65534, runAsNonRoot: true },
-                volumeMounts: policyDirs.map(d => ({ name: d.name, mountPath: `/host${d.path}`, readOnly: true })),
-                readinessProbe: {
-                  exec: { command: ["/bin/sh", "-c", policyScript, "host-policy", "check"] },
-                  periodSeconds: 300,
-                  timeoutSeconds: 60,
-                  failureThreshold: 1,
-                },
-              },
-            ],
-            volumes: policyDirs.map(d => ({ name: d.name, hostPath: { path: d.path, type: d.type } })),
-          },
-        },
+    createHostReconcilerDaemonSet(this, config, {
+      apply: {
+        name: "write",
+        command: ["/bin/sh", "-c", policyScript, "host-policy", "apply"],
+        env: policyEnv,
+        securityContext: { ...confined, runAsUser: 0 },
+        volumeMounts: policyDirs.map(d => ({ name: d.name, mountPath: `/host${d.path}` })),
       },
+      verify: {
+        checkCommand: ["/bin/sh", "-c", policyScript, "host-policy", "check"],
+        env: policyEnv,
+        securityContext: { ...confined, runAsUser: 65534, runAsNonRoot: true },
+        volumeMounts: policyDirs.map(d => ({ name: d.name, mountPath: `/host${d.path}`, readOnly: true })),
+      },
+      volumes: policyDirs.map(d => ({ name: d.name, hostPath: { path: d.path, type: d.type } })),
     });
   }
 }

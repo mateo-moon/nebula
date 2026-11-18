@@ -1,18 +1,9 @@
 import { Construct } from "constructs";
 import { BaseConstruct } from "../../../core";
-import { ClusterV1Beta2, MachineDeploymentV1Beta1 } from "#imports/cluster.x-k8s.io";
-import { K0sWorkerConfigTemplateV1Beta2 } from "#imports/bootstrap.cluster.x-k8s.io";
+import { ClusterV1Beta2 } from "#imports/cluster.x-k8s.io";
 import { K0sCalicoConfig, resolveK0sCalico } from "./calico";
-import {
-  DEFAULT_PRESTART_COMMANDS,
-  NODE_IP_DISCOVERY_COMMANDS,
-  renderK0sWorkerArgs,
-  withNodeIpArgs,
-  type K0sInfraProvider,
-  type K0sWorkerPool,
-  autoscalerAnnotations,
-  hostBootstrapTemplateName,
-} from "./cluster";
+import type { K0sInfraProvider } from "./cluster";
+import { emitWorkerPools, NODE_IP_DISCOVERY_COMMANDS, type K0sWorkerPool } from "./worker-pools";
 import {
   K0smotronControlPlane,
   type K0smotronControlPlaneConfig,
@@ -100,9 +91,7 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
     const name = this.config.name;
     const namespace = this.config.namespace ?? "default";
     const k8sVersion = this.config.k8sVersion ?? "v1.31.8";
-    const k0sVersion = `${k8sVersion}+k0s.0`;
     const workerK8sVersion = this.config.workerK8sVersion ?? k8sVersion;
-    const workerK0sVersion = `${workerK8sVersion}+k0s.0`;
     const podCidr = this.config.podCidr ?? "10.244.0.0/16";
     const serviceCidr = this.config.serviceCidr ?? "10.96.0.0/12";
     const networkProvider = this.config.networkProvider ?? "calico";
@@ -160,88 +149,17 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
       ...this.config.controlPlane,
     });
 
-    // 4. Worker pools — per pool: infra machine template (provider) +
-    //    K0sWorkerConfigTemplate (cloud-init + native --labels/--taints) +
-    //    MachineDeployment (static replicas, no autoscaler). Identical to the
-    //    standalone K0sCluster's worker emission.
-    for (const [poolName, pool] of Object.entries(this.config.workerPools ?? {})) {
-      const infraRef = provider.emitMachineTemplate(
-        this,
-        `worker-template-${poolName}`,
-        {
-          baseName: `${name}-${poolName}`,
-          namespace,
-          role: "worker",
-          machine: pool.machine,
-        },
-      );
-
-      const hostCommands = provider.hostPreK0sCommands?.(pool.machine, "worker") ?? [];
-      const workerConfigName = hostBootstrapTemplateName(`${name}-${poolName}-config`, hostCommands);
-      // Dual-stack workers must state their own --node-ip from k0s 1.35 on —
-      // see NODE_IP_DISCOVERY_COMMANDS for why name-based detection cannot
-      // work under Cluster API.
-      const dualStack = this.config.dualStack !== undefined;
-      const wargs = dualStack
-        ? withNodeIpArgs(renderK0sWorkerArgs(pool))
-        : renderK0sWorkerArgs(pool);
-      new K0sWorkerConfigTemplateV1Beta2(this, `worker-config-${poolName}`, {
-        metadata: { name: workerConfigName, namespace },
-        spec: {
-          template: {
-            spec: {
-              version: workerK0sVersion,
-              ...(wargs.length ? { args: wargs } : {}),
-              preK0SCommands: [
-                ...hostCommands,
-                ...DEFAULT_PRESTART_COMMANDS,
-                ...(dualStack ? this.config.workerNodeIpDiscoveryCommands ?? NODE_IP_DISCOVERY_COMMANDS : []),
-                ...(pool.extraPreStartCommands ?? []),
-              ],
-            },
-          },
-        },
-      });
-
-      const annotations = autoscalerAnnotations(pool);
-      new MachineDeploymentV1Beta1(this, `worker-md-${poolName}`, {
-        metadata: { name: `${name}-${poolName}`, namespace, ...(annotations ? { annotations } : {}) },
-        spec: {
-          clusterName,
-          ...(annotations ? {} : { replicas: pool.replicas ?? 2 }),
-          selector: {
-            matchLabels: { "cluster.x-k8s.io/cluster-name": clusterName },
-          },
-          template: {
-            spec: {
-              clusterName,
-              version: workerK8sVersion,
-              // Bound the drain so a PodDisruptionBudget cannot hold a machine
-              // deletion open forever — a single-replica workload has nothing
-              // to fail over to while its node is the one being drained. See
-              // the same field on the AWS worker fleet for the incident.
-              // (v1beta1 spelling here; the fleet emits raw v1beta2, where the
-              // same knob is deletion.nodeDrainTimeoutSeconds.) Write the
-              // CANONICAL Go duration: the apiserver stores seconds and renders
-              // them back as "5m0s", so "5m" reads as permanent ArgoCD drift.
-              nodeDrainTimeout: "5m0s",
-              ...(pool.failureDomain ? { failureDomain: pool.failureDomain } : {}),
-              bootstrap: {
-                configRef: {
-                  apiVersion: "bootstrap.cluster.x-k8s.io/v1beta2",
-                  kind: "K0sWorkerConfigTemplate",
-                  name: workerConfigName,
-                },
-              },
-              infrastructureRef: {
-                apiVersion: infraRef.apiVersion,
-                kind: infraRef.kind,
-                name: infraRef.name,
-              },
-            },
-          },
-        },
-      });
-    }
+    emitWorkerPools(this, {
+      clusterName,
+      namespace,
+      k8sVersion: workerK8sVersion,
+      provider,
+      pools: this.config.workerPools,
+      nodeIpDiscoveryCommands: this.config.dualStack !== undefined
+        ? this.config.workerNodeIpDiscoveryCommands ?? NODE_IP_DISCOVERY_COMMANDS
+        : undefined,
+      // Bound drains blocked by a PDB. The API returns the canonical Go duration.
+      nodeDrainTimeout: "5m0s",
+    });
   }
 }
