@@ -8,6 +8,7 @@ import { Testing } from "cdk8s";
 import { parse, stringify } from "yaml";
 import { AwsK0sCluster, K0sOidcAuthentication, type KubernetesOidcIdentityConfig } from "nebula-cdk8s";
 import { assertRenderedAuthenticator, buildOidcProfile, writeOidcProfile, type OidcKubeconfigOptions } from "../src/commands/oidc-kubeconfig";
+import { prepareBootstrapOidcProfile, withTemporaryBootstrapKubeconfig } from "../src/commands/bootstrap/oidc";
 
 const identity = (): KubernetesOidcIdentityConfig => ({
   cluster: "mgmt", hostname: "api.management.example.test",
@@ -106,15 +107,47 @@ test("the identity is checked against the rendered control-plane authenticator w
   fs.writeFileSync(file, bytes);
   const handoff = f.build()!;
   assert.doesNotThrow(() => assertRenderedAuthenticator(manifests, handoff));
+  assert.throws(() => prepareBootstrapOidcProfile(manifests, "mgmt", {}, f.state), /Supply --oidc-config/);
+  const bootstrap = prepareBootstrapOidcProfile(manifests, "mgmt", { oidcConfig: f.config }, f.state);
+  assert.ok(bootstrap);
+  assert.equal(bootstrap.kubeconfig, handoff.kubeconfig);
+  assert.equal(fs.existsSync(bootstrap.output), false, "preflight must not publish a profile");
   const other = identity(); other.workforce.audience = "other-client"; fs.writeFileSync(f.config, JSON.stringify(other));
   assert.throws(() => assertRenderedAuthenticator(manifests, f.build()), /does not match/);
+  assert.throws(() => prepareBootstrapOidcProfile(manifests, "mgmt", { oidcConfig: f.config }, f.state), /does not match/);
   assert.equal(fs.readFileSync(file, "utf8"), bytes);
   assert.equal(fs.readFileSync(f.admin, "utf8"), f.adminBytes);
   const cp = objects.find(object => object.kind === "K0sControlPlane")!;
   delete cp.spec.k0sConfigSpec.k0s.spec.api.extraArgs["authentication-config"];
+  cp.spec.k0sConfigSpec.k0s.spec.api.extraArgs["service-account-issuer"] = "https://workload-issuer.example.test";
   fs.writeFileSync(file, objects.map(object => stringify(object)).join("---\n"));
   assert.throws(() => assertRenderedAuthenticator(manifests, handoff), /does not match/);
+  assert.equal(prepareBootstrapOidcProfile(manifests, "mgmt", {}, f.state), undefined);
+  assert.throws(() => prepareBootstrapOidcProfile(manifests, "mgmt", { oidcConfig: f.config }, f.state), /no rendered OIDC/);
+  cp.spec.k0sConfigSpec.k0s.spec.api.rawArgs = ["--authentication-config=/etc/custom-authentication.yaml"];
+  fs.writeFileSync(file, objects.map(object => stringify(object)).join("---\n"));
+  assert.throws(() => prepareBootstrapOidcProfile(manifests, "mgmt", {}, f.state), /structured OIDC authenticator/);
 }));
+
+test("bootstrap deletes its temporary administrator kubeconfig on success and failure", async () => {
+  let admin = "";
+  const use = (file: string) => {
+    admin = file;
+    assert.equal(fs.statSync(path.dirname(file)).mode & 0o777, 0o700);
+    fs.writeFileSync(file, "synthetic bootstrap credential", { mode: 0o600 });
+  };
+  assert.equal(await withTemporaryBootstrapKubeconfig(async file => {
+    use(file);
+    return "kubeconfig-oidc";
+  }), "kubeconfig-oidc");
+  assert.equal(fs.existsSync(path.dirname(admin)), false);
+
+  await assert.rejects(withTemporaryBootstrapKubeconfig(async file => {
+    use(file);
+    throw new Error("GitOps handoff failed");
+  }), /GitOps handoff failed/);
+  assert.equal(fs.existsSync(path.dirname(admin)), false);
+});
 
 test("a private API endpoint can use a local public CA without enabling insecure TLS", () => fixture(f => {
   const ca = path.join(f.directory, "ca.pem"), key = path.join(f.directory, "fixture.key");
@@ -162,7 +195,7 @@ test("a hosted control plane's authenticator is read from its mounted ConfigMap"
   assert.throws(() => assertRenderedAuthenticator(manifests, f.build()), /does not match/);
   // The ConfigMap of another namespace, or a control plane without the mount, is not this cluster's authenticator.
   write(objects.map(object => object.kind === "ConfigMap" ? { ...object, metadata: { ...object.metadata, namespace: "elsewhere" } } : object));
-  assert.throws(() => assertRenderedAuthenticator(manifests, profile), /does not match/);
+  assert.throws(() => assertRenderedAuthenticator(manifests, profile), /Cannot read the rendered/);
   write(objects.map(object => object.kind === "K0smotronControlPlane" ? { ...object, spec: { ...object.spec, mounts: [] } } : object));
-  assert.throws(() => assertRenderedAuthenticator(manifests, profile), /does not match/);
+  assert.throws(() => assertRenderedAuthenticator(manifests, profile), /Cannot read the rendered/);
 }));

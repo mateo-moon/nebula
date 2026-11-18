@@ -15,7 +15,7 @@ const PROVIDERS: Record<string, BootstrapProvider> = {
   [awsProvider.name]: awsProvider,
 };
 
-export async function bootstrap(options: BootstrapOptions): Promise<void> {
+export async function bootstrap(options: BootstrapOptions): Promise<string | void> {
   const name = (options.provider || "gcp").toLowerCase();
   const provider = PROVIDERS[name];
   if (!provider) {
@@ -23,5 +23,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<void> {
       `Unsupported --provider '${name}' (expected: ${Object.keys(PROVIDERS).join(" | ")})`,
     );
   }
-  await provider.bootstrap(options);
+  if (name !== "aws" && (options.oidcConfig || options.oidcClientConfig || options.oidcCaFile))
+    throw new Error("The OIDC bootstrap handoff is supported by the AWS k0s provider");
+  return provider.bootstrap(options);
 }

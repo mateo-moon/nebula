@@ -35,6 +35,12 @@ export interface BootstrapOptions {
    * this tree. Scaffold one with `nebula init --provider aws`.
    */
   gitopsDir?: string;
+  /** Local workforce identity JSON (or "-" for stdin) for the OIDC-enabled cluster. */
+  oidcConfig?: string;
+  /** Protected Desktop application registration file when the identity requires it. */
+  oidcClientConfig?: string;
+  /** Optional local PEM CA for the workforce-facing API endpoint. */
+  oidcCaFile?: string;
 }
 
 /** A cloud provider's bootstrap implementation. */
@@ -42,5 +48,5 @@ export interface BootstrapProvider {
   /** Provider key used by `--provider` */
   name: string;
   /** Run the full bootstrap for this provider. */
-  bootstrap(options: BootstrapOptions): Promise<void>;
+  bootstrap(options: BootstrapOptions): Promise<string | void>;
 }

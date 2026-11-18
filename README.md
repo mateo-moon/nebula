@@ -112,8 +112,9 @@ the k0s management cluster, transfers Cluster API state, and installs Argo CD
 before removing the temporary kind cluster. Use `--gitops-dir <path>` to select
 the AWS deployment directory.
 
-For an OIDC-enabled cluster, `nebula oidc-kubeconfig` writes a sign-in kubeconfig
-from local inputs, without cluster access. See
+AWS bootstrap returns a sign-in kubeconfig for an OIDC-enabled k0s cluster
+when given the local identity with `--oidc-config`. The standalone
+`nebula oidc-kubeconfig` command works without bootstrapping or cluster access. See
 [sign-in kubeconfig inputs and usage](packages/cli/README.md).
 
 ## Repository structure
