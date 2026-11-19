@@ -36,15 +36,23 @@ import {
  * https://github.com/k0sproject/k0smotron/releases/tag/v2.3.1
  */
 const K0SMOTRON_VERSION = "v2.3.1";
-const K0SMOTRON_RELEASES_BASE =
-  `https://github.com/k0sproject/k0smotron/releases/download/${K0SMOTRON_VERSION}`;
+const K0SMOTRON_COMPONENTS = {
+  infrastructure: "infrastructure",
+  controlPlane: "control-plane",
+  bootstrap: "bootstrap",
+} as const;
 
-/** k0smotron fetchConfig URLs for each provider type */
-const K0SMOTRON_FETCH_URLS = {
-  infrastructure: `${K0SMOTRON_RELEASES_BASE}/infrastructure-components.yaml`,
-  controlPlane: `${K0SMOTRON_RELEASES_BASE}/control-plane-components.yaml`,
-  bootstrap: `${K0SMOTRON_RELEASES_BASE}/bootstrap-components.yaml`,
-};
+function k0smotronProvider(config: ClusterApiOperatorConfig, tier: keyof typeof K0SMOTRON_COMPONENTS) {
+  // Raw Helm values take precedence over the typed options when the chart is rendered.
+  const values = config.values?.[tier] as { k0smotron?: { version?: unknown } } | undefined;
+  const override = values?.k0smotron?.version;
+  const version = typeof override === "string" ? override : config[tier]?.k0smotron?.version ?? K0SMOTRON_VERSION;
+  const component = K0SMOTRON_COMPONENTS[tier];
+  return {
+    version,
+    fetchConfig: { url: `https://github.com/k0sproject/k0smotron/releases/download/${version}/${component}-components.yaml` },
+  };
+}
 
 /**
  * CAPI core and CAPA both ship `resources: {}` — BestEffort QoS, cpu.shares 2,
@@ -167,7 +175,7 @@ export interface ClusterApiOperatorAwsConfig {
 export interface ClusterApiOperatorConfig {
   /** Namespace for the operator (defaults to capi-operator-system) */
   namespace?: string;
-  /** Helm chart version (defaults to 0.25.0) */
+  /** Helm chart version (defaults to 0.27.0) */
   version?: string;
   /** Helm repository URL */
   repository?: string;
@@ -252,12 +260,7 @@ export class ClusterApiOperator extends HelmModule<ClusterApiOperatorConfig> {
 
     // Build infrastructure providers based on config
     const infrastructureProviders: Record<string, unknown> = {
-      k0smotron: {
-        version: this.config.infrastructure?.k0smotron?.version ?? K0SMOTRON_VERSION,
-        fetchConfig: {
-          url: K0SMOTRON_FETCH_URLS.infrastructure,
-        },
-      },
+      k0smotron: k0smotronProvider(this.config, "infrastructure"),
     };
 
     // Add GCP provider if configured
@@ -315,20 +318,10 @@ export class ClusterApiOperator extends HelmModule<ClusterApiOperatorConfig> {
         },
       },
       controlPlane: {
-        k0smotron: {
-          version: this.config.controlPlane?.k0smotron?.version ?? K0SMOTRON_VERSION,
-          fetchConfig: {
-            url: K0SMOTRON_FETCH_URLS.controlPlane,
-          },
-        },
+        k0smotron: k0smotronProvider(this.config, "controlPlane"),
       },
       bootstrap: {
-        k0smotron: {
-          version: this.config.bootstrap?.k0smotron?.version ?? K0SMOTRON_VERSION,
-          fetchConfig: {
-            url: K0SMOTRON_FETCH_URLS.bootstrap,
-          },
-        },
+        k0smotron: k0smotronProvider(this.config, "bootstrap"),
       },
       certManager: {
         enabled: false, // We use our own cert-manager
