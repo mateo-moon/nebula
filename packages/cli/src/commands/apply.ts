@@ -1,21 +1,13 @@
 /**
  * Apply command - Apply synthesized manifests to cluster with CRD dependency handling
  *
- * Applies resources in phases:
- * 1. CRDs and Namespaces
- * 2. Wait for CRDs to be established
- * 3. Operators/Controllers
- * 4. Wait for operator CRDs
- * 5. Custom Resources
- *
- * Shell execution is no-shell (run/kubectl from ./bootstrap/exec → execFileSync,
- * argv only); there is no local exec/execSync helper anymore.
+ * Apply dependencies before the resources that consume them.
  */
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as yaml from 'yaml';
-import { run, kubectl, log, sleep } from './bootstrap/exec';
+import { kubectl, log, sleep } from './bootstrap/exec';
 
 export interface ApplyOptions {
   file?: string;
@@ -86,60 +78,20 @@ function parseManifest(filePath: string): K8sResource[] {
     .filter((r): r is K8sResource => r !== null && typeof r === 'object' && 'kind' in r);
 }
 
-function isPhase1Resource(resource: K8sResource): boolean {
-  // Phase 1: CRDs and Namespaces (fundamental resources)
-  return (
-    resource.kind === 'CustomResourceDefinition' ||
-    resource.kind === 'Namespace'
-  );
-}
+const coreApiVersions = new Set([
+  'v1', 'apps/v1', 'batch/v1', 'rbac.authorization.k8s.io/v1', 'networking.k8s.io/v1',
+]);
+const operatorKinds = new Set([
+  'ServiceAccount', 'Secret', 'ConfigMap', 'ClusterRole', 'ClusterRoleBinding',
+  'Role', 'RoleBinding', 'Deployment', 'StatefulSet', 'DaemonSet', 'Service', 'Job',
+]);
 
-function isPhase2Resource(resource: K8sResource): boolean {
-  // Phase 2: Core Kubernetes resources + Operators that install CRDs
-  // Must be core K8s apiVersions only - not Crossplane managed resources
-  const coreApiVersions = [
-    'v1',
-    'apps/v1',
-    'batch/v1',
-    'rbac.authorization.k8s.io/v1',
-    'networking.k8s.io/v1',
-  ];
-
-  const operatorKinds = [
-    'ServiceAccount',
-    'Secret',
-    'ConfigMap',
-    'ClusterRole',
-    'ClusterRoleBinding',
-    'Role',
-    'RoleBinding',
-    'Deployment',
-    'StatefulSet',
-    'DaemonSet',
-    'Service',
-    'Job',
-  ];
-
-  return coreApiVersions.includes(resource.apiVersion) && operatorKinds.includes(resource.kind);
-}
-
-function isCrossplaneProvider(resource: K8sResource): boolean {
-  return (
-    resource.apiVersion.includes('pkg.crossplane.io') &&
-    resource.kind === 'Provider'
-  );
-}
-
-function isDeploymentRuntimeConfig(resource: K8sResource): boolean {
-  // DeploymentRuntimeConfig must be applied BEFORE Providers that reference them
-  return (
-    resource.apiVersion.includes('pkg.crossplane.io') &&
-    resource.kind === 'DeploymentRuntimeConfig'
-  );
-}
-
-function isProviderConfig(resource: K8sResource): boolean {
-  return resource.kind === 'ProviderConfig';
+interface ApplyPhase {
+  name: string;
+  file: string;
+  accepts: (resource: K8sResource) => boolean;
+  ignoreErrors?: boolean;
+  afterApply?: (reapply: () => void) => Promise<void>;
 }
 
 /** Build the `kubectl apply --server-side …` argv for a manifest file (no shell). */
@@ -202,7 +154,7 @@ async function waitForDeployments(timeout: number = 120): Promise<void> {
   log('   ⚠️  Some deployments may not be fully ready yet, continuing...');
 }
 
-async function waitForCrds(timeout: number = 120): Promise<void> {
+async function checkForCrds(): Promise<void> {
   log('   Waiting for CRDs to be established...');
 
   // CRDs typically establish within a few seconds
@@ -257,6 +209,55 @@ function writeResourcesAsYaml(resources: K8sResource[], filePath: string): void 
   fs.writeFileSync(filePath, content);
 }
 
+// The first matching phase owns each resource. The final batch also accepts
+// arbitrary custom resources whose API groups are unknown to the CLI.
+function planApply(resources: K8sResource[]) {
+  const phases: ApplyPhase[] = [
+    {
+      name: 'CRDs and Namespaces', file: 'phase1.yaml', ignoreErrors: true,
+      accepts: r => r.kind === 'CustomResourceDefinition' || r.kind === 'Namespace',
+      afterApply: checkForCrds,
+    },
+    {
+      name: 'Operators and Services', file: 'phase2.yaml', ignoreErrors: true,
+      accepts: r => coreApiVersions.has(r.apiVersion) && operatorKinds.has(r.kind),
+      afterApply: async () => {
+        log('   Waiting for operators to initialize...');
+        await waitForDeployments(120);
+        await checkForCrds();
+      },
+    },
+    {
+      name: 'DeploymentRuntimeConfigs', file: 'runtimeconfigs.yaml',
+      accepts: r => r.apiVersion.includes('pkg.crossplane.io') && r.kind === 'DeploymentRuntimeConfig',
+    },
+    {
+      name: 'Crossplane Providers', file: 'providers.yaml',
+      accepts: r => r.apiVersion.includes('pkg.crossplane.io') && r.kind === 'Provider',
+      afterApply: () => waitForProviders(300),
+    },
+    {
+      name: 'ProviderConfigs', file: 'providerconfigs.yaml', ignoreErrors: true,
+      accepts: r => r.kind === 'ProviderConfig',
+    },
+    {
+      name: 'Custom Resources', file: 'phase3.yaml', ignoreErrors: true,
+      accepts: () => true,
+      afterApply: async reapply => {
+        log('   Retrying custom resources...');
+        await sleep(10000);
+        reapply();
+      },
+    },
+  ];
+  const batches = phases.map(phase => ({ phase, resources: [] as K8sResource[] }));
+  for (const resource of resources) {
+    const batch = batches.find(({ phase }) => phase.accepts(resource))!;
+    batch.resources.push(resource);
+  }
+  return batches;
+}
+
 export async function apply(options: ApplyOptions): Promise<void> {
   const pattern = options.file || 'dist/*.k8s.yaml';
   const dryRun = options.dryRun || false;
@@ -294,118 +295,23 @@ export async function apply(options: ApplyOptions): Promise<void> {
   log(`   Parsed ${allResources.length} resources total`);
   log('');
 
-  // Group resources by phase
-  const phase1: K8sResource[] = []; // CRDs, Namespaces
-  const runtimeConfigs: K8sResource[] = []; // DeploymentRuntimeConfigs (must be before providers)
-  const providers: K8sResource[] = []; // Crossplane Providers
-  const phase2: K8sResource[] = []; // Operators, Deployments, Services
-  const providerConfigs: K8sResource[] = []; // ProviderConfigs
-  const phase3: K8sResource[] = []; // Custom Resources
-
-  for (const resource of allResources) {
-    if (isPhase1Resource(resource)) {
-      phase1.push(resource);
-    } else if (isDeploymentRuntimeConfig(resource)) {
-      runtimeConfigs.push(resource);
-    } else if (isCrossplaneProvider(resource)) {
-      providers.push(resource);
-    } else if (isProviderConfig(resource)) {
-      providerConfigs.push(resource);
-    } else if (isPhase2Resource(resource)) {
-      phase2.push(resource);
-    } else {
-      phase3.push(resource);
-    }
+  const batches = planApply(allResources);
+  for (const { phase, resources } of batches) {
+    log(`   ${phase.name}: ${resources.length}`);
   }
 
-  log(`   Phase 1: ${phase1.length} CRDs/Namespaces`);
-  log(`   Phase 2: ${phase2.length} Operators/Services`);
-  log(`   RuntimeConfigs: ${runtimeConfigs.length} DeploymentRuntimeConfigs`);
-  log(`   Providers: ${providers.length} Crossplane Providers`);
-  log(`   ProviderConfigs: ${providerConfigs.length} Provider Configs`);
-  log(`   Phase 3: ${phase3.length} Custom Resources`);
-  log('');
-
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nebula-apply-'));
-
   try {
-    // Phase 1: CRDs and Namespaces
-    // Use --server-side for CRDs to avoid annotation size limits (>262KB)
-    if (phase1.length > 0) {
-      log('📦 Phase 1: Applying CRDs and Namespaces...');
-      const phase1File = path.join(tempDir, 'phase1.yaml');
-      writeResourcesAsYaml(phase1, phase1File);
-      kubectl(applyArgs(phase1File, dryRun), { ignoreErrors: true });
-
-      if (!dryRun) {
-        await waitForCrds(60);
-      }
-    }
-
-    // Phase 2: Operators and Services (includes Crossplane controller)
-    // Must be applied BEFORE Crossplane Providers since Crossplane installs the Provider CRD
-    if (phase2.length > 0) {
+    for (const { phase, resources } of batches) {
+      if (!resources.length) continue;
       log('');
-      log('📦 Phase 2: Applying Operators and Services...');
-      const phase2File = path.join(tempDir, 'phase2.yaml');
-      writeResourcesAsYaml(phase2, phase2File);
-      kubectl(applyArgs(phase2File, dryRun), { ignoreErrors: true });
-
-      if (!dryRun) {
-        // Wait for operators to create their CRDs (Crossplane creates Provider CRD)
-        log('   Waiting for operators to initialize...');
-        await waitForDeployments(120);
-        await waitForCrds(120);
-      }
-    }
-
-    // Apply DeploymentRuntimeConfigs (must be before Providers that reference them)
-    if (runtimeConfigs.length > 0) {
-      log('');
-      log('📦 Applying DeploymentRuntimeConfigs...');
-      const runtimeConfigsFile = path.join(tempDir, 'runtimeconfigs.yaml');
-      writeResourcesAsYaml(runtimeConfigs, runtimeConfigsFile);
-      kubectl(applyArgs(runtimeConfigsFile, dryRun));
-    }
-
-    // Apply Crossplane Providers (after Crossplane controller is running and RuntimeConfigs exist)
-    if (providers.length > 0) {
-      log('');
-      log('📦 Applying Crossplane Providers...');
-      const providersFile = path.join(tempDir, 'providers.yaml');
-      writeResourcesAsYaml(providers, providersFile);
-      kubectl(applyArgs(providersFile, dryRun));
-
-      if (!dryRun) {
-        await waitForProviders(300);
-      }
-    }
-
-    // Apply ProviderConfigs (after Providers are healthy)
-    if (providerConfigs.length > 0) {
-      log('');
-      log('📦 Applying ProviderConfigs...');
-      const configsFile = path.join(tempDir, 'providerconfigs.yaml');
-      writeResourcesAsYaml(providerConfigs, configsFile);
-      kubectl(applyArgs(configsFile, dryRun), { ignoreErrors: true });
-    }
-
-    // Phase 3: Custom Resources
-    if (phase3.length > 0) {
-      log('');
-      log('📦 Phase 3: Applying Custom Resources...');
-      const phase3File = path.join(tempDir, 'phase3.yaml');
-      writeResourcesAsYaml(phase3, phase3File);
-
-      // Try to apply, may fail for some CRs if CRDs not ready
-      kubectl(applyArgs(phase3File, dryRun), { ignoreErrors: true });
-
-      if (!dryRun) {
-        // Retry after waiting for any remaining CRDs
-        log('   Retrying failed resources...');
-        await sleep(10000);
-        kubectl(applyArgs(phase3File, dryRun), { ignoreErrors: true });
-      }
+      log(`📦 Applying ${phase.name}...`);
+      const file = path.join(tempDir, phase.file);
+      writeResourcesAsYaml(resources, file);
+      const args = applyArgs(file, dryRun);
+      const applyFile = () => kubectl(args, { ignoreErrors: phase.ignoreErrors });
+      applyFile();
+      if (!dryRun) await phase.afterApply?.(applyFile);
     }
 
     log('');
