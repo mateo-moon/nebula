@@ -86,7 +86,7 @@ export class Iam extends Construct {
 
       // Create GCP Service Account
       // Note: The accountId is derived from metadata.name in Crossplane
-      const gsa = new CpServiceAccount(this, `${kind}-gsa`, {
+      new CpServiceAccount(this, `${kind}-gsa`, {
         metadata: {
           name: accountId, // This becomes the GCP service account ID
         },

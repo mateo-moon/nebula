@@ -1,7 +1,7 @@
 import { Construct } from "constructs";
-import { Network, NetworkConfig } from "./network";
-import { Gke, GkeConfig, NodePoolConfig } from "./gke";
-import { Iam, IamConfig, WorkloadIdentityConfig } from "./iam";
+import { Network, type NetworkConfig } from "./network";
+import { Gke, type GkeConfig } from "./gke";
+import { Iam, type IamConfig } from "./iam";
 import { NetworkSpecDeletionPolicy } from "#imports/compute.gcp.upbound.io";
 import { ClusterSpecDeletionPolicy } from "#imports/container.gcp.upbound.io";
 import {
