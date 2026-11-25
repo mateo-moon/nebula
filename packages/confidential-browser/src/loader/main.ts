@@ -23,7 +23,7 @@ const loadSdk = retryableSdkLoader(async () => {
   if (typeof sdk.default !== "function" || typeof sdk.fetch !== "function" || typeof sdk.verify_certificate !== "function") {
     throw new Error("Verification tools are incomplete. Reload this page before entering owner access.");
   }
-  await sdk.default(new URL("./sdk/tng_wasm_bg.wasm", location.href).href);
+  await sdk.default({ module_or_path: new URL("./sdk/tng_wasm_bg.wasm", location.href).href });
   return sdk;
 });
 const status = (text: string) => {
