@@ -44,8 +44,8 @@ test("worker failure terminates TLS state and closes a TCP session that finishes
   try {
     // Relay validation imports its URL checker asynchronously. A timer tick
     // cannot establish that the stubbed connection attempt has started.
-    await Promise.race([started, deadline]); worker.emit({ type: "error", error: "Source verification stopped" });
-    await assert.rejects(test.result, /Source verification stopped/); assert.equal(test.terminations(), 1);
+    await Promise.race([started, deadline]); worker.emit({ type: "error", code: "IMAGE_REGISTRY_SOURCE_FAILED", error: "private source verification sentinel" });
+    await assert.rejects(test.result, (error: any) => error.code === "IMAGE_REGISTRY_SOURCE_FAILED" && !error.message.includes("private source verification sentinel")); assert.equal(test.terminations(), 1);
     opened(Response.json({ id: session })); await Promise.race([closed, deadline]);
     assert.deepEqual(deleted, [`/nebula/v1/registry-tunnels/${session}`]);
   } finally { clearTimeout(timer); test.restore(); }

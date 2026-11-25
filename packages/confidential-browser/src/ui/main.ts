@@ -9,6 +9,7 @@ import { readinessSummary, storageReadinessTimeoutMs, type StatusLabel } from ".
 import { registryReference, sourceImageKey, sourceKeyFromRecovery, RegistrySourceError } from "./registry-source";
 import { verificationDownload } from "./verification-download";
 import { resourceReadExample } from "./resource-help";
+import { ImagePreparationError } from "./image-error";
 import type { SupervisorReport } from "./storage-status";
 const api = window.nebula, owner = api.owner;
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id)! as T;
@@ -44,6 +45,7 @@ const completed = new Set<Phase>();
 let activePhase: Phase | undefined;
 let failedPhase: Phase | undefined;
 let keyDeliveryStarted = false;
+let imageOperation: "local-encryption" | "ciphertext-upload" | "publication" | undefined;
 const stepFailures = new WeakMap<HTMLElement, HTMLElement>();
 class UserFacingError extends Error {
   constructor(message: string, readonly kind?: "attestation" | "owner-auth" | "instance" | "final-timeout" | "setup") { super(message); }
@@ -255,7 +257,14 @@ function offerRecoveryBackup(value: unknown) {
 function failure(error: unknown) {
   const notice = el("notice"); notice.hidden = false;
   const step = activePhase ? phaseLabels[activePhase] : "Check deployment inputs and stack access";
-  const reason = error instanceof UserFacingError || error instanceof RegistrySourceError ? error.message.slice(0, 600) : attestationRejected(error) ?
+  // Transport errors may contain SDK details or remote response text. Report
+  // only the operation we know was in progress, never a speculative cause.
+  const imageError = error instanceof ImagePreparationError ? error :
+    activePhase === "encrypting" && !(error instanceof UserFacingError) && !(error instanceof RegistrySourceError) && !attestationRejected(error) ?
+      imageOperation === "ciphertext-upload" ? new ImagePreparationError("IMAGE_UPLOAD_UNCONFIRMED") :
+      imageOperation === "publication" ? new ImagePreparationError("IMAGE_PUBLICATION_UNCONFIRMED") : undefined : undefined;
+  const reason = imageError ? `${imageError.message} Diagnostic: ${imageError.code}.` :
+    error instanceof UserFacingError || error instanceof RegistrySourceError ? error.message.slice(0, 600) : attestationRejected(error) ?
     "The requested confidential VM's attestation was rejected by the approved policy." :
     "This operation could not be confirmed. A network, verification or local browser operation failed.";
   // finalClaimed is durably saved before the first resource write. It is a
@@ -264,7 +273,7 @@ function failure(error: unknown) {
     keyDeliveryStarted || owner.finalClaimed || owner.restored ? "Some keys may already have reached the verified enrolled VM. Key delivery is not fully confirmed." :
     "No image or disk keys were sent during this attempt.";
   const saved = owner.prepared || completed.has("encrypting") ? "Your encrypted image and release checkpoint are saved. Retrying this same approved release needs no image re-upload. " : "";
-  const retry = error instanceof UserFacingError && error.kind === "attestation" ?
+  const retry = imageError ? imageError.next : error instanceof UserFacingError && error.kind === "attestation" ?
     "Have the administrator compare the launch configuration with the approved measurements. Retry only if the original approved configuration is restored. A measured configuration change requires a fresh explicitly approved release. Keep the approved policy and existing instance pins." :
     error instanceof UserFacingError && error.kind === "owner-auth" ? "Restore the owner recovery backup for this release, then use Verify again & refresh status." :
     error instanceof UserFacingError && error.kind === "instance" ? "Reconnect to the original enrolled VM and use its matching owner recovery backup. A replacement requires a fresh explicitly approved release and enrollment; do not adopt a new instance pin." :
@@ -600,6 +609,7 @@ async function inspect() {
 el("deploy-form").addEventListener("submit", event => {
   event.preventDefault(); if (busy || !connected || owner.prepared) return; busy = true; input("deploy").disabled = true;
   el<HTMLFieldSetElement>("deployment-inputs").disabled = true;
+  imageOperation = undefined;
   el("notice").hidden = true;
   text("job-title", "Checking your deployment inputs…");
   text("job-description", "Keep this tab open while your browser prepares the release.");
@@ -641,6 +651,7 @@ el("deploy-form").addEventListener("submit", event => {
     offerRecoveryBackup(await api.backup(recoveryPassword)); input("recovery-password").value = "";
     try {
     completed.clear();
+    imageOperation = "local-encryption";
     progress("encrypting", "Encrypting image locally in your browser…");
     if (!owner.encryptedImage) {
       if (owner.cipherCacheAttempt) await removeCipherCache({ id: owner.cipherCacheAttempt, manifestDigest: "" });
@@ -674,9 +685,11 @@ el("deploy-form").addEventListener("submit", event => {
     }
     owner.encryptedImage = local.cache; delete owner.cipherCacheAttempt; await api.save();
     offerRecoveryBackup(await api.backup(recoveryPassword));
+    imageOperation = "ciphertext-upload";
     await uploadEncryptedImage(local.image, imageLimits,
       (path, method, body, headers) => request(api.channel, path, method, body, "nebula-browser", headers),
       (sent, total) => progress("encrypting", `Uploading encrypted layers: ${imageSizeLabel(sent)} / ${imageSizeLabel(total)} (${Math.floor(sent * 100 / total)}%)`));
+    imageOperation = "publication";
     progress("encrypting", "Publishing your encrypted image…");
     await request(api.channel, "/nebula/v1/publish", "POST", JSON.stringify({
       applicationApproval: owner.applicationApproval }));

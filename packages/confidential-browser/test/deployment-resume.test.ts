@@ -22,6 +22,8 @@ async function deployment(restored = false, rejectedConnection = false, options:
   configureApplication?: (containers: any[]) => void;
   finalVerificationError?: string; transientFinalErrors?: string[]; transientFinalStatuses?: number[]; finalInstanceStatus?: number; keyWriteFailureAfter?: number;
   freshSetup?: boolean; setupErrorBody?: unknown; pauseSetup?: boolean;
+  localWorkerError?: { code?: unknown; error?: unknown };
+  imageTransferError?: string; publicationError?: string;
 } = {}) {
   const blobs = new Map<string, Blob>(), activeUrls = new Set<string>();
   const anchorClicks: { href: string; download: string; connected: boolean }[] = [];
@@ -143,8 +145,9 @@ async function deployment(restored = false, rejectedConnection = false, options:
       if (init?.method === "POST") { const value = JSON.parse(init.body as string); if (enrollment && enrollment.transportPublicKey !== value.transportPublicKey) return response({}, 409); enrollment ??= value; return response(enrollment); }
       return response(enrollment ?? {}, enrollment ? 200 : 404);
     }
-    if (path.startsWith("/nebula/v1/image")) { uploadRequests++; return response(init?.method === "POST" ? { version: 2, digest: prepared.digest, layers: [{ digest: "sha256:" + "e".repeat(64), size: 1, received: 0 }] } : {}); }
+    if (path.startsWith("/nebula/v1/image")) { uploadRequests++; if (options.imageTransferError) throw new Error(options.imageTransferError); return response(init?.method === "POST" ? { version: 2, digest: prepared.digest, layers: [{ digest: "sha256:" + "e".repeat(64), size: 1, received: 0 }] } : {}); }
     if (path === "/nebula/v1/publish") {
+      if (options.publicationError) throw new Error(options.publicationError);
       assert.deepEqual(Object.keys(JSON.parse(init!.body as string)).sort(), ["applicationApproval"]);
       publishes++; return response({}, 202);
     }
@@ -177,7 +180,7 @@ async function deployment(restored = false, rejectedConnection = false, options:
   } };
   class LocalWorker {
     onmessage?: (event: any) => void;
-    postMessage() { queueMicrotask(() => this.onmessage?.({ data: { type: "ready", result: { version: 2, manifest: "e30=", config: "e30=",
+    postMessage() { queueMicrotask(() => this.onmessage?.({ data: options.localWorkerError ? { type: "error", ...options.localWorkerError } : { type: "ready", result: { version: 2, manifest: "e30=", config: "e30=",
       manifestDigest: prepared.digest, layers: [{ digest: "sha256:" + "e".repeat(64), name: "layer-0.enc", size: 1, file: new Blob(["x"]) }] } } })); }
     terminate() {}
   }
@@ -257,6 +260,44 @@ test("rejected stack settings keep image encryption and publication disabled", a
   assert.equal(ui.counts().keyWrites, 0);
   assert.deepEqual(ui.completed(), []);
   assert.deepEqual(ui.active(), []);
+});
+
+test("local encryption failures show fixed actionable diagnostics and keep arbitrary worker text private", async () => {
+  for (const [code, reason, next] of [
+    ["IMAGE_PLATFORM_UNSUPPORTED", /not a valid linux\/amd64 image/, /Build or pull the image for linux\/amd64/],
+    ["IMAGE_DOCKER_SAVE_REQUIRED", /no Docker save manifest/, /docker image save/],
+    ["IMAGE_STORAGE_QUOTA", /ran out of local storage/, /Keep this site's owner data/],
+    ["IMAGE_STORAGE_UNAVAILABLE", /could not read the selected image/, /do not clear owner recovery data/],
+    ["IMAGE_ENCRYPTION_FAILED", /No more specific safe diagnostic/, /report this diagnostic code/],
+  ] as const) {
+    const ui = await deployment(false, false, { localWorkerError: { code, error: "private-key-password-archive-content-sentinel" } });
+    const notice = ui.el("notice").textContent;
+    assert.match(notice, reason); assert.match(notice, next); assert.ok(notice.includes(`Diagnostic: ${code}.`));
+    assert.doesNotMatch(notice, /private-key-password-archive-content-sentinel/);
+    assert.match(notice, /No image or disk keys were sent during this attempt/);
+    assert.equal(ui.steps[0].classes.has("failed"), true);
+  }
+  for (const code of ["private-key-password-archive-content-sentinel", "constructor", { toString() { throw new Error("must not read an unreviewed code"); } }]) {
+    const ui = await deployment(false, false, { localWorkerError: { code, error: "private-key-password-archive-content-sentinel" } });
+    assert.match(ui.el("notice").textContent, /Diagnostic: IMAGE_ENCRYPTION_FAILED/);
+    assert.doesNotMatch(ui.el("notice").textContent, /private-key-password-archive-content-sentinel/);
+  }
+});
+
+test("unconfirmed ciphertext transfer and publication report only the known operation while preserving attestation rejection", async () => {
+  for (const [options, code] of [
+    [{ imageTransferError: "private transport key-response sentinel" }, "IMAGE_UPLOAD_UNCONFIRMED"],
+    [{ publicationError: "private publication response sentinel" }, "IMAGE_PUBLICATION_UNCONFIRMED"],
+  ] as const) {
+    const ui = await deployment(false, false, options), notice = ui.el("notice").textContent;
+    assert.ok(notice.includes(`Diagnostic: ${code}.`));
+    assert.doesNotMatch(notice, /private .*sentinel/);
+    assert.match(notice, /No image or disk keys were sent during this attempt/);
+    assert.equal(ui.owner.finalPin, undefined); assert.equal(ui.counts().keyWrites, 0);
+  }
+  const ui = await deployment(false, false, { imageTransferError: 'CreateOHttpClientFailed(EvidenceVerifyError(EarStatusNotAffirming { status: "contraindicated" }))' });
+  assert.match(ui.el("notice").textContent, /attestation was rejected by the approved policy/);
+  assert.doesNotMatch(ui.el("notice").textContent, /IMAGE_UPLOAD_UNCONFIRMED/);
 });
 
 test("the initial page hides unconfirmed requirements even before JavaScript connects", () => {

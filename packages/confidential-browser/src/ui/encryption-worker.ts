@@ -1,5 +1,6 @@
 import { encryptDockerArchive, type LocalEncryptionResult } from "./image-encryption";
 import { hash, utf8 } from "../loader/transport";
+import { ImagePreparationError, classifyImageError } from "./image-error";
 
 /** OPFS contains only ciphertext and standard public OCI metadata, never a
  * usable image key. The owner vault separately binds the cache's manifest. */
@@ -15,7 +16,10 @@ self.onmessage = event => { void (async () => {
   try {
     let saved: any;
     try { saved = JSON.parse(await (await (await directory.getFileHandle("receipt.json")).getFile()).text()); }
-    catch (error) { if ((error as DOMException).name !== "NotFoundError") throw error; }
+    catch (error) {
+      if ((error as Error).name === "SyntaxError") throw new ImagePreparationError("IMAGE_CACHE_MISMATCH");
+      if ((error as DOMException).name !== "NotFoundError") throw error;
+    }
     let result: LocalEncryptionResult;
     if (saved) {
       if (!manifestDigest || saved.result?.manifestDigest !== manifestDigest || saved.keySha256 !== keySha256 ||
@@ -40,4 +44,4 @@ self.onmessage = event => { void (async () => {
     }
     complete = true; self.postMessage({ type: "ready", result: { ...result, layers } });
   } finally { key.fill(0); if (!complete && !manifestDigest) await root.removeEntry(cacheId, { recursive: true }); }
-})().catch(error => self.postMessage({ type: "error", error: error instanceof Error ? error.message : "Local image encryption failed" })); };
+})().catch(error => self.postMessage({ type: "error", code: classifyImageError(error).code })); };

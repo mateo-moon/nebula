@@ -1,6 +1,7 @@
 import { hash } from "../loader/transport";
 import type { ImageUploadLimits } from "@nebula/confidential-client/image-protocol";
 import type { LocalEncryptionResult } from "./image-encryption";
+import { ImagePreparationError, imageWorkerError } from "./image-error";
 
 declare const NEBULA_IMAGE_WORKER: string;
 type Send = (path: string, method: string, body: BodyInit, headers?: Record<string, string>) => Promise<Response>;
@@ -12,23 +13,25 @@ export interface CipherCache { id: string; manifestDigest: string; recovery?: Lo
 
 export async function prepareLocalImage(archive: File, imageKey: string, keyId: string, limits: ImageUploadLimits,
   cache: CipherCache | undefined, progress: (done: number, total: number) => void, attemptId?: string) {
-  if (!archive.size || archive.size > limits.maxBytes) throw new Error("The image archive exceeds this stack's upload limit");
+  if (!archive.size || archive.size > limits.maxBytes) throw new ImagePreparationError("IMAGE_SIZE_LIMIT");
   const id = cache?.id ?? attemptId ?? "nebula-cipher-" + crypto.randomUUID();
-  if (!/^nebula-cipher-[a-f0-9-]{36}$/.test(id)) throw new Error("Invalid local ciphertext cache identity");
+  if (!/^nebula-cipher-[a-f0-9-]{36}$/.test(id)) throw new ImagePreparationError("IMAGE_CACHE_MISMATCH");
   const url = URL.createObjectURL(new Blob([NEBULA_IMAGE_WORKER], { type: "text/javascript" }));
-  const worker = new Worker(url);
+  let worker: Worker;
+  try { worker = new Worker(url); }
+  catch { URL.revokeObjectURL(url); throw new ImagePreparationError("IMAGE_WORKER_STOPPED"); }
   try {
     const image = await new Promise<LocalCipherImage>((resolve, reject) => {
-      worker.onerror = event => reject(new Error(event.message || "The local encryption worker stopped"));
+      worker.onerror = () => reject(new ImagePreparationError("IMAGE_WORKER_STOPPED"));
       worker.onmessage = event => {
         const message = event.data;
         if (message.type === "progress") progress(message.done, message.total);
         else if (message.type === "ready") resolve(message.result);
-        else if (message.type === "error") reject(new Error(message.error));
+        else if (message.type === "error") reject(imageWorkerError(message.code));
       };
       worker.postMessage({ archive, imageKey, keyId, cacheId: id, manifestDigest: cache?.manifestDigest, recovery: cache?.recovery, maxBytes: limits.maxBytes });
     });
-    if (!/^sha256:[a-f0-9]{64}$/.test(image.manifestDigest) || !image.layers.length || image.layers.some(l => l.file.size !== l.size)) throw new Error("The local encrypted image is incomplete");
+    if (!/^sha256:[a-f0-9]{64}$/.test(image.manifestDigest) || !image.layers.length || image.layers.some(l => l.file.size !== l.size)) throw new ImagePreparationError("IMAGE_CACHE_MISMATCH");
     const { layers, ...metadata } = image;
     const recovery = { ...metadata, layers: layers.map(({ file: _, ...layer }) => layer) };
     return { image, cache: { id, manifestDigest: image.manifestDigest, recovery } };
@@ -39,14 +42,17 @@ export async function prepareLocalImage(archive: File, imageKey: string, keyId: 
 export async function uploadEncryptedImage(image: LocalCipherImage, limits: ImageUploadLimits, send: Send,
   progress: (sent: number, total: number) => void) {
   const total = image.layers.reduce((sum, layer) => sum + layer.size, 0);
-  if (!total || total > limits.maxBytes) throw new Error("Encrypted layers exceed this stack's upload limit");
-  const acknowledgement = await (await send("/nebula/v1/image", "POST", JSON.stringify({ version: 2, manifest: image.manifest, config: image.config }))).json();
-  if (acknowledgement.version !== 2 || acknowledgement.digest !== image.manifestDigest || !Array.isArray(acknowledgement.layers) || acknowledgement.layers.length !== image.layers.length) throw new Error("The attested upload checkpoint differs from your encrypted image");
+  if (!total || total > limits.maxBytes) throw new ImagePreparationError("IMAGE_SIZE_LIMIT");
+  const response = await send("/nebula/v1/image", "POST", JSON.stringify({ version: 2, manifest: image.manifest, config: image.config }));
+  let acknowledgement: any;
+  try { acknowledgement = await response.json(); }
+  catch { throw new ImagePreparationError("IMAGE_UPLOAD_CHECKPOINT"); }
+  if (!acknowledgement || acknowledgement.version !== 2 || acknowledgement.digest !== image.manifestDigest || !Array.isArray(acknowledgement.layers) || acknowledgement.layers.length !== image.layers.length) throw new ImagePreparationError("IMAGE_UPLOAD_CHECKPOINT");
   let sent = 0; progress(sent, total);
   for (const [index, layer] of image.layers.entries()) {
-    if (!/^sha256:[a-f0-9]{64}$/.test(layer.digest) || layer.file.size !== layer.size) throw new Error("Invalid local encrypted layer");
+    if (!/^sha256:[a-f0-9]{64}$/.test(layer.digest) || layer.file.size !== layer.size) throw new ImagePreparationError("IMAGE_INTEGRITY_FAILED");
     const checkpoint = acknowledgement.layers[index];
-    if (checkpoint.digest !== layer.digest || checkpoint.size !== layer.size || !Number.isSafeInteger(checkpoint.received) || checkpoint.received < 0 || checkpoint.received > layer.size || (checkpoint.received !== layer.size && checkpoint.received % limits.chunkBytes !== 0)) throw new Error("Invalid attested encrypted-layer checkpoint");
+    if (!checkpoint || checkpoint.digest !== layer.digest || checkpoint.size !== layer.size || !Number.isSafeInteger(checkpoint.received) || checkpoint.received < 0 || checkpoint.received > layer.size || (checkpoint.received !== layer.size && checkpoint.received % limits.chunkBytes !== 0)) throw new ImagePreparationError("IMAGE_UPLOAD_CHECKPOINT");
     progress(sent + checkpoint.received, total);
     for (let offset = checkpoint.received; offset < layer.size; offset += limits.chunkBytes) {
       const end = Math.min(offset + limits.chunkBytes, layer.size), raw = await layer.file.slice(offset, end).arrayBuffer();
@@ -77,18 +83,21 @@ export async function prepareRegistryImage(source: RegistryImageInput, wasm: Uin
   imageKey: string, keyId: string, limits: ImageUploadLimits, cache: CipherCache | undefined,
   send: import("./registry-transport").TunnelRequest, progress: (done: number, total: number) => void, attemptId?: string) {
   const id = cache?.id ?? attemptId ?? "nebula-cipher-" + crypto.randomUUID();
-  const url = URL.createObjectURL(new Blob([NEBULA_REGISTRY_WORKER], { type: "text/javascript" })), worker = new Worker(url);
+  const url = URL.createObjectURL(new Blob([NEBULA_REGISTRY_WORKER], { type: "text/javascript" }));
+  let worker: Worker;
+  try { worker = new Worker(url); }
+  catch { URL.revokeObjectURL(url); throw new ImagePreparationError("IMAGE_WORKER_STOPPED"); }
   // At most 256 layers, with a full verification prepass during recovery.
   const tunnels = new Set<string>(), sourceCaches = new Set<string>(), pending = new Set<Promise<void>>();
   let stopped = false;
   try {
     return await new Promise<{ image: LocalCipherImage; cache: CipherCache }>((resolve, reject) => {
-      worker.onerror = () => reject(new Error("The isolated registry source worker stopped"));
+      worker.onerror = () => reject(new ImagePreparationError("IMAGE_WORKER_STOPPED"));
       worker.onmessage = event => {
         const message = event.data;
         if (message.type === "progress") progress(message.done, message.total);
         else if (message.type === "ready") resolve(message.result);
-        else if (message.type === "error") reject(new Error(message.error));
+        else if (message.type === "error") reject(imageWorkerError(message.code));
         else if (message.type === "source-cache") {
           if (typeof message.id !== "string" || !message.id.startsWith(id + "/") || !/^nebula-cipher-[a-f0-9-]{36}\/nebula-source-[a-f0-9-]{36}$/.test(message.id) || sourceCaches.size >= 512) reject(new Error("Invalid local source ciphertext cache identity"));
           else sourceCaches.add(message.id);

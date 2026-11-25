@@ -228,7 +228,45 @@ test("the actual local encryption worker passes the stack's expanded-byte limit 
   const deadline = Date.now() + 5000;
   while (!messages.some(message => message.type === "error" || message.type === "ready")) { if (Date.now() >= deadline) assert.fail("The worker did not finish"); await new Promise(resolve => setTimeout(resolve, 5)); }
   const terminal = messages.find(message => message.type === "error" || message.type === "ready");
-  assert.equal(terminal.type, "error"); assert.match(terminal.error, /Uncompressed image layers/);
+  assert.equal(terminal.type, "error"); assert.equal(terminal.code, "IMAGE_SIZE_LIMIT"); assert.equal("error" in terminal, false);
   assert.equal(files.has("receipt.json"), false); assert.deepEqual(removed, [cacheId]);
   assert.ok([...files.values()].flat().reduce((sum, raw) => sum + raw.length, 0) <= maximum);
+});
+
+test("the actual encryption worker reports safe format, platform and browser-storage codes without exception text", async () => {
+  const bundle = await build({ entryPoints: [new URL("../src/ui/encryption-worker.ts", import.meta.url).pathname], bundle: true, write: false, format: "iife", platform: "browser", target: "es2022" });
+  const source = fixture([Buffer.from("private source image")]);
+  const arm64Config = Buffer.from(JSON.stringify({ architecture: "arm64", os: "linux", rootfs: { type: "layers", diff_ids: [sha(source.layers[0][1])] } }));
+  const arm64 = gzipDockerArchive([Buffer.from("private source image")], false, false, arm64Config).archive;
+  const invalidJson = new Blob([tar([["manifest.json", Buffer.from('{"private-error-sentinel": INVALID')]])]);
+  const noDockerManifest = new Blob([tar([["not-an-image.txt", Buffer.from("private source image")]])]);
+  for (const options of [
+    { archive: arm64, expected: "IMAGE_PLATFORM_UNSUPPORTED" },
+    { archive: noDockerManifest, expected: "IMAGE_DOCKER_SAVE_REQUIRED" },
+    { archive: invalidJson, expected: "IMAGE_ARCHIVE_INVALID" },
+    { archive: source.archive, corruptReceipt: true, expected: "IMAGE_CACHE_MISMATCH" },
+    { archive: source.archive, error: new DOMException("private-error-sentinel", "QuotaExceededError"), expected: "IMAGE_STORAGE_QUOTA" },
+    { archive: source.archive, error: new DOMException("private-error-sentinel", "NotAllowedError"), expected: "IMAGE_STORAGE_UNAVAILABLE" },
+    { archive: source.archive, missingStorage: true, expected: "IMAGE_STORAGE_UNSUPPORTED" },
+    { archive: source.archive, error: new Error("private-error-sentinel"), expected: "IMAGE_ENCRYPTION_FAILED" },
+  ]) {
+    const messages: any[] = [], self: any = { postMessage(value: unknown) { messages.push(value); } };
+    const root = { async getDirectoryHandle() { if (options.error) throw options.error; throw new Error("Unexpected OPFS request"); } };
+    // For archive validation cases, the worker gets a writable ciphertext sink
+    // but never publishes a release or calls a remote API.
+    const directory = { async getFileHandle(name: string, create?: { create?: boolean }) {
+      if (name === "receipt.json" && options.corruptReceipt) return { async getFile() { return new Blob(['{"private-error-sentinel": INVALID']); } };
+      if (!create?.create) throw new DOMException("not found", "NotFoundError");
+      return { async createWritable() { return { async write() {}, async close() {} }; } };
+    } };
+    const storage = options.missingStorage ? {} : { async getDirectory() { return options.error ? root : { async getDirectoryHandle() { return directory; }, async removeEntry() {} }; } };
+    runInNewContext(bundle.outputFiles[0].text, { self, navigator: { storage }, crypto: webcrypto, Blob, Uint8Array, ArrayBuffer, DataView, TextEncoder, TextDecoder, ReadableStream, DecompressionStream, DOMException, atob, btoa, setTimeout, clearTimeout });
+    self.onmessage({ data: { archive: options.archive, imageKey: randomBytes(32).toString("hex"), keyId, cacheId: "nebula-cipher-aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", maxBytes: 2 ** 32 } });
+    const deadline = Date.now() + 5000;
+    while (!messages.some(message => message.type === "error" || message.type === "ready")) { if (Date.now() >= deadline) assert.fail("The worker did not finish"); await new Promise(resolve => setTimeout(resolve, 5)); }
+    const terminal = messages.find(message => message.type === "error" || message.type === "ready");
+    assert.deepEqual(Object.keys(terminal).sort(), ["code", "type"]);
+    assert.equal(terminal.type, "error"); assert.equal(terminal.code, options.expected);
+    assert.equal(JSON.stringify(messages).includes("private-error-sentinel"), false);
+  }
 });

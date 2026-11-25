@@ -2,6 +2,7 @@ import { isolatedRegistryFetch } from "./registry-fetch-worker";
 import { RegistrySource, RegistrySourceError } from "./registry-source";
 import { createSourceCiphertextStage } from "./registry-cipher-cache";
 import { encryptRegistrySource } from "./registry-encryption";
+import { classifyImageError } from "./image-error";
 let sequence = 0, started = false;
 const pending = new Map<number, { resolve(value: Response): void; reject(error: Error): void }>();
 const send = (path: string, method = "GET", body?: BodyInit, headers?: Record<string,string>) => new Promise<Response>((resolve, reject) => {
@@ -24,5 +25,8 @@ self.onmessage = event => {
         (done, total) => self.postMessage({ type: "progress", done, total }), attemptId);
       self.postMessage({ type: "ready", result });
     } finally { reader.clear(); source.sourceKey?.fill(0); source.credentials = {}; message.imageKey = ""; }
-  })().catch(error => self.postMessage({ type: "error", error: error instanceof RegistrySourceError ? error.message : "The registry source could not be authenticated, verified or encrypted locally. Check the source, its separate credentials/key and available browser storage; no image was published." }));
+  })().catch(error => {
+    const classified = classifyImageError(error);
+    self.postMessage({ type: "error", code: error instanceof RegistrySourceError && classified.code === "IMAGE_ENCRYPTION_FAILED" ? "IMAGE_REGISTRY_SOURCE_FAILED" : classified.code });
+  });
 };

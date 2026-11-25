@@ -1,10 +1,15 @@
 import { createHMAC, createSHA256 } from "hash-wasm";
 import { b64, bytes, hex, utf8 } from "../loader/transport";
 import { KEY_ANNOTATION, PUBLIC_ANNOTATION, LAYER_MEDIA_TYPE, MAX_METADATA_BYTES, type EncryptedManifest } from "@nebula/confidential-client/image-protocol";
+import { ImagePreparationError } from "./image-error";
 
 const BLOCK = 512, CHUNK = 1024 * 1024;
 const decode = (data: Uint8Array) => new TextDecoder("utf-8", { fatal: true }).decode(data);
 const sha = async (data: Uint8Array) => "sha256:" + hex(new Uint8Array(await crypto.subtle.digest("SHA-256", data as BufferSource)));
+function sourceJson(raw: Uint8Array) {
+  try { return JSON.parse(decode(raw)); }
+  catch { throw new ImagePreparationError("IMAGE_ARCHIVE_INVALID"); }
+}
 interface Entry { start: number; size: number }
 export interface CipherSink { write(data: Uint8Array): Promise<void>; close(): Promise<void> }
 export interface LocalEncryptionResult {
@@ -90,11 +95,11 @@ export async function encryptDockerArchive(archive: Blob, imageKey: Uint8Array, 
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 2 ** 32 || !archive.size || archive.size > maxBytes) throw new Error("The image archive exceeds this stack's upload limit");
   const entries = await dockerArchiveEntries(archive), index = entries.get("manifest.json");
   if (!index) throw new Error("Choose a Docker save image archive containing manifest.json");
-  const manifests = JSON.parse(decode(await metadata(archive.slice(index.start, index.start + index.size))));
+  const manifests = sourceJson(await metadata(archive.slice(index.start, index.start + index.size)));
   if (!Array.isArray(manifests) || manifests.length !== 1 || !Array.isArray(manifests[0].Layers) || !manifests[0].Layers.length || manifests[0].Layers.length > 256) throw new Error("Choose an archive containing exactly one image");
   const source = manifests[0], configEntry = entries.get(safePath(source.Config));
   if (!configEntry) throw new Error("Image configuration is missing");
-  const config = await metadata(archive.slice(configEntry.start, configEntry.start + configEntry.size)), parsed = JSON.parse(decode(config));
+  const config = await metadata(archive.slice(configEntry.start, configEntry.start + configEntry.size)), parsed = sourceJson(config);
   if (parsed.os !== "linux" || parsed.architecture !== "amd64" || parsed.rootfs?.type !== "layers" ||
       !Array.isArray(parsed.rootfs.diff_ids) || parsed.rootfs.diff_ids.length !== source.Layers.length || parsed.rootfs.diff_ids.some((d: unknown) => typeof d !== "string" || !/^sha256:[a-f0-9]{64}$/.test(d))) throw new Error("A valid linux/amd64 image is required");
   const layers: Entry[] = source.Layers.map((path: string) => { const entry = entries.get(safePath(path)); if (!entry || entry.size < 1) throw new Error("An image layer is missing"); return entry; });
@@ -149,7 +154,7 @@ export async function encryptImageLayers(config: Uint8Array, layers: PlainImageL
   sink: (name: string) => Promise<CipherSink>, progress: (done: number, total: number) => void,
   recovery?: LocalEncryptionResult, maxBytes = 2 ** 32): Promise<LocalEncryptionResult> {
   if (imageKey.length !== 32 || !/^kbs:\/\/\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(keyId)) throw new Error("Invalid image key resource");
-  const parsed = JSON.parse(decode(config));
+  const parsed = sourceJson(config);
   if (config.length > MAX_METADATA_BYTES || parsed.os !== "linux" || parsed.architecture !== "amd64" || parsed.rootfs?.type !== "layers" || !Array.isArray(parsed.rootfs.diff_ids) || parsed.rootfs.diff_ids.length !== layers.length || !layers.length || layers.length > 256 || parsed.rootfs.diff_ids.some((d: unknown) => typeof d !== "string" || !/^sha256:[a-f0-9]{64}$/.test(d)) || !Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 2 ** 32) throw new Error("A valid bounded linux/amd64 image is required");
   const total = layers.every(layer => layer.size !== undefined) ? layers.reduce((sum, layer) => sum + layer.size!, 0) : maxBytes;
   if (total > maxBytes) throw new Error("Uncompressed image layers exceed this stack's upload limit");
