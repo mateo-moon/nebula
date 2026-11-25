@@ -90,6 +90,92 @@ export interface DeschedulerConfig {
   tolerations?: Toleration[];
 }
 
+interface DeschedulerPlugin {
+  name: string;
+  args: Record<string, unknown>;
+}
+
+function deschedulerPolicy(config: DeschedulerConfig) {
+  const exclude = config.excludeNamespaces ?? ["kube-system", "argocd"];
+  const namespaceArgs = exclude.length ? { namespaces: { exclude } } : {};
+  const useActualUsage = config.useActualUsage === true;
+  const balance: DeschedulerPlugin[] = [];
+  const violations: DeschedulerPlugin[] = [];
+
+  if (config.enableRemoveDuplicates !== false) {
+    balance.push({ name: "RemoveDuplicates", args: namespaceArgs });
+  }
+  if (config.enableLowNodeUtilization !== false) {
+    const low = config.lowUtilizationThresholds;
+    const target = config.targetUtilizationThresholds;
+    balance.push({
+      name: "LowNodeUtilization",
+      args: {
+        thresholds: {
+          cpu: low?.cpu ?? 20,
+          memory: low?.memory ?? 20,
+          ...(useActualUsage ? {} : { pods: low?.pods ?? 20 }),
+        },
+        targetThresholds: {
+          cpu: target?.cpu ?? 50,
+          memory: target?.memory ?? 50,
+          ...(useActualUsage ? {} : { pods: target?.pods ?? 50 }),
+        },
+        ...(useActualUsage ? { metricsUtilization: { source: "KubernetesMetrics" } } : {}),
+        // Node utilization accepts exclusions under a different key from the pod plugins.
+        ...(exclude.length ? { evictableNamespaces: { exclude } } : {}),
+      },
+    });
+  }
+
+  if (config.enableRemovePodsViolatingNodeAffinity !== false) {
+    violations.push({
+      name: "RemovePodsViolatingNodeAffinity",
+      args: { nodeAffinityType: ["requiredDuringSchedulingIgnoredDuringExecution"], ...namespaceArgs },
+    });
+  }
+  if (config.enableRemovePodsViolatingNodeTaints !== false) {
+    violations.push({ name: "RemovePodsViolatingNodeTaints", args: namespaceArgs });
+  }
+  if (config.enableRemovePodsViolatingInterPodAntiAffinity !== false) {
+    violations.push({ name: "RemovePodsViolatingInterPodAntiAffinity", args: namespaceArgs });
+  }
+  const restarts = config.enableRemovePodsHavingTooManyRestarts === false ? [] : [{
+    name: "RemovePodsHavingTooManyRestarts",
+    args: {
+      podRestartThreshold: config.podRestartThreshold ?? 100,
+      includingInitContainers: true,
+      ...namespaceArgs,
+    },
+  }];
+
+  const defaultEvictor = {
+    name: "DefaultEvictor",
+    args: {
+      evictSystemCriticalPods: false,
+      evictFailedBarePods: true,
+      evictLocalStoragePods: false,
+      ignorePvcPods: config.ignorePvcPods !== false,
+      nodeFit: true,
+    },
+  };
+
+  return {
+    // The chart uses metricsProviders to decide whether to grant metrics.k8s.io access.
+    ...(useActualUsage ? { metricsProviders: [{ source: "KubernetesMetrics" }] } : {}),
+    ...(config.maxNoOfPodsToEvictPerNode ? { maxNoOfPodsToEvictPerNode: config.maxNoOfPodsToEvictPerNode } : {}),
+    profiles: [{
+      name: "default",
+      // Keep the serialized config order and the deschedule execution order stable.
+      pluginConfig: [defaultEvictor, ...balance, ...restarts, ...violations],
+      plugins: {
+        deschedule: { enabled: [...violations, ...restarts].map(plugin => plugin.name) },
+        balance: { enabled: balance.map(plugin => plugin.name) },
+      },
+    }],
+  };
+}
+
 export class Descheduler extends HelmModule<DeschedulerConfig> {
   public readonly helm: Helm;
   public readonly namespace?: kplus.Namespace;
@@ -105,182 +191,9 @@ export class Descheduler extends HelmModule<DeschedulerConfig> {
       this.config.priorityClassName ?? "system-cluster-critical";
     const replicas = this.config.replicas ?? 1;
 
-    // Default thresholds
-    const lowThresholds = {
-      cpu: this.config.lowUtilizationThresholds?.cpu ?? 20,
-      memory: this.config.lowUtilizationThresholds?.memory ?? 20,
-      pods: this.config.lowUtilizationThresholds?.pods ?? 20,
-    };
-    const targetThresholds = {
-      cpu: this.config.targetUtilizationThresholds?.cpu ?? 50,
-      memory: this.config.targetUtilizationThresholds?.memory ?? 50,
-      pods: this.config.targetUtilizationThresholds?.pods ?? 50,
-    };
-
-    // Default excluded namespaces (critical system namespaces)
-    const excludeNamespaces = this.config.excludeNamespaces ?? [
-      "kube-system",
-      "argocd",
-    ];
-
-    // Create namespace if not kube-system (kube-system already exists)
     if (namespaceName !== "kube-system") {
       this.namespace = this.createNamespace(namespaceName);
     }
-
-    // Build enabled plugins list
-    const deschedulePlugins: string[] = [];
-    const balancePlugins: string[] = [];
-
-    if (this.config.enableRemoveDuplicates !== false) {
-      balancePlugins.push("RemoveDuplicates");
-    }
-    if (this.config.enableLowNodeUtilization !== false) {
-      balancePlugins.push("LowNodeUtilization");
-    }
-    if (this.config.enableRemovePodsViolatingNodeAffinity !== false) {
-      deschedulePlugins.push("RemovePodsViolatingNodeAffinity");
-    }
-    if (this.config.enableRemovePodsViolatingNodeTaints !== false) {
-      deschedulePlugins.push("RemovePodsViolatingNodeTaints");
-    }
-    if (this.config.enableRemovePodsViolatingInterPodAntiAffinity !== false) {
-      deschedulePlugins.push("RemovePodsViolatingInterPodAntiAffinity");
-    }
-    if (this.config.enableRemovePodsHavingTooManyRestarts !== false) {
-      deschedulePlugins.push("RemovePodsHavingTooManyRestarts");
-    }
-
-    // Namespace exclusion in descheduler v1alpha2 is applied per-plugin via the
-    // plugin args, not globally and not via DefaultEvictor (which has no
-    // namespace field). Most plugins read `namespaces.exclude`; the node-level
-    // utilization plugins read `evictableNamespaces.exclude` (only `exclude` is
-    // honored there).
-    const namespaceArgs =
-      excludeNamespaces.length > 0
-        ? { namespaces: { exclude: excludeNamespaces } }
-        : {};
-    const evictableNamespaceArgs =
-      excludeNamespaces.length > 0
-        ? { evictableNamespaces: { exclude: excludeNamespaces } }
-        : {};
-
-    // Build plugin configurations - every enabled plugin needs a config entry
-    const pluginConfig: Record<string, unknown>[] = [];
-
-    if (this.config.enableRemoveDuplicates !== false) {
-      pluginConfig.push({
-        name: "RemoveDuplicates",
-        args: { ...namespaceArgs },
-      });
-    }
-
-    const useActualUsage = this.config.useActualUsage === true;
-
-    if (this.config.enableLowNodeUtilization !== false) {
-      pluginConfig.push({
-        name: "LowNodeUtilization",
-        args: {
-          thresholds: {
-            cpu: lowThresholds.cpu,
-            memory: lowThresholds.memory,
-            ...(useActualUsage ? {} : { pods: lowThresholds.pods }),
-          },
-          targetThresholds: {
-            cpu: targetThresholds.cpu,
-            memory: targetThresholds.memory,
-            ...(useActualUsage ? {} : { pods: targetThresholds.pods }),
-          },
-          ...(useActualUsage
-            ? { metricsUtilization: { source: "KubernetesMetrics" } }
-            : {}),
-          ...evictableNamespaceArgs,
-        },
-      });
-    }
-
-    if (this.config.enableRemovePodsHavingTooManyRestarts !== false) {
-      pluginConfig.push({
-        name: "RemovePodsHavingTooManyRestarts",
-        args: {
-          podRestartThreshold: this.config.podRestartThreshold ?? 100,
-          includingInitContainers: true,
-          ...namespaceArgs,
-        },
-      });
-    }
-
-    if (this.config.enableRemovePodsViolatingNodeAffinity !== false) {
-      pluginConfig.push({
-        name: "RemovePodsViolatingNodeAffinity",
-        args: {
-          nodeAffinityType: ["requiredDuringSchedulingIgnoredDuringExecution"],
-          ...namespaceArgs,
-        },
-      });
-    }
-
-    if (this.config.enableRemovePodsViolatingNodeTaints !== false) {
-      pluginConfig.push({
-        name: "RemovePodsViolatingNodeTaints",
-        args: { ...namespaceArgs },
-      });
-    }
-
-    if (this.config.enableRemovePodsViolatingInterPodAntiAffinity !== false) {
-      pluginConfig.push({
-        name: "RemovePodsViolatingInterPodAntiAffinity",
-        args: { ...namespaceArgs },
-      });
-    }
-
-    // Build descheduler policy. `metricsProviders` is what the chart keys the
-    // metrics.k8s.io RBAC rule off, so it must be set alongside the plugin arg.
-    const deschedulerPolicy = {
-      ...(useActualUsage
-        ? { metricsProviders: [{ source: "KubernetesMetrics" }] }
-        : {}),
-      ...(this.config.maxNoOfPodsToEvictPerNode
-        ? { maxNoOfPodsToEvictPerNode: this.config.maxNoOfPodsToEvictPerNode }
-        : {}),
-      profiles: [
-        {
-          name: "default",
-          pluginConfig,
-          plugins: {
-            deschedule: {
-              enabled: deschedulePlugins,
-            },
-            balance: {
-              enabled: balancePlugins,
-            },
-          },
-        },
-      ],
-    };
-
-    // Prepend a DefaultEvictor (eviction policy). Namespace exclusion itself is
-    // applied per-plugin via the args above, not here — which is why this is
-    // unconditional: these guards are what keep the evictor away from critical
-    // and stateful pods, and they must hold whether or not namespaces are
-    // excluded.
-    (deschedulerPolicy.profiles[0] as Record<string, unknown>).pluginConfig = [
-      {
-        name: "DefaultEvictor",
-        args: {
-          evictSystemCriticalPods: false,
-          evictFailedBarePods: true,
-          evictLocalStoragePods: false,
-          ignorePvcPods: this.config.ignorePvcPods !== false,
-          nodeFit: true,
-        },
-      },
-      ...pluginConfig,
-    ];
-
-    // Portable by default (no vendor-specific tolerations). Add via config/values
-    // where needed (e.g. GKE: components.gke.io/gke-managed-components).
-    const defaultTolerations: Array<Record<string, unknown>> = [];
 
     const defaultValues: Record<string, unknown> = {
       kind,
@@ -289,8 +202,8 @@ export class Descheduler extends HelmModule<DeschedulerConfig> {
         : { schedule, suspend: false }),
       replicas,
       priorityClassName,
-      tolerations: this.config.tolerations ?? defaultTolerations,
-      deschedulerPolicy,
+      tolerations: this.config.tolerations ?? [],
+      deschedulerPolicy: deschedulerPolicy(this.config),
       leaderElection: {
         enabled: replicas > 1,
       },

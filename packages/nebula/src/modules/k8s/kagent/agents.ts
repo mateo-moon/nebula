@@ -24,31 +24,6 @@ import {
 
 const TOOL_SERVER = "kagent-tool-server";
 
-/**
- * kagent 0.9.7 controller bug workaround: the Go controller returns tasks without
- * the A2A `kind: "task"` field (not stored in the DB). The Python SDK's Task model
- * validates kind must be "task" → ValidationError → UI sessions hang. This sitecustomize.py
- * monkey-patches Task.model_validate to fix kind="" → "task" before validation.
- * Mounted via the Agent CR's deployment.volumes (kagent-managed, persists across restarts).
- */
-const SITECUSTOMIZE_PY = [
-  'try:',
-  '    from a2a.types import Task',
-  '    _orig = Task.model_validate',
-  '    @classmethod',
-  '    def _patched(cls, data, *a, **kw):',
-  '        if isinstance(data, dict) and data.get("kind") == "":',
-  '            data = dict(data, kind="task")',
-  '        return _orig.__func__(cls, data, *a, **kw)',
-  '    Task.model_validate = _patched',
-  'except Exception:',
-  '    pass',
-].join("\n");
-
-const KIND_FIX_DEPLOYMENT = undefined; // kagent 0.9.9+ fixes the kind="" bug upstream — no mount needed.
-// For 0.9.7: create a kagent-kind-fix ConfigMap (key: _task_store.py with the
-// patched content above) + set this to the volumes/volumeMounts object.
-
 export interface DeclareAgentsOptions {
   githubMcp?: string;
   /** Name of the cluster-info RemoteMCPServer (from declareClusterInfoMcp). When set, the
@@ -96,8 +71,6 @@ export function declareAgents(
     metadata: { name: "docs-agent-context", namespace },
     data: { prompt: docsPrompt },
   });
-  // NOTE: the `kagent-kind-fix` ConfigMap (patched _task_store.py for the kind="" bug)
-  // is managed via kubectl, NOT cdk8s — see KIND_FIX_DEPLOYMENT above + the deploy script.
 
   // ── docs-agent: cluster documentation (inline systemMessage; ConfigMap is a reference) ──
   // NOTE: kagent 0.9.7's CRD doesn't have systemMessageFrom — using inline systemMessage.
@@ -112,7 +85,6 @@ export function declareAgents(
     namespace,
     modelConfig: SUBAGENT_MODEL_CONFIG,
     syncWave: KAGENT_WAVE.AGENT,
-    deployment: KIND_FIX_DEPLOYMENT,
     description:
       "Cluster documentation specialist. Answers 'how to' / access questions with " +
       "specific commands for THIS cluster. Never gives generic advice.",
@@ -134,7 +106,6 @@ export function declareAgents(
     namespace,
     modelConfig: SUBAGENT_MODEL_CONFIG,
     syncWave: KAGENT_WAVE.AGENT,
-    deployment: KIND_FIX_DEPLOYMENT,
     description:
       "Read-only Kubernetes specialist. Inspects pods, events, logs, resources, " +
       "Helm releases, and Prometheus metrics. Returns concise, cited findings.",
@@ -153,7 +124,6 @@ export function declareAgents(
     namespace,
     modelConfig: ORCHESTRATOR_MODEL_CONFIG,
     syncWave: KAGENT_WAVE.AGENT,
-    deployment: KIND_FIX_DEPLOYMENT,
     description:
       "Drafts infrastructure and code changes. Proposes manifests/branches/PRs; " +
       "never applies changes directly to the cluster.",
@@ -186,7 +156,6 @@ export function declareAgents(
     // k8s-inspector / change-author via A2A (agentTool below) and references an embedding
     // ModelConfig for memory — all must exist before its first reconcile.
     syncWave: KAGENT_WAVE.AGENT_ORCHESTRATOR,
-    deployment: KIND_FIX_DEPLOYMENT,
     description:
       "The DevOps engineer agent. Understands intent, routes to specialists, " +
       "keeps cluster changes in reviewable drafts, and reports clearly.",

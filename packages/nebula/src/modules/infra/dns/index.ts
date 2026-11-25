@@ -9,14 +9,7 @@ import {
   Zone as CpRoute53Zone,
   ZoneSpecDeletionPolicy,
 } from '#imports/route53.aws.upbound.io';
-import {
-  DnsDelegation,
-  DnsDelegationConfig,
-  GcpDelegationConfig,
-  CloudflareDelegationConfig,
-  HetznerDelegationConfig,
-  ManualDelegationConfig,
-} from './delegation';
+import { DnsDelegation, type DnsDelegationConfig } from './delegation';
 import { BaseConstruct } from '../../../core';
 import { mapDeletionPolicy } from '../_shared';
 
@@ -132,7 +125,7 @@ export class Dns extends BaseConstruct<DnsConfig> {
       throw new Error("Dns: `project` is required when provider is 'gcp'.");
     }
 
-    // Create DNS zones
+    const zoneDnsNames = new Map<string, string>();
     for (const zoneConfig of this.config.zones) {
       // Ensure DNS name ends with a dot
       const dnsName = zoneConfig.dnsName.endsWith('.')
@@ -167,6 +160,7 @@ export class Dns extends BaseConstruct<DnsConfig> {
       });
 
       this.zones[zoneConfig.name] = zone;
+      zoneDnsNames.set(zoneConfig.name, dnsName);
 
       // Handle delegation
       // Note: GCP assigns nameservers dynamically when zones are created, so they
@@ -215,16 +209,12 @@ export class Dns extends BaseConstruct<DnsConfig> {
     // Create DNS records
     if (this.config.records) {
       for (const recordConfig of this.config.records) {
-        const zoneConfig = this.config.zones.find(z => z.name === recordConfig.zoneName);
+        const zoneDnsName = zoneDnsNames.get(recordConfig.zoneName);
         const zone = this.zones[recordConfig.zoneName];
-        if (!zone || !zoneConfig) {
+        if (!zone || zoneDnsName === undefined) {
           throw new Error(`Zone '${recordConfig.zoneName}' not found for record '${recordConfig.name}'`);
         }
 
-        // Build full DNS name (GCP requires FQDN with trailing dot)
-        const zoneDnsName = zoneConfig.dnsName.endsWith('.') 
-          ? zoneConfig.dnsName 
-          : `${zoneConfig.dnsName}.`;
         const recordName = recordConfig.name === '@'
           ? zoneDnsName
           : `${recordConfig.name}.${zoneDnsName}`;

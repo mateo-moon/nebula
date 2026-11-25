@@ -92,37 +92,54 @@ function existingOutput({ output, kubeconfig }: OidcProfile): boolean {
   return true;
 }
 
-/** The authentication configuration a rendered control plane hands its API server, or undefined. */
-function renderedAuthentication(objects: any[], cluster: string): unknown {
+/** Read the structured authentication configuration for the named cluster. */
+export function readRenderedAuthentication(directory: string, cluster: string): Record<string, unknown> | undefined {
+  const objects = fs.readdirSync(directory).filter(file => file.endsWith(".k8s.yaml"))
+    .flatMap(file => parseAllDocuments(fs.readFileSync(path.join(directory, file), "utf8")).map(document => document.toJSON()));
   const owner = objects.find(object => object?.kind === "Cluster" && object.metadata?.name === cluster);
   const ref = owner?.spec?.controlPlaneRef;
+  if (!ref?.name || !ref.kind) return undefined;
   const namespace = owner?.metadata?.namespace ?? "default";
   const controlPlane = objects.find(object => object?.kind === ref?.kind && object.metadata?.name === ref?.name &&
     (object.metadata?.namespace ?? "default") === namespace);
   // A control plane on its own machines carries the file in its bootstrap
   // configuration; one hosted as pods mounts it from a ConfigMap.
   const standalone = controlPlane?.spec?.k0sConfigSpec;
-  const file: string | undefined = (standalone?.k0s ?? controlPlane?.spec?.k0sConfig)?.spec?.api?.extraArgs?.["authentication-config"];
+  const api = (standalone?.k0s ?? controlPlane?.spec?.k0sConfig)?.spec?.api;
+  // A ServiceAccount issuer alone is used for workload identity. A human OIDC
+  // issuer supplied through legacy flags needs a structured policy to validate.
+  if (api?.extraArgs?.["oidc-issuer-url"] ||
+    api?.rawArgs?.some((arg: string) => /^(?:--?)?(?:oidc-issuer-url|authentication-config)(?:=|$)/.test(arg)))
+    throw new Error(`Use a structured OIDC authenticator for ${cluster} instead of raw API authentication flags`);
+  const file: string | undefined = api?.extraArgs?.["authentication-config"];
   if (!file) return undefined;
+  const parseConfig = (content: unknown): Record<string, unknown> => {
+    const config = typeof content === "string" ? parse(content) : undefined;
+    if (config?.kind !== "AuthenticationConfiguration" || (config.jwt !== undefined && !Array.isArray(config.jwt)))
+      throw new Error(`Cannot read the rendered control-plane authentication configuration of ${cluster}`);
+    return config;
+  };
   if (standalone) {
     const content = standalone.files?.find((item: { path: string }) => item.path === file)?.content;
-    return typeof content === "string" ? parse(content) : undefined;
+    return parseConfig(content);
   }
   for (const mount of controlPlane.spec.mounts ?? []) {
     if (!mount.configMap?.name || !file.startsWith(`${mount.path}/`)) continue;
     const configMap = objects.find(object => object?.kind === "ConfigMap" && object.metadata?.name === mount.configMap.name &&
       (object.metadata?.namespace ?? "default") === namespace);
     const content = configMap?.data?.[file.slice(mount.path.length + 1)];
-    if (typeof content === "string") return parse(content);
+    if (typeof content === "string") return parseConfig(content);
   }
-  return undefined;
+  return parseConfig(undefined);
 }
 
 /** Check the identity against the authenticator a synthesized control plane will enforce. */
 export function assertRenderedAuthenticator(directory: string, profile: OidcProfile): void {
-  const objects = fs.readdirSync(directory).filter(file => file.endsWith(".k8s.yaml"))
-    .flatMap(file => parseAllDocuments(fs.readFileSync(path.join(directory, file), "utf8")).map(document => document.toJSON()));
-  if (!isDeepStrictEqual(renderedAuthentication(objects, profile.cluster), profile.authentication))
+  assertOidcAuthenticator(readRenderedAuthentication(directory, profile.cluster), profile);
+}
+
+export function assertOidcAuthenticator(authentication: unknown, profile: OidcProfile): void {
+  if (!isDeepStrictEqual(authentication, profile.authentication))
     throw new Error(`Local OIDC identity does not match the rendered control-plane authentication configuration of ${profile.cluster}`);
 }
 
@@ -138,7 +155,11 @@ export function writeOidcProfile(profile: OidcProfile): string {
 export async function oidcKubeconfig(options: OidcKubeconfigOptions): Promise<void> {
   const profile = buildOidcProfile(options);
   if (options.rendered) assertRenderedAuthenticator(localPath(options.rendered), profile);
-  const output = writeOidcProfile(profile);
+  printOidcHandoff(profile, writeOidcProfile(profile));
+}
+
+/** Report the operator profile path and the next interactive login step. */
+export function printOidcHandoff(profile: OidcProfile, output: string): void {
   const helper = profile.command === "kubectl" ? "the kubectl oidc-login plugin" : profile.command;
   console.log(`Sign-in kubeconfig for ${profile.cluster}: ${output}`);
   console.log(`Requires ${helper} on this machine.`);

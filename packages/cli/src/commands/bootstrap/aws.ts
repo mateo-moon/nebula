@@ -30,6 +30,8 @@ import {
 import type { BootstrapOptions, BootstrapProvider } from "./types";
 import { buildCapaCredentialsIni, toCapaB64 } from "nebula-cdk8s";
 import { apply } from "../apply";
+import { printOidcHandoff, writeOidcProfile } from "../oidc-kubeconfig";
+import { prepareBootstrapOidcProfile, withTemporaryBootstrapKubeconfig } from "./oidc";
 
 const MGMT_NAMESPACE = "default";
 
@@ -700,14 +702,6 @@ async function deployPlatform(
   await waitForProviders(300, kubeconfig);
 }
 
-/** Apply the management cluster CRs (after the operator installs the CAPA/k0s CRDs). */
-async function deployCluster(
-  gitopsDir: string,
-  clusterName: string,
-): Promise<void> {
-  await applyRepoModule(gitopsDir, `${platformDir(gitopsDir)}/cluster-api`, clusterName);
-}
-
 /** Wait until the CAPI cluster's control plane is ready and its kubeconfig secret exists. */
 /**
  * Grace before "no control-plane Machine exists yet" becomes a failure. The
@@ -839,7 +833,7 @@ async function waitForClusterReady(
 }
 
 /** Write the CAPI-generated kubeconfig for the management cluster to a local file. */
-function fetchKubeconfig(clusterName: string): string {
+function fetchKubeconfig(clusterName: string, output: string): void {
   const b64 = kubectl(
     ["get", "secret", `${clusterName}-kubeconfig`, "-n", MGMT_NAMESPACE, "-o", "jsonpath={.data.value}"],
     { silent: true, ignoreErrors: true },
@@ -850,9 +844,7 @@ function fetchKubeconfig(clusterName: string): string {
     );
   }
   const kubeconfig = Buffer.from(b64, "base64").toString("utf-8");
-  const kPath = path.join(stateDir(clusterName), "kubeconfig");
-  fs.writeFileSync(kPath, kubeconfig, { mode: 0o600 });
-  return kPath;
+  fs.writeFileSync(output, kubeconfig, { mode: 0o600 });
 }
 
 /** Throw if any synthed manifest still contains an unresolved `ref+` secret. */
@@ -1256,7 +1248,7 @@ async function disposeKind(
   return true;
 }
 
-async function bootstrapAws(options: BootstrapOptions): Promise<void> {
+async function bootstrapAws(options: BootstrapOptions): Promise<string> {
   const kindName = options.name || "nebula";
 
   // The repo is the single source of truth: everything configurable (cluster name,
@@ -1290,6 +1282,11 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
 
   preflightAws(region, options.awsProfile, git, oidc);
 
+  // Validate the operator profile against the same render we will apply to Kind,
+  // before provisioning anything or fetching an administrator kubeconfig.
+  const clusterManifests = synthRepoModule(gitopsDir, `${platformDir(gitopsDir)}/cluster-api`, clusterName);
+  const operatorProfile = prepareBootstrapOidcProfile(clusterManifests, clusterName, options);
+
   // Step 1: Kind bootstrap cluster (ephemeral — only runs CAPA to create mgmt).
   if (!options.skipKind) await createKindCluster(kindName);
 
@@ -1319,72 +1316,62 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   log("");
   log("📦 Step 4: Creating the management cluster (CAPA + k0s)");
   log("─".repeat(50));
-  await deployCluster(gitopsDir, clusterName);
+  await apply({ file: `${clusterManifests}/*.k8s.yaml` });
   await waitForClusterReady(1800, clusterName);
 
-  // Step 5: Fetch the management cluster kubeconfig.
-  log("");
-  log("🔄 Step 5: Fetching the management cluster kubeconfig");
-  log("─".repeat(50));
-  const mgmtKubeconfig = fetchKubeconfig(clusterName);
-  log(`   ✅ Wrote ${mgmtKubeconfig}`);
-  await waitForMgmtApiStable(mgmtKubeconfig, 300);
+  const finish = async (mgmtKubeconfig: string): Promise<string> => {
+    log("");
+    log("🔄 Step 5: Connecting to the management cluster for GitOps handoff");
+    fetchKubeconfig(clusterName, mgmtKubeconfig);
+    await waitForMgmtApiStable(mgmtKubeconfig, 300);
 
-  // Step 5.5: IRSA (keyless only) — publish the cluster's OIDC discovery to S3 and
-  // create the IAM OIDC provider + provider role, so the keyless Crossplane provider
-  // can assume the role via WebIdentity. Must precede the handoff (its auth probe
-  // exercises WebIdentity). The cluster was created with the matching OIDC issuer
-  // flag (cluster-api oidcIssuer). CAPA stays keyless via the instance profile.
-  if (keyless) {
-    if (!oidc) {
-      throw new Error(
-        "config.aws.keyless is true but config.oidc is missing — the keyless Crossplane " +
-          "provider needs IRSA (oidc.{accountId,bucket,issuerUrl,providerRoleArn}).",
-      );
+    // Publish the ServiceAccount issuer before the keyless Crossplane handoff.
+    // This is independent of the workforce authenticator.
+    if (keyless) {
+      if (!oidc) {
+        throw new Error(
+          "config.aws.keyless is true but config.oidc is missing — the keyless Crossplane " +
+            "provider needs IRSA (oidc.{accountId,bucket,issuerUrl,providerRoleArn}).",
+        );
+      }
+      await setupIrsa(mgmtKubeconfig, region, clusterName, oidc, options.awsProfile);
+    } else {
+      await setupAwsCredentials(region, options.awsProfile, mgmtKubeconfig);
     }
-    await setupIrsa(mgmtKubeconfig, region, clusterName, oidc, options.awsProfile);
-  }
 
-  // Step 6: Hand off to ArgoCD. Installs Crossplane + provider-aws and ArgoCD on
-  // mgmt, then ArgoCD reconciles the full platform (clusters/mgmt/*)
-  // from git, including the cluster's own CAPI definition (it adopts the AWS
-  // resources Kind's CAPA created). In KEYLESS mode no AWS credentials are baked on
-  // mgmt — Crossplane and CAPA authenticate via the node instance profile (whose
-  // controller permissions were provisioned on Kind, AwsIam controllerPolicies). In
-  // secret mode the static keys must be baked on mgmt first (provider-aws/CAPA read
-  // them), since config.aws.keyless=false renders the modules in secret mode.
-  if (!keyless) {
-    await setupAwsCredentials(region, options.awsProfile, mgmtKubeconfig);
-  }
-  await deployGitopsHandoff(gitopsDir, kindName, mgmtKubeconfig, clusterName, keyless);
+    await deployGitopsHandoff(gitopsDir, kindName, mgmtKubeconfig, clusterName, keyless);
 
-  // Step 7: dispose of the Kind scaffold now that the pivot has handed the CAPI graph to
-  // the management cluster. Default behavior (the CLI description already promises "Kind
-  // is discarded"); --keep-kind opts out for debugging.
-  let kindDeleted = false;
-  if (options.keepKind) {
-    log("   Keeping the Kind bootstrap cluster (--keep-kind).");
-  } else {
-    kindDeleted = await disposeKind(kindName, mgmtKubeconfig, clusterName);
-  }
+    let kindDeleted = false;
+    if (options.keepKind) {
+      log("   Keeping the Kind bootstrap cluster (--keep-kind).");
+    } else {
+      kindDeleted = await disposeKind(kindName, mgmtKubeconfig, clusterName);
+    }
 
-  log("");
-  log("═".repeat(50));
-  log("✨ AWS bootstrap complete!");
-  log("");
-  log(`   Kind (bootstrap):  ${kindDeleted ? "deleted ✅" : `kind-${kindName} (still present)`}`);
-  log(`   k0s (management):  ${clusterName}  →  KUBECONFIG="${mgmtKubeconfig}"`);
-  log("");
-  log("   ArgoCD now reconciles the whole platform and all apps from git — including");
-  log("   the cluster-api module, so the management cluster owns its own CAPI lifecycle.");
-  if (!kindDeleted) {
-    log("   Kind was only the bootstrap scaffold — delete it once ArgoCD is green:");
-    log(`     kind delete cluster --name ${kindName}`);
-  }
-  log("");
-  log(`   export KUBECONFIG="${mgmtKubeconfig}"`);
-  log("   kubectl get nodes");
-  log("");
+    const output = operatorProfile ? writeOidcProfile(operatorProfile) : mgmtKubeconfig;
+    log("");
+    log("═".repeat(50));
+    log("✨ AWS bootstrap complete!");
+    log(`   Kind (bootstrap):  ${kindDeleted ? "deleted ✅" : `kind-${kindName} (still present)`}`);
+    log(`   k0s (management):  ${clusterName}`);
+    log("   ArgoCD now reconciles the platform and all apps from Git.");
+    if (!kindDeleted) {
+      log("   Kind was only the bootstrap scaffold — delete it once ArgoCD is green:");
+      log(`     kind delete cluster --name ${kindName}`);
+    }
+    log("");
+    if (operatorProfile) {
+      printOidcHandoff(operatorProfile, output);
+    } else {
+      log(`   export KUBECONFIG="${output}"`);
+      log("   kubectl get nodes");
+    }
+    log("");
+    return output;
+  };
+  return operatorProfile
+    ? withTemporaryBootstrapKubeconfig(finish)
+    : finish(path.join(stateDir(clusterName), "kubeconfig"));
 }
 
 export const awsProvider: BootstrapProvider = {
