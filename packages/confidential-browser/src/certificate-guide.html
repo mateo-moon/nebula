@@ -1,0 +1,30 @@
+<details class="certificate-guide">
+  <summary>How to check this browser's certificate</summary>
+  <ol>
+    <li><strong>Export this tab's leaf certificate.</strong> Use the browser's certificate viewer, not the page's download. Choose the site's certificate, rather than its issuer or a certificate chain, and export DER or PEM. In Chrome or Edge, open DevTools → Security → View certificate. In Firefox, open the site's connection details → More information → View Certificate. If an embedded browser cannot show its certificate, open the portal in a browser that can and check that browser's connection.</li>
+    <li><strong>Read its fingerprint and validity.</strong> For a DER export:
+      <pre><code>openssl x509 -inform DER -in browser-leaf.der \
+  -noout -fingerprint -sha256 -dates</code></pre>
+      <p>For PEM, omit <code>-inform DER</code> and use your PEM filename. Add <code>-text</code> to inspect X.509 details and extensions; OpenSSL does not validate the embedded AMD evidence. The certificate fingerprint hashes the entire DER certificate. The TLS public-key fingerprint hashes its DER SubjectPublicKeyInfo (SPKI); these are different values. A renewed certificate may keep the same public key. Neither fingerprint nor validity alone verifies attestation.</p>
+    </li>
+    <li><strong>Verify its attestation independently.</strong> Use a verifier obtained from a source you trust and an approved policy from an independently trusted release or review. With a reviewed TNG build:
+      <pre><code>tng tools rats-tls verify --cert browser-leaf.der \
+  --verify "$(cat approved-verify.json)"</code></pre>
+      <p>The same command accepts PEM. <code>--verify</code> takes JSON text, not a filename. Use an approved built-in CoCo configuration. Its verifier checks AMD SNP evidence and its binding to the certificate key. Your independently approved policy must require the approved VM launch measurement, native workload-policy digest (<code>HOST_DATA / init_data</code>), minimum TCB, and disabled debug and migration. Check chip identity when your policy requires it. This needs no external Trustee.</p>
+      <p>Success exits with code 0 and prints <code>verified OK</code> followed by an attestation-result JWT. Stop on an error or nonzero exit. Decoding a JWT to read its claims does not verify its signature or policy.</p>
+    </li>
+  </ol>
+  <details>
+    <summary>Where do the expected measurements come from?</summary>
+    <p>The VM launch measurement identifies the guest's starting state: 48 bytes shown as 96 hexadecimal characters. The checker compares AMD's signed measurement with your expected reference. The prefilled reference is bundled with this UI; it is not learned from the running guest's report.</p>
+    <ol>
+      <li><strong>Choose the boot configuration.</strong> DevOps deploys a pinned Kata runtime and its guest boot files. Nebula adds the guest's CPU settings and kernel parameters.</li>
+      <li><strong>Calculate and review the reference.</strong> Maintainers check the public boot-file hashes and use a pinned SNP calculator with the exact kernel command line and virtual CPU settings.</li>
+      <li><strong>Publish it in the release.</strong> The calculated digest is manually committed to a release profile. The browser build includes that profile, and the certificate form copies its measurement into the field. There is currently no automatic node-to-UI reference-generation pipeline.</li>
+    </ol>
+    <p>The separate workload-policy digest is a 64-character SHA-256 of the native genpolicy Init-Data document. Use this frontend's value from the independently reviewed deployment plan. It binds the container configuration and agent policy; the VM launch measurement alone does not approve the workload. Preparation and final guests have their own policy bindings.</p>
+    <p><a href="https://github.com/mateo-moon/nebula/blob/9914ee5ee23525b04d9e18821b84e2314bc7f00b/packages/confidential-browser/measurement-reference.md" target="_blank" rel="noopener noreferrer">Boot inputs, calculation and source-to-field explanation</a> · <a href="https://github.com/mateo-moon/nebula/blob/9914ee5ee23525b04d9e18821b84e2314bc7f00b/packages/confidential-browser/qualification/snp-launch-2026-11-12.json" target="_blank" rel="noopener noreferrer">Public calculation record</a> · <a href="https://github.com/mateo-moon/nebula/blob/9914ee5ee23525b04d9e18821b84e2314bc7f00b/packages/confidential-browser/src/loader/profiles.json" target="_blank" rel="noopener noreferrer">Pinned release profiles</a> · <a href="https://github.com/mateo-moon/nebula/blob/9914ee5ee23525b04d9e18821b84e2314bc7f00b/tools/tng-client/README.md" target="_blank" rel="noopener noreferrer">Independent TNG verifier build guide</a></p>
+  </details>
+  <p>The page's checker and <code>/certificate.der</code> download are conveniences. Verify the browser-exported certificate; if you use a reported download instead, first compare its complete certificate fingerprint with this tab's actual leaf. Matching a public-key fingerprint alone is not a full attestation check. Expected policy values supplied only by this page are not an independent trust source. A fresh nonce cannot authenticate the JavaScript that displays its own result. Enter access tokens, passwords and registry credentials only after your independent check succeeds.</p>
+  <p class="certificate-guide-links"><a href="https://developer.chrome.com/docs/devtools/security" target="_blank" rel="noopener noreferrer">Chrome certificate viewer</a> · <a href="https://learn.microsoft.com/en-us/microsoft-edge/devtools/security/" target="_blank" rel="noopener noreferrer">Edge certificate viewer</a> · <a href="https://support.mozilla.org/en-US/kb/secure-website-certificate" target="_blank" rel="noopener noreferrer">Firefox certificate viewer</a></p>
+</details>

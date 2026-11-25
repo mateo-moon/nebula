@@ -23,7 +23,7 @@ const run = async (cmd: string, args: string[], timeout = 180_000) => (await exe
 const enabled = process.env.RUN_KUBERNETES_OIDC_INTEGRATION === "1";
 const image = process.env.OIDC_TEST_KIND_IMAGE ?? "kindest/node:v1.35.0@sha256:452d707d4862f52530247495d180205e029056831160e22870e37e3f6c1ac31f";
 
-test("public OIDC profiles merge without sharing another cluster's login audience", { skip: !enabled }, async () => {
+test("public OIDC profiles merge without sharing another cluster's login audience", { skip: !enabled, timeout: 90_000 }, async () => {
   const work = mkdtempSync(join(tmpdir(), "kubernetes-oidc-profiles-"));
   const clusters = ["alpha", "beta", "gamma"];
   try {
@@ -40,7 +40,9 @@ test("public OIDC profiles merge without sharing another cluster's login audienc
     // This reads only the explicit public fixture files. config view does
     // not invoke the exec plugin or contact any Kubernetes API.
     const merged = JSON.parse((await exec("kubectl", ["config", "view", "--merge", "-o", "json"], {
-      env: { ...process.env, KUBECONFIG: files.join(delimiter) }, timeout: 10_000,
+      env: { ...process.env, KUBECONFIG: files.join(delimiter) },
+      // Allow bounded CI process startup time for this local-only merge.
+      timeout: 60_000,
     })).stdout);
     assert.equal(merged.users.length, clusters.length, "each context must retain its own login configuration");
     for (const cluster of clusters) {

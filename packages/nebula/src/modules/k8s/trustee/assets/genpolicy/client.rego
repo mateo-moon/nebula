@@ -3,12 +3,38 @@
 
 trustee_creation(p, i) if {
     container_role(p) == container_role(i)
+    trustee_literal_process(p.Process, i.Process)
     name := object.get(p.Annotations, "io.kubernetes.cri.container-name", "sandbox")
     not data.pstate[concat("", ["trustee_started_", name])]
     trustee_image_annotation(p, i)
-    every env in [value | value := p.Process.Env[_]; not contains(value, "$(")] {
-        env in i.Process.Env
+}
+
+# Application/image strings are literals, never permission for a host to apply
+# genpolicy's fieldRef placeholder substitutions. HOSTNAME is the sole dynamic
+# environment entry emitted by this profile; user/image placeholders are
+# independently rejected before synthesis.
+trustee_literal_process(p, i) if {
+    expected_args := object.get(p, "Args", [])
+    actual_args := object.get(i, "Args", [])
+    count(expected_args) == count(actual_args)
+    every index, value in actual_args {
+        # Kubernetes' literal dollar escape is deterministic, unlike fieldRef
+        # placeholder wildcards. Preserve that native escaping behavior.
+        replace(expected_args[index], "$$", "$") == value
     }
+    expected := object.get(p, "Env", [])
+    actual := object.get(i, "Env", [])
+    # Native image/Pod merging can repeat an identical value (for example
+    # HOME=/tmp). Such repetitions have identical process semantics. Required
+    # literal values and all unexpected/different values remain exact sets.
+    count([value | some value in expected; startswith(value, "HOSTNAME=")]) ==
+        count([value | some value in actual; startswith(value, "HOSTNAME=")])
+    {value | some value in expected; value != "HOSTNAME=$(host-name)"} ==
+        {value | some value in actual; not trustee_dynamic_hostname(expected, value)}
+}
+trustee_dynamic_hostname(expected, value) if {
+    "HOSTNAME=$(host-name)" in expected
+    startswith(value, "HOSTNAME=")
 }
 
 trustee_image_annotation(p, i) if {

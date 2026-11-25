@@ -1,0 +1,106 @@
+{
+  "testedAt": "2026-10-22T19:23:06.827026+00:00",
+  "scope": "One disposable owner-claimable ConfidentialWorkload with an encrypted generic OCI image, retained encrypted block storage and guest-memory storage, deployed through dev ArgoCD on the existing SEV-SNP host.",
+  "sourceRevisions": {
+    "nebulaRuntime": "c722a1acc000dcb9d95da5e0eb53bb557fb96026",
+    "nebulaOperator": "a042cc216b12d5b2795585d94eafd8913baa7967",
+    "nebulaClient": "cb00e22219f633e48673037b9d9cb92c8fbec585",
+    "devopsDeployment": "677beb4a7b6c3791ac6766fef09d048bfa32381f"
+  },
+  "deployment": {
+    "namespace": "confidential-workload-testcase",
+    "argoApplication": "dev-confidential-workload-testcase",
+    "syncedHealthy": true,
+    "officialTrusteeChart": true,
+    "nativeGenpolicy": true,
+    "externalBootstrapTrustee": false,
+    "ownerKeysInKubernetes": false,
+    "ciphertextImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:b0e602cfe7c6588f27775b6a56199a2c1618fbe5d5151d7b9d2378ccdaa5f810"
+  },
+  "ownerFlow": {
+    "actualDeployCommandPassed": true,
+    "localImageEncryptedAndPublished": true,
+    "allOciLayersEncrypted": true,
+    "awaitingPublicationObservedBeforeUpload": true,
+    "guestCreatedAutomaticallyAfterTagPublication": true,
+    "ownerAndOperatorInitDataAgree": true,
+    "attestedGuestTlsIdentityEnrolled": true,
+    "firstClaimAccepted": true,
+    "ownerAuthorizationVerifiedBeforeKeyUpload": true,
+    "imageAndVolumeKeysProvisioned": true,
+    "actualAttestAndStatusCommandsPassed": true,
+    "cachedPublicAmdEndorsementVerified": true,
+    "cachedEndorsementRenewalPreservedInstancePin": true,
+    "verifierHttpReadinessRegressionPassed": true
+  },
+  "storage": {
+    "encryptedBlockPhase": "ready",
+    "retainedDiskBytes": 1073741824,
+    "luksVersion": 2,
+    "plaintextApplicationMarkerAbsentFromRawDisk": true,
+    "applicationDataMarkerVerified": true,
+    "applicationScratchVerifiedAsTmpfs": true
+  },
+  "negativeChecks": {
+    "measurementMismatchRejected": true,
+    "initDataMismatchRejected": true,
+    "invalidEndorsementCertificateRejected": true,
+    "secondOwnerClaimStatus": 409,
+    "impostorAuthorizationStatus": 403,
+    "impostorPolicyMutationStatus": 403,
+    "remoteOwnerImageKeyReadStatus": 403,
+    "remoteOwnerVolumeKeyReadStatus": 403,
+    "remoteRcarStatus": 403,
+    "originalOwnerStillAuthorized": true
+  },
+  "isolation": {
+    "applicationCannotReachKbsOrCdh": true,
+    "applicationCannotReadTestedKeyPaths": true,
+    "applicationIsolationEndpoint": {
+      "isolated": true,
+      "kbs": "unreachable",
+      "cdh": "unreachable",
+      "keyFilesReadable": false
+    },
+    "hostCannotReachGuestInternalPorts": {
+      "8080": "unreachable",
+      "8006": "unreachable",
+      "8444": "unreachable"
+    },
+    "administratorExecBlockedByNativePolicy": [
+      "app",
+      "kbs",
+      "nebula-owner",
+      "nebula-storage-data"
+    ],
+    "operatorSecretReadExecPodDeleteAndPvcPatchDenied": true,
+    "kubernetesSecretCount": 0,
+    "testKeysAndInvitationAbsentFromKubernetesConfiguration": true
+  },
+  "preservation": {
+    "existingPodUidsChecked": 10,
+    "existingPodUidsPreserved": true,
+    "existingPvUidsAndSpecsChecked": 8,
+    "existingPvcUidsAndSpecsChecked": 8,
+    "existingVolumeBindingsPreserved": true,
+    "existingDiskInodesSizesAndHeadersPreserved": true
+  },
+  "softwareValidation": {
+    "clientTypecheckPassed": true,
+    "clientTestsPassed": 17,
+    "clientOptionalTestsSkipped": 3,
+    "nativeInvalidCertificateChainRejected": true,
+    "devopsTypecheckPassed": true,
+    "devopsApplicationLifecycleTestsPassed": 13,
+    "deterministicDevopsSynthesis": true,
+    "clientOnlyPinUpdatePreservesDeploymentBytes": true
+  },
+  "limits": [
+    "An administrator who claims the invitation first can deny service; the client refuses key upload unless its own key controls the attested guest.",
+    "Trustee state and guest TLS identity are ephemeral; replacement requires explicit owner enrollment and reprovisioning.",
+    "Owner enrollment pins one chosen instance; it is not a global singleton guarantee.",
+    "Disk rollback and general ciphertext-integrity protection are outside this test.",
+    "The application probe checks the stated network endpoints and key paths; this is targeted qualification, not an exhaustive security audit."
+  ],
+  "privacy": "Private keys, invitation, raw evidence, chip identity, guest addresses and instance pin are omitted. Detailed receipts and keys remain in the private owner release directory."
+}

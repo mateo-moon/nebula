@@ -1,0 +1,228 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, statSync, existsSync, symlinkSync, renameSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, dirname } from "node:path";
+import { App, Chart } from "cdk8s";
+import { HostKernelModules, hostKernelModulesScript } from "../src/modules/k8s/host-reconciliation";
+
+const script = hostKernelModulesScript();
+const header = "# Managed by Nebula HostKernelModules.";
+const config = { name: "thin-modules", namespace: "openebs", image: `example.invalid/host@sha256:${"a".repeat(64)}`,
+  nodeSelector: { "kubernetes.io/hostname": "snp-worker" }, modules: ["dm_thin_pool"] as const };
+const chart = () => new Chart(new App(), "modules", { disableResourceNameHashes: true });
+
+test("the retained module reconciler confines apply to one explicit host and gives readiness no host mutation capability", () => {
+  const target = chart(); new HostKernelModules(target, "thin", config);
+  const [resource] = target.toJson();
+  assert.equal(resource.kind, "DaemonSet");
+  assert.equal(resource.metadata.name, config.name);
+  assert.equal(resource.metadata.annotations["argocd.argoproj.io/sync-options"], "Prune=false,Delete=false");
+  const pod = resource.spec.template.spec, init = pod.initContainers[0], verify = pod.containers[0];
+  assert.deepEqual(pod.nodeSelector, config.nodeSelector);
+  assert.equal(pod.automountServiceAccountToken, false);
+  assert.deepEqual(init.command.slice(0, 9), ["timeout", "60s", "nsenter", "--mount=/host/proc/1/ns/mnt",
+    "--root=/host/proc/1/root", "--wdns=/", "--", "/bin/sh", "-c"]);
+  assert.ok(!init.command.includes("--wd=/"), "The working directory must open after entering the host root");
+  assert.equal(init.command.at(-1), "apply");
+  assert.equal(init.securityContext.privileged, true);
+  assert.equal(init.securityContext.readOnlyRootFilesystem, true);
+  assert.deepEqual(init.volumeMounts, [{ name: "host-proc", mountPath: "/host/proc", readOnly: true }]);
+  assert.equal(verify.securityContext.privileged, undefined);
+  assert.equal(verify.securityContext.runAsNonRoot, true);
+  assert.deepEqual(verify.securityContext.capabilities, { drop: ["ALL"] });
+  assert(verify.volumeMounts.every((mount: any) => mount.readOnly));
+  assert.equal(verify.readinessProbe.exec.command.at(-1), "check");
+  assert.equal(verify.readinessProbe.periodSeconds, 300);
+  assert.equal(verify.readinessProbe.timeoutSeconds, 10);
+  assert.deepEqual(init.env, [{ name: "KERNEL_MODULES", value: "dm_thin_pool" },
+    { name: "MODULES_FILE", value: "90-nebula-thin-modules.conf" }]);
+  assert(!JSON.stringify(pod).includes("/dev/mapper"));
+  assert.equal(spawnSync("sh", ["-n"], { input: script, encoding: "utf8" }).status, 0);
+});
+
+test("module declarations reject duplicates, non-reviewed names, options and broad selectors", () => {
+  for (const modules of [[], ["dm_mod"], ["dm_thin_pool", "dm_thin_pool"], ["dm_thin_pool parameter=1"],
+    ["../dm_thin_pool"], ["dm_thin_pool;reboot"], ["dm_thin_pool\nother"]]) {
+    assert.throws(() => new HostKernelModules(chart(), "bad", { ...config, modules } as any), /reviewed module names/);
+  }
+  assert.throws(() => new HostKernelModules(chart(), "bad", { ...config, nodeSelector: { tier: "storage" } }), /host name selector/);
+  assert.throws(() => new HostKernelModules(chart(), "bad", { ...config, image: "example.invalid/host:latest" }), /digest-pinned/);
+});
+
+function fixture(usrmerge = false) {
+  const work = mkdtempSync(join(tmpdir(), "nebula-host-modules-")), root = join(work, "host"), bin = join(work, "bin");
+  const kernel = "6.12.115-test", moduleBase = `/lib/modules/${kernel}/kernel/drivers/md`;
+  const paths = ["dm-bufio.ko.xz", "dm-bio-prison.ko.xz", "persistent-data/dm-persistent-data.ko.xz", "dm-thin-pool.ko.xz"]
+    .map(name => `${moduleBase}/${name}`);
+  for (const path of paths) {
+    const file = root + (usrmerge ? "/usr" + path : path);
+    mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, "public module fixture");
+  }
+  if (usrmerge) symlinkSync("usr/lib", join(root, "lib"));
+  mkdirSync(bin); mkdirSync(join(root, "sys/module"), { recursive: true }); mkdirSync(join(root, "etc/modules-load.d"), { recursive: true });
+  const selected = paths.at(-1)!, plan = paths.map(path => `insmod ${path} `).join("\n");
+  const executable = (name: string, body: string) => { const file = join(bin, name); writeFileSync(file, "#!/bin/sh\nset -eu\n" + body, { mode: 0o755 }); return file; };
+  executable("uname", "printf '%s\\n' \"$TEST_KERNEL\"\n");
+  const modinfo = executable("modinfo", `
+case "$2" in
+ filename) printf '%s\\n' "\${SELECTED_MODULE:-$SELECTED}" ;;
+ vermagic)
+   if [ -n "\${SWAP_LIB_TO:-}" ] && [ ! -e "$HOST_ROOT/swapped" ]; then
+     rm "$HOST_ROOT/lib"; ln -s "$SWAP_LIB_TO" "$HOST_ROOT/lib"; touch "$HOST_ROOT/swapped"
+   fi
+   printf '%s SMP\\n' "\${VERMAGIC:-$TEST_KERNEL}" ;;
+ intree) printf '%s\\n' "\${INTREE:-Y}" ;;
+ sig_id) printf '%s\\n' "\${SIGNATURE_ID:-PKCS#7}" ;;
+ signer) printf '%s\\n' "\${SIGNER-Build time autogenerated kernel key}" ;;
+ sig_key) printf '%s\\n' "\${SIGNATURE_KEY-36:85:71:58}" ;;
+ *) exit 2 ;;
+esac
+`);
+  const dpkg = executable("dpkg-query", `
+printf '%s\\n' "$2" >> "$PACKAGE_LOG"
+case "$2" in "$PACKAGE_TREE"/*) ;; *) exit 1 ;; esac
+printf '%s: %s\\n' "\${PACKAGE_OWNER:-linux-image-$TEST_KERNEL}" "$2"
+`);
+  const modprobe = executable("modprobe", `
+printf '%s\\n' "$*" >> "$CALL_LOG"
+case "$*" in
+ "--dry-run --verbose dm_thin_pool")
+   if [ ! -d "$SYS_MODULES/dm_thin_pool" ]; then printf '%s\\n' "\${PLAN-$MODULE_PLAN}"; fi ;;
+ "--config /dev/null --dry-run --verbose dm_thin_pool")
+   if [ ! -d "$SYS_MODULES/dm_thin_pool" ]; then printf '%s\\n' "\${CLEAN_PLAN-\${PLAN-$MODULE_PLAN}}"; fi ;;
+ "--config /dev/null --ignore-install dm_thin_pool")
+   [ "\${LOAD_FAIL:-0}" = 0 ] || exit 17
+   mkdir -p "$SYS_MODULES/dm_thin_pool" ;;
+ *) exit 2 ;;
+esac
+`);
+  const callLog = join(work, "calls"), packageLog = join(work, "packages"), target = join(root, "etc/modules-load.d/90-nebula-thin-modules.conf");
+  const env = { ...process.env, PATH: bin + ":" + process.env.PATH, HOST_ROOT: root, SYS_MODULES: join(root, "sys/module"),
+    MODPROBE: modprobe, MODINFO: modinfo, DPKG_QUERY: dpkg, TEST_KERNEL: kernel, SELECTED: selected, MODULE_PLAN: plan,
+    CALL_LOG: callLog, PACKAGE_LOG: packageLog, PACKAGE_TREE: `${usrmerge ? "/usr" : ""}/lib/modules/${kernel}/kernel`,
+    KERNEL_MODULES: "dm_thin_pool", MODULES_FILE: "90-nebula-thin-modules.conf" };
+  const calls = () => existsSync(callLog) ? readFileSync(callLog, "utf8").trim().split("\n") : [];
+  const run = (action: string, overrides: Record<string, string> = {}) => spawnSync("sh", ["-c", script, "host-modules", action], {
+    env: { ...env, ...overrides }, encoding: "utf8" });
+  return { work, root, target, env, plan, paths, calls, run, loaded: join(root, "sys/module/dm_thin_pool"),
+    packageQueries: () => existsSync(packageLog) ? readFileSync(packageLog, "utf8").trim().split("\n") : [],
+    clearCalls: () => rmSync(callLog, { force: true }), done: () => rmSync(work, { recursive: true, force: true }) };
+}
+
+test("apply preflights only signed installed modules, loads without hooks, writes one boot file and is idempotent", () => {
+  const f = fixture();
+  try {
+    const unrelated = join(f.root, "etc/modules-load.d/unrelated.conf"); writeFileSync(unrelated, "overlay\n");
+    const first = f.run("apply"); assert.equal(first.status, 0, first.stderr);
+    assert.deepEqual(f.calls(), ["--dry-run --verbose dm_thin_pool", "--config /dev/null --dry-run --verbose dm_thin_pool",
+      "--config /dev/null --ignore-install dm_thin_pool"]);
+    assert.equal(readFileSync(f.target, "utf8"), `${header}\ndm_thin_pool\n`);
+    assert.equal(statSync(f.target).mode & 0o777, 0o644);
+    const before = statSync(f.target); f.clearCalls();
+    const second = f.run("apply"); assert.equal(second.status, 0, second.stderr);
+    assert.equal(statSync(f.target).ino, before.ino); assert.equal(statSync(f.target).mtimeMs, before.mtimeMs);
+    assert(f.calls().every(call => call.includes("--dry-run")), "Already loaded modules are never loaded again or unloaded");
+    assert.equal(readFileSync(unrelated, "utf8"), "overlay\n");
+  } finally { f.done(); }
+});
+
+test("Debian usrmerge aliases retain device/inode identity and use the physical package-owned module paths", () => {
+  const f = fixture(true);
+  try {
+    const first = f.run("apply"); assert.equal(first.status, 0, first.stderr);
+    assert.ok(f.packageQueries().length >= f.paths.length);
+    assert.ok(f.packageQueries().every(path => path.startsWith("/usr/lib/modules/6.12.115-test/kernel/")));
+    assert.equal(readFileSync(f.target, "utf8"), `${header}\ndm_thin_pool\n`);
+    assert.equal(f.run("check").status, 0);
+    assert.equal(f.calls().filter(call => call.includes("--ignore-install")).length, 1);
+  } finally { f.done(); }
+});
+
+test("usrmerge aliases cannot escape the installed kernel tree or change inode while module metadata is checked", () => {
+  for (const race of [false, true]) {
+    const f = fixture(true);
+    try {
+      for (const path of f.paths) {
+        const file = join(f.root, "alternate", path);
+        mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, "different public fixture inode");
+      }
+      const changes = race ? { SWAP_LIB_TO: "alternate/lib" } : {};
+      if (!race) { rmSync(join(f.root, "lib")); symlinkSync("alternate/lib", join(f.root, "lib")); }
+      const result = f.run("apply", changes);
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, race ? /path identity changed/ : /canonical module outside/);
+      assert.equal(existsSync(f.target), false); assert.equal(existsSync(f.loaded), false);
+      assert.ok(!f.calls().some(call => call.includes("--ignore-install")));
+    } finally { f.done(); }
+  }
+});
+
+test("canonical module paths cannot turn package ownership queries into glob patterns", () => {
+  const f = fixture(true);
+  try {
+    const directory = join(f.root, "usr/lib/modules/6.12.115-test/kernel/drivers/md");
+    renameSync(directory, directory + "*"); symlinkSync("md*", directory);
+    const result = f.run("apply");
+    assert.notEqual(result.status, 0); assert.match(result.stderr, /unsafe canonical module path/);
+    assert.deepEqual(f.packageQueries(), []);
+    assert.equal(existsSync(f.target), false); assert.equal(existsSync(f.loaded), false);
+  } finally { f.done(); }
+});
+
+test("readiness is read-only and never loads modules or repairs a drifted declaration", () => {
+  const f = fixture();
+  try {
+    assert.equal(f.run("apply").status, 0); f.clearCalls();
+    const before = statSync(f.target); assert.equal(f.run("check").status, 0);
+    assert.deepEqual(f.calls(), []); assert.equal(statSync(f.target).mtimeMs, before.mtimeMs);
+    writeFileSync(f.target, `${header}\ndm_thin_pool\noverlay\n`);
+    assert.notEqual(f.run("check").status, 0); assert.match(readFileSync(f.target, "utf8"), /overlay/);
+    writeFileSync(f.target, `${header}\ndm_thin_pool\n`); rmSync(f.loaded, { recursive: true });
+    assert.notEqual(f.run("check").status, 0); assert.equal(existsSync(f.loaded), false); assert.deepEqual(f.calls(), []);
+  } finally { f.done(); }
+});
+
+test("apply refuses hooks, options, unsafe dependencies and mismatched or unsigned modules before any load/write", () => {
+  for (const changes of [
+    { PLAN: "install /bin/evil", CLEAN_PLAN: "install /bin/evil" },
+    { PLAN: "install /bin/evil", CLEAN_PLAN: "" },
+    { PLAN: "insmod /tmp/evil.ko" },
+    { PLAN: "insmod /lib/modules/other/kernel/drivers/md/dm-thin-pool.ko.xz" },
+    { PLAN: "insmod /lib/modules/6.12.115-test/kernel/drivers/md/dm-unreviewed.ko.xz" },
+    { VERMAGIC: "different-kernel" }, { INTREE: "N" }, { SIGNATURE_ID: "unsigned" },
+    { SIGNER: "" }, { SIGNATURE_KEY: "" }, { PACKAGE_OWNER: "unrelated-package" },
+  ]) {
+    const f = fixture();
+    try {
+      const result = f.run("apply", changes); assert.notEqual(result.status, 0, JSON.stringify(changes));
+      assert.equal(existsSync(f.target), false); assert.equal(existsSync(f.loaded), false);
+      assert(!f.calls().some(call => call.includes("--ignore-install")));
+    } finally { f.done(); }
+  }
+  const f = fixture();
+  try {
+    const withArguments = f.plan.replace("dm-thin-pool.ko.xz ", "dm-thin-pool.ko.xz options=1");
+    assert.notEqual(f.run("apply", { PLAN: withArguments }).status, 0);
+    assert.equal(existsSync(f.target), false); assert.equal(existsSync(f.loaded), false);
+  } finally { f.done(); }
+});
+
+test("unsafe environment, unmanaged/symlinked paths and a failed load cannot alter unrelated host files", () => {
+  for (const changes of [{ KERNEL_MODULES: "dm_thin_pool; touch injected" }, { KERNEL_MODULES: "dm_thin_pool dm_thin_pool" },
+    { MODULES_FILE: "../other.conf" }, { MODULES_FILE: "90-nebula-../../other.conf" }, { LOAD_FAIL: "1" }]) {
+    const f = fixture();
+    try { assert.notEqual(f.run("apply", changes).status, 0); assert.equal(existsSync(f.target), false); assert.equal(existsSync(f.loaded), false); }
+    finally { f.done(); }
+  }
+  for (const linked of [false, true]) {
+    const f = fixture();
+    try {
+      const other = join(f.work, "retained"); writeFileSync(other, "retained data\n");
+      if (linked) symlinkSync(other, f.target); else writeFileSync(f.target, "owned by somebody else\n");
+      assert.notEqual(f.run("apply").status, 0); assert.equal(readFileSync(other, "utf8"), "retained data\n");
+      assert.deepEqual(f.calls(), []); assert.equal(existsSync(f.loaded), false);
+    } finally { f.done(); }
+  }
+});

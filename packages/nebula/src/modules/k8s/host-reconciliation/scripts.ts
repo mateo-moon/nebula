@@ -45,6 +45,10 @@ export function hostConfigurationPolicyScript(): string {
   return asset("host-policy.sh");
 }
 
+export function hostKernelModulesScript(): string {
+  return asset("kernel-modules.sh");
+}
+
 export interface PinnedLoopAttachScriptOptions {
   backingDirectory: string;
   logPrefix: string;

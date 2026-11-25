@@ -61,15 +61,28 @@ jobs:
           curl --fail --location --retry 3 https://github.com/kyverno/kyverno/releases/download/v1.19.1/kyverno-cli_v1.19.1_linux_x86_64.tar.gz --output "$RUNNER_TEMP/kyverno-cli.tar.gz"
           printf 'b38228f367fc0fdc2b08f4c83ea50ac5f16c60ff8d62d76a66157c33c47b70ae  %s\n' "$RUNNER_TEMP/kyverno-cli.tar.gz" | sha256sum --check
           tar -xzf "$RUNNER_TEMP/kyverno-cli.tar.gz" -C "$RUNNER_TEMP" kyverno
+      - name: Pull pinned credential-test tools
+        run: |
+          pnpm exec tsx --eval 'import { ECR_READER_AWS_CLI_IMAGE, ECR_READER_TOOLS_IMAGE } from "./src/modules/infra/aws/ecr-scaled-job-reader/index.ts"; console.log(ECR_READER_AWS_CLI_IMAGE + "\n" + ECR_READER_TOOLS_IMAGE)' > "$RUNNER_TEMP/ecr-reader-test-images"
+          while IFS= read -r image; do
+            for attempt in 1 2 3; do
+              if timeout 180s docker pull "$image"; then break; fi
+              if [ "$attempt" -eq 3 ]; then exit 1; fi
+              sleep "$((attempt * 15))"
+            done
+          done < "$RUNNER_TEMP/ecr-reader-test-images"
       - name: Fetch the pinned Envoy Gateway chart for offline synthesis tests
         run: |
-          chart_dir=$(mktemp -d "$RUNNER_TEMP/envoy-gateway.XXXXXX")
+          chart_dir=$(mktemp -d "$RUNNER_TEMP/envoy-gateway-chart.XXXXXX")
           helm pull oci://docker.io/envoyproxy/gateway-helm@sha256:dcb82a14c04b426615a71d97222c7edf9f5ff58b800d241e71ac5784ae6dc7b7 --destination "$chart_dir"
-          mv "$chart_dir"/*.tgz "$RUNNER_TEMP/envoy-gateway.tgz"
+          chart=("$chart_dir"/*.tgz)
+          test "${#chart[@]}" -eq 1 && test -f "${chart[0]}"
+          mv -- "${chart[0]}" "$RUNNER_TEMP/gateway-helm-v1.10.0.tgz"
       - name: Tests (including the packed-tarball import test)
         env:
-          ENVOY_GATEWAY_CHART: ${{ runner.temp }}/envoy-gateway.tgz
+          ENVOY_GATEWAY_CHART: ${{ runner.temp }}/gateway-helm-v1.10.0.tgz
           ECR_READER_CONTAINER_TEST: "1"
+          WELCOME_CADDY_INTEGRATION: "1"
           BAREMETAL_CROSSPLANE_CLI: ${{ runner.temp }}/crossplane
           KYVERNO_CHART_ARCHIVE: ${{ runner.temp }}/kyverno-3.9.1.tgz
           KYVERNO_CLI: ${{ runner.temp }}/kyverno
@@ -156,8 +169,8 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -buildvcs=false -o "$RUNNER_TEMP/nebula-oidc-login-linux" .
           CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -buildvcs=false -o "$RUNNER_TEMP/nebula-oidc-login-macos" .
 
-  trustee-client:
-    name: Trustee Node client (Node ${{ matrix.node }})
+  confidential-client:
+    name: Confidential client (Node ${{ matrix.node }})
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
@@ -169,7 +182,7 @@ jobs:
             pnpm: 11.9.0
     defaults:
       run:
-        working-directory: packages/trustee-client
+        working-directory: packages/confidential-client
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
