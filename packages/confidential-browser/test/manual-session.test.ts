@@ -19,6 +19,7 @@ class Element {
   }
   querySelector() { return this.button; }
   submit() { for (const listener of this.listeners.get("submit") ?? []) listener({ preventDefault() {} }); }
+  change() { for (const listener of this.listeners.get("change") ?? []) listener({ preventDefault() {}, target: this } as any); }
 }
 function fixture(t: TestContext) {
   const elements = new Map<string, Element>();
@@ -92,4 +93,31 @@ test("SDK preflight deduplicates approval and only one owner can resolve after a
   f.get("manual-owner").submit(); await new Promise(resolve => setTimeout(resolve, 5));
   assert.equal(generate.mock.calls.filter(call => (call.arguments[0] as Algorithm).name === "ECDSA").length, 1);
   assert.equal(initialize, 2); assert.equal(f.storageWrites(), 0); assert.deepEqual(f.network, ["/nebula/v1/tls"]);
+});
+
+test("returning owners can select a recovery file without entering a used invitation", async t => {
+  const f = fixture(t);
+  void manualSession("https://guest.example", async () => ({}), hardware);
+  await until(() => f.get("manual-verification").listeners.has("submit"));
+  f.get("independently-verified").checked = true; f.get("manual-verification").submit();
+  await until(() => !f.get("manual-owner").hidden);
+  assert.equal(f.get("claim-token").required, true);
+  assert.match(f.get("owner-access-guidance").textContent, /no saved owner access.*recovery file/i);
+  f.get("manual-recovery").files = [{ size: 1, text: async () => "" }];
+  f.get("manual-recovery").change();
+  assert.equal(f.get("claim-token").required, false);
+  assert.match(f.get("owner-access-guidance").textContent, /Recovery file selected/);
+  f.get("manual-recovery").files = []; f.get("manual-recovery").change();
+  assert.equal(f.get("claim-token").required, true);
+});
+
+test("saved owner access asks only for the existing password", async t => {
+  const f = fixture(t);
+  f.values.set("nebula-confidential-vault-v1:https://guest.example", "encrypted owner fixture");
+  void manualSession("https://guest.example", async () => ({}), hardware);
+  await until(() => f.get("manual-verification").listeners.has("submit"));
+  f.get("independently-verified").checked = true; f.get("manual-verification").submit();
+  await until(() => !f.get("manual-owner").hidden);
+  assert.equal(f.get("claim-token").required, false);
+  assert.match(f.get("owner-access-guidance").textContent, /Saved owner access found.*no token/i);
 });

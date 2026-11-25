@@ -115,10 +115,19 @@ export async function manualSession(target: string, sdk: () => Promise<any>, har
   const form = document.getElementById("manual-owner") as HTMLFormElement; form.hidden = false;
   const stored = encryptedOwnerVault(target);
   const token = document.getElementById("claim-token") as HTMLInputElement;
-  token.required = !stored;
-  document.getElementById("manual-recovery")!.addEventListener("change", event => {
-    token.required = !stored && !(event.target as HTMLInputElement).files?.length;
-  });
+  const recoveryInput = document.getElementById("manual-recovery") as HTMLInputElement;
+  const guidance = document.getElementById("owner-access-guidance")!;
+  const updateAccessGuidance = () => {
+    const recovering = !!recoveryInput.files?.length;
+    token.required = !stored && !recovering;
+    guidance.textContent = recovering
+      ? "Recovery file selected. Enter its password. Leave the one-time token empty unless you are replacing an expired, unused invitation."
+      : stored
+        ? "Saved owner access found in this browser. Enter your password; no token or recovery file is needed."
+        : "No saved owner access in this browser. To reconnect, choose your latest encrypted recovery file below. Use a one-time token only if this stack has never been claimed.";
+  };
+  updateAccessGuidance();
+  recoveryInput.addEventListener("change", updateAccessGuidance);
   const login = document.getElementById("owner-login-status")!;
   let submitting = false, resolved = false;
   return await new Promise<ManualSession>(resolve => form.addEventListener("submit", event => {
